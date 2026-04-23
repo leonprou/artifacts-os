@@ -1,0 +1,13 @@
+{
+  "x-dir": "research",
+  "x-prefix": "",
+  "x-numbered": false,
+  "x-columns": ["name", "created:date", "status"],
+  "title": "Research",
+  "type": "object",
+  "properties": {
+    "status": {
+      "enum": ["draft", "done"]
+    }
+  }
+}

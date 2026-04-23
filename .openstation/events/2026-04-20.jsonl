@@ -1,0 +1,4 @@
+{"ts":"2026-04-20T15:08:27.045266+03:00","event":"task_created","task":"0001-migrate-docs-specs-to-openstation","status":"backlog","assignee":"","parent":""}
+{"ts":"2026-04-20T15:11:58.709489+03:00","event":"status_transition","task":"0001-migrate-docs-specs-to-openstation","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-04-20T15:13:07.789879+03:00","event":"run_started","task":"0001-migrate-docs-specs-to-openstation","agent":"author","run_id":"r0001","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-04-20T15:13:25.407137+03:00","event":"status_transition","task":"0001-migrate-docs-specs-to-openstation","old_status":"ready","new_status":"in-progress","forced":false}

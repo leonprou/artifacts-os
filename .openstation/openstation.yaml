@@ -1,0 +1,59 @@
+layout_version: 1
+
+project:
+  name: "artifacts-os"
+  alias: "artifact"
+
+defaults:
+  show:
+    editor: true
+
+run:
+  detached_backend: tmux
+  tmux:
+    mode: session
+
+views:
+  active:
+    columns: id,name,assignee,status
+    filters:
+      status: in-progress
+
+  review:
+    columns: id,name,assignee,owner
+    filters:
+      status: review
+
+  ready:
+    columns: id,name,assignee
+    filters:
+      status: ready
+
+  backlog:
+    columns: id,name,assignee
+    filters:
+      status: backlog
+
+  mine:
+    columns: id,name,status
+    filters:
+      assignee: me
+
+  sessions:
+    columns: id,task,agent,status,started,cost
+    sort: -started
+
+  spec:
+    columns: id,name,created:date,summary
+
+  research:
+    columns: name,created:date,summary
+
+  note:
+    columns: name,created:date,status,summary
+
+default_views:
+  session: sessions
+  spec: spec
+  research: research
+  note: note
