@@ -45,8 +45,8 @@ def test_create_empty_title_raises(make_vault) -> None:
 
 def test_create_schema_validation_fails(tmp_path: Path) -> None:
     root = tmp_path / "vault"
-    (root / ".openstation").mkdir(parents=True)
     (root / "artifacts" / "tasks").mkdir(parents=True)
+    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
     kinds = [
         KindDef(
             name="task",

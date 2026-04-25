@@ -22,7 +22,7 @@ def _meta(frontmatter: dict, name: str = "t0001-test") -> ArtifactMeta:
         id=frontmatter.get("id", ""),
         kind=frontmatter.get("kind", ""),
         name=name,
-        title=frontmatter.get("title", ""),
+        title=frontmatter.get("name", name),
         status=frontmatter.get("status"),
         tags=frontmatter.get("tags", []),
         created=frontmatter.get("created", ""),
@@ -59,7 +59,7 @@ def _registry(kinds: list[KindDef] | None = None) -> Registry:
 
 def test_all_valid():
     """Valid artifact → result.valid == True, issues == []."""
-    fm = {"id": "t0001", "kind": "task", "title": "Fix bug", "created": "2026-01-01", "status": "ready"}
+    fm = {"id": "t0001", "kind": "task", "name": "t0001-fix-bug", "created": "2026-01-01", "status": "ready"}
     result = validate_one(_meta(fm), _registry())
     assert result.valid is True
     assert result.issues == []
@@ -67,7 +67,7 @@ def test_all_valid():
 
 def test_missing_id():
     """Missing id → error with field='id'."""
-    fm = {"kind": "task", "title": "Fix bug", "created": "2026-01-01", "status": "ready"}
+    fm = {"kind": "task", "name": "t0001-fix-bug", "created": "2026-01-01", "status": "ready"}
     result = validate_one(_meta(fm, name="t0001-test"), _registry())
     assert any(i.field == "id" and i.severity == "error" for i in result.issues)
     assert result.valid is False
@@ -75,23 +75,23 @@ def test_missing_id():
 
 def test_missing_kind():
     """Missing kind → error with field='kind'."""
-    fm = {"id": "t0001", "title": "Fix bug", "created": "2026-01-01", "status": "ready"}
+    fm = {"id": "t0001", "name": "t0001-fix-bug", "created": "2026-01-01", "status": "ready"}
     result = validate_one(_meta(fm), _registry())
     assert any(i.field == "kind" and i.severity == "error" for i in result.issues)
     assert result.valid is False
 
 
-def test_missing_title():
-    """Missing title → error with field='title'."""
+def test_missing_name():
+    """Missing name → error with field='name'."""
     fm = {"id": "t0001", "kind": "task", "created": "2026-01-01", "status": "ready"}
     result = validate_one(_meta(fm), _registry())
-    assert any(i.field == "title" and i.severity == "error" for i in result.issues)
+    assert any(i.field == "name" and i.severity == "error" for i in result.issues)
     assert result.valid is False
 
 
 def test_missing_created():
     """Missing created → error with field='created'."""
-    fm = {"id": "t0001", "kind": "task", "title": "Fix bug", "status": "ready"}
+    fm = {"id": "t0001", "kind": "task", "name": "t0001-fix-bug", "status": "ready"}
     result = validate_one(_meta(fm), _registry())
     assert any(i.field == "created" and i.severity == "error" for i in result.issues)
     assert result.valid is False
@@ -99,7 +99,7 @@ def test_missing_created():
 
 def test_unknown_status():
     """Unknown status → error with field='status', fixable=True."""
-    fm = {"id": "t0001", "kind": "task", "title": "Fix bug", "created": "2026-01-01", "status": "wip"}
+    fm = {"id": "t0001", "kind": "task", "name": "t0001-fix-bug", "created": "2026-01-01", "status": "wip"}
     result = validate_one(_meta(fm), _registry())
     status_issues = [i for i in result.issues if i.field == "status"]
     assert len(status_issues) == 1
@@ -111,7 +111,7 @@ def test_unknown_status():
 
 def test_unknown_kind():
     """Unknown kind → error; KindDef-dependent rules skipped."""
-    fm = {"id": "x0001", "kind": "unknown-kind", "title": "Test", "created": "2026-01-01"}
+    fm = {"id": "x0001", "kind": "unknown-kind", "name": "x0001-test", "created": "2026-01-01"}
     result = validate_one(_meta(fm), _registry())
     kind_issues = [i for i in result.issues if i.field == "kind"]
     assert len(kind_issues) == 1
@@ -123,7 +123,7 @@ def test_unknown_kind():
 
 def test_numbered_id_wrong_format():
     """Numbered ID with wrong format → error, fixable=False."""
-    fm = {"id": "t42", "kind": "task", "title": "Fix bug", "created": "2026-01-01", "status": "ready"}
+    fm = {"id": "t42", "kind": "task", "name": "t0001-fix-bug", "created": "2026-01-01", "status": "ready"}
     result = validate_one(_meta(fm, name="t42-test"), _registry())
     id_issues = [i for i in result.issues if i.field == "id"]
     assert len(id_issues) == 1
@@ -133,7 +133,7 @@ def test_numbered_id_wrong_format():
 
 def test_non_numbered_id_bad_slug():
     """Non-numbered ID with bad slug → error, fixable=False."""
-    fm = {"id": "My Agent!", "kind": "agent", "title": "Agent", "created": "2026-01-01"}
+    fm = {"id": "My Agent!", "kind": "agent", "name": "my-agent", "created": "2026-01-01"}
     result = validate_one(_meta(fm, name="my-agent"), _registry())
     id_issues = [i for i in result.issues if i.field == "id"]
     assert len(id_issues) == 1
@@ -160,7 +160,7 @@ def test_schema_violation():
     fm = {
         "id": "t0001",
         "kind": "task",
-        "title": "Fix bug",
+        "name": "t0001-fix-bug",
         "created": "2026-01-01",
         "status": "ready",
         "priority": "high",  # should be integer
@@ -175,7 +175,7 @@ def test_unknown_field_warning():
     fm = {
         "id": "t0001",
         "kind": "task",
-        "title": "Fix bug",
+        "name": "t0001-fix-bug",
         "created": "2026-01-01",
         "status": "ready",
         "assigne": "bob",  # typo
@@ -200,7 +200,7 @@ def test_unknown_field_with_additional_properties_false():
             "properties": {
                 "id": {},
                 "kind": {},
-                "title": {},
+                "name": {},
                 "created": {},
                 "status": {},
             },
@@ -211,7 +211,7 @@ def test_unknown_field_with_additional_properties_false():
     fm = {
         "id": "t0001",
         "kind": "task",
-        "title": "Fix",
+        "name": "t0001-fix",
         "created": "2026-01-01",
         "status": "ready",
         "extra_field": "oops",
@@ -230,7 +230,7 @@ def test_only_warnings_result_is_valid():
     fm = {
         "id": "t0001",
         "kind": "task",
-        "title": "Fix bug",
+        "name": "t0001-fix-bug",
         "created": "2026-01-01",
         "status": "ready",
         "weirdkey": "value",
@@ -243,16 +243,16 @@ def test_only_warnings_result_is_valid():
 
 def test_multiple_violations_accumulated():
     """Multiple violations are all accumulated, not short-circuited."""
-    # Missing title AND missing created AND bad status
+    # Missing name AND missing created AND bad status
     fm = {
         "id": "t0001",
         "kind": "task",
         "status": "wip",  # bad status
-        # missing title and created
+        # missing name and created
     }
     result = validate_one(_meta(fm), _registry())
     fields_with_issues = {i.field for i in result.issues}
-    assert "title" in fields_with_issues
+    assert "name" in fields_with_issues
     assert "created" in fields_with_issues
     assert "status" in fields_with_issues
     assert len(result.issues) >= 3
@@ -260,8 +260,8 @@ def test_multiple_violations_accumulated():
 
 def test_validate_many():
     """validate_many returns one result per artifact."""
-    fm1 = {"id": "t0001", "kind": "task", "title": "A", "created": "2026-01-01", "status": "ready"}
-    fm2 = {"id": "t0002", "kind": "task", "title": "B", "created": "2026-01-01", "status": "ready"}
+    fm1 = {"id": "t0001", "kind": "task", "name": "t0001-a", "created": "2026-01-01", "status": "ready"}
+    fm2 = {"id": "t0002", "kind": "task", "name": "t0002-b", "created": "2026-01-01", "status": "ready"}
     metas = [_meta(fm1, "t0001-a"), _meta(fm2, "t0002-b")]
     results = validate_many(metas, _registry())
     assert len(results) == 2

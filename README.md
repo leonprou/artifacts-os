@@ -21,7 +21,7 @@ Optional extras: `views` (Rich rendering), `cli`, `tui` (Textual browser), `log`
 ```python
 from artifacts_os import find_vault_root, Registry, KindDef, create, get, list_artifacts
 
-# Locate the vault (walks up from CWD looking for .openstation/)
+# Locate the vault (walks up from CWD looking for artifacts/artifacts.yaml)
 root = find_vault_root()
 
 # Define artifact kinds

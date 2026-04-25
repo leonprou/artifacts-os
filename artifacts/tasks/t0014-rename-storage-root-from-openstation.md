@@ -3,7 +3,7 @@ kind: task
 id: t0014
 name: rename-storage-root-from-openstation
 type: feature
-status: in-progress
+status: verified
 assignee: developer
 owner: user
 created: 2026-04-23
@@ -114,19 +114,63 @@ and `openstation` as the **CLI tool name** (commands like
 
 ---
 
+## Progress
+
+### 2026-04-23 23:16:13 — Incomplete run (r0018)
+
+**Stop reason:** Non-zero exit code (8)
+**Stats:** cost=$1.74, turns=51
+
+## Findings
+
+All `openstation/` storage root references replaced with `artifacts/` across source, tests, and docs. All 144 tests pass.
+
+**Source changes (3 files):** `discover.py`, `store.py`, `registry.py` — `_kind_dir` and `_load_vault_kinds` now use `"artifacts"` instead of `"openstation"`.
+
+**Test changes (7 files):** `tests/core/conftest.py`, `test_registry.py`, `test_store.py`, `tests/cli/conftest.py`, `test_create.py`, `test_status.py`, `test_validate_cmd.py` — fixtures and assertions updated to `artifacts/`.
+
+**Docs changes (6 files):** `docs/2026-04-20-artifacts-os-design.md`, `.openstation/docs/storage-query-layer.md`, `.openstation/skills/openstation-execute/SKILL.md`, `.openstation/commands/openstation.list.md`, `artifacts/specs/s0002-artifacts-os-architecture.md`, `artifacts/specs/s0004-artifacts-os-log-module.md`.
+
+`vault.py` and `init.py` left unchanged as specified.
+
 ## Verification
 
-- [ ] `src/.../core/discover.py` has no `/ "openstation"` (storage usage)
-- [ ] `src/.../core/store.py` has no `/ "openstation"` (storage usage)
-- [ ] `src/.../core/registry.py` has no `/ "openstation"` (storage usage)
-- [ ] `vault.py` and `init.py` are unchanged
-- [ ] All tests pass: `pytest`
-- [ ] Test fixtures create `artifacts/` dirs, not `openstation/` dirs
-- [ ] Test assertions reference `artifacts/` paths
-- [ ] `docs/2026-04-20-artifacts-os-design.md` layout and prose updated
-- [ ] `.openstation/docs/storage-query-layer.md` paths updated
-- [ ] `.openstation/skills/openstation-execute/SKILL.md` routing table and examples updated
-- [ ] `.openstation/commands/openstation.list.md` fallback path updated
-- [ ] `artifacts/specs/s0002-artifacts-os-architecture.md` updated
-- [ ] `artifacts/specs/s0004-artifacts-os-log-module.md` updated
-- [ ] No remaining `/ "openstation"` or `` `openstation/` `` (storage meaning) in any changed file
+- [x] `src/.../core/discover.py` has no `/ "openstation"` (storage usage)
+- [x] `src/.../core/store.py` has no `/ "openstation"` (storage usage)
+- [x] `src/.../core/registry.py` has no `/ "openstation"` (storage usage)
+- [x] `vault.py` and `init.py` are unchanged
+- [x] All tests pass: `pytest`
+- [x] Test fixtures create `artifacts/` dirs, not `openstation/` dirs
+- [x] Test assertions reference `artifacts/` paths
+- [x] `docs/2026-04-20-artifacts-os-design.md` layout and prose updated
+- [x] `.openstation/docs/storage-query-layer.md` paths updated
+- [x] `.openstation/skills/openstation-execute/SKILL.md` routing table and examples updated
+- [x] `.openstation/commands/openstation.list.md` fallback path updated
+- [x] `artifacts/specs/s0002-artifacts-os-architecture.md` updated
+- [x] `artifacts/specs/s0004-artifacts-os-log-module.md` updated
+- [x] No remaining `/ "openstation"` or `` `openstation/` `` (storage meaning) in any changed file
+
+## Verification Report
+
+*Verified: 2026-04-25*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | `discover.py` has no `/ "openstation"` | PASS | Grep on `src/` returns no matches |
+| 2 | `store.py` has no `/ "openstation"` | PASS | Same grep, no matches |
+| 3 | `registry.py` has no `/ "openstation"` | PASS | Same grep, no matches |
+| 4 | `vault.py` and `init.py` unchanged | PASS | `vault.py` only contains `.openstation` (vault marker); `init.py` creates `artifacts/` and compat symlink as before |
+| 5 | All tests pass | PASS | `pytest` — 144 passed in 0.51s |
+| 6 | Test fixtures use `artifacts/` dirs | PASS | `tests/core/conftest.py:43,46` and `tests/cli/conftest.py:38,44` confirmed |
+| 7 | Test assertions reference `artifacts/` paths | PASS | No storage `openstation/` paths remain in any test file |
+| 8 | `docs/2026-04-20-artifacts-os-design.md` updated | PASS | Only `.openstation/` vault marker refs remain |
+| 9 | `.openstation/docs/storage-query-layer.md` updated | PASS | Only `.openstation/` framework plumbing refs remain |
+| 10 | `openstation-execute/SKILL.md` updated | PASS | Only `.openstation/docs/` (vault marker) ref remains — correct |
+| 11 | `openstation.list.md` updated | PASS | No `openstation/` matches |
+| 12 | `s0002-artifacts-os-architecture.md` updated | PASS | Only `.openstation/` vault marker ref; `artifacts/{kind.dir}/` confirmed |
+| 13 | `s0004-artifacts-os-log-module.md` updated | PASS | No `openstation/` matches |
+| 14 | No remaining storage-meaning `openstation/` refs | PASS | All remaining matches are `.openstation/` (vault marker) or CLI tool name |
+
+### Summary
+
+14 passed, 0 failed. All criteria met.

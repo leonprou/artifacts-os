@@ -57,3 +57,5 @@
 {"ts":"2026-04-23T23:10:30.720145+03:00","event":"status_transition","task":"t0014-rename-storage-root-from-openstation","old_status":"backlog","new_status":"ready","forced":false}
 {"ts":"2026-04-23T23:10:33.628153+03:00","event":"run_started","task":"t0014-rename-storage-root-from-openstation","agent":"developer","run_id":"r0018","mode":"execute","context_only":false,"detached":false}
 {"ts":"2026-04-23T23:10:58.892050+03:00","event":"status_transition","task":"t0014-rename-storage-root-from-openstation","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-04-23T23:16:13.934930+03:00","event":"run_complete","task":"t0014-rename-storage-root-from-openstation","agent":"developer","run_id":"r0018","run_status":"failed","cost":"1.74","turns":51}
+{"ts":"2026-04-23T23:16:51.516718+03:00","event":"status_transition","task":"t0014-rename-storage-root-from-openstation","old_status":"in-progress","new_status":"review","forced":false}

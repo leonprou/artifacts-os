@@ -8,8 +8,9 @@ Artifacts is an agentic harness for using and organizing artifacts.
 
 ## Artifact Storage
 
-Store all project artifacts under `artifacts/`, not `openstation/`.  
-Note: code currently writes to `openstation/` — this rename is in progress.
+Store all project artifacts under `artifacts/`. The vault marker is
+`artifacts/artifacts.yaml` — `find_vault_root` walks up from CWD until
+it finds this file.
 
 ## Project Structure
 

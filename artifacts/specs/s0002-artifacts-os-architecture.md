@@ -1,7 +1,7 @@
 ---
 kind: spec
 name: artifacts-os-architecture
-status: final
+status: approved
 created: 2026-04-20
 task: "[[0001-migrate-docs-specs-to-openstation]]"
 agent: manual
@@ -97,12 +97,12 @@ dependencies = [
 ```python
 def find_vault_root(start: Path | None = None) -> Path | None:
     """Walk up from start (default: CWD) looking for a directory
-    that contains .openstation/. Returns the first match or None."""
+    that contains artifacts/artifacts.yaml. Returns the first match or None."""
 ```
 
 Implementation: iterate `start, start.parent, start.parent.parent, …`
-until `(candidate / ".openstation").is_dir()` or we hit the filesystem
-root. No git calls.
+until `(candidate / "artifacts" / "artifacts.yaml").is_file()` or we hit
+the filesystem root. No git calls.
 
 ---
 
@@ -432,8 +432,8 @@ __all__ = [
 
 - **Framework:** pytest with `tmp_path` fixture.
 - **No mocking** — all tests operate on real temp-dir vault structures.
-- **Fixture helper** `make_vault(tmp_path, kinds)` creates the
-  `.openstation/` marker and `artifacts/{kind.dir}/` directories,
+- **Fixture helper** `make_vault(tmp_path, kinds)` creates
+  `artifacts/artifacts.yaml` and `artifacts/{kind.dir}/` directories,
   returns a `Registry`.
 - **Coverage targets by module:**
 

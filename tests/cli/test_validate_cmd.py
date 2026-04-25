@@ -15,7 +15,7 @@ def test_all_valid_vault_returns_0(vault, write_artifact):
     """Vault with all valid artifacts exits 0."""
     write_artifact(vault, "tasks", "t0001-fix-bug.md",
                    {"kind": "task", "id": "t0001", "name": "t0001-fix-bug",
-                    "title": "Fix bug", "created": "2026-01-01", "status": "ready"})
+                    "created": "2026-01-01", "status": "ready"})
     # No SystemExit means exit code 0
     main(["validate"])
 
@@ -23,9 +23,9 @@ def test_all_valid_vault_returns_0(vault, write_artifact):
 def test_vault_with_error_returns_2(vault, write_artifact, capsys):
     """Vault with one bad artifact (error) exits 2 and JSON output contains name."""
     write_artifact(vault, "tasks", "t0001-broken.md",
-                   {"kind": "task", "id": "t0001", "name": "t0001-broken",
+                   {"kind": "task", "id": "t0001",
                     "created": "2026-01-01", "status": "ready"})
-    # missing title → error
+    # missing name → error
 
     with pytest.raises(SystemExit) as exc:
         main(["validate", "-j"])
@@ -40,7 +40,7 @@ def test_vault_with_only_warnings_returns_0(vault, write_artifact, capsys):
     """Vault with only warnings exits 0; warnings appear in JSON output."""
     write_artifact(vault, "tasks", "t0001-test.md",
                    {"kind": "task", "id": "t0001", "name": "t0001-test",
-                    "title": "Test", "created": "2026-01-01", "status": "ready",
+                    "created": "2026-01-01", "status": "ready",
                     "weirdkey": "value"})  # unknown field → warning
 
     main(["validate", "-j"])  # exits 0
@@ -56,9 +56,9 @@ def test_vault_with_only_warnings_returns_0(vault, write_artifact, capsys):
 def test_json_output(vault, write_artifact, capsys):
     """--json output is valid JSON and each issue has a severity key."""
     write_artifact(vault, "tasks", "t0001-broken.md",
-                   {"kind": "task", "id": "t0001", "name": "t0001-broken",
+                   {"kind": "task", "id": "t0001",
                     "created": "2026-01-01", "status": "ready"})
-    # missing title → error
+    # missing name → error
 
     with pytest.raises(SystemExit) as exc:
         main(["validate", "-j"])
@@ -76,7 +76,7 @@ def test_fix_corrects_status(vault, write_artifact):
     """--fix corrects bad status; re-validate returns 0."""
     write_artifact(vault, "tasks", "t0001-broken.md",
                    {"kind": "task", "id": "t0001", "name": "t0001-broken",
-                    "title": "Test", "created": "2026-01-01", "status": "wip"})
+                    "created": "2026-01-01", "status": "wip"})
     # bad status → error, fixable
 
     # First validate fails
@@ -95,7 +95,7 @@ def test_fix_does_not_touch_warnings(vault, write_artifact, capsys):
     """--fix does not remove unknown fields (warnings)."""
     write_artifact(vault, "tasks", "t0001-test.md",
                    {"kind": "task", "id": "t0001", "name": "t0001-test",
-                    "title": "Test", "created": "2026-01-01", "status": "ready",
+                    "created": "2026-01-01", "status": "ready",
                     "weirdkey": "value"})
 
     main(["validate", "--fix"])  # fix runs; exits 0 (only warnings)
@@ -110,7 +110,7 @@ def test_dry_run_does_not_write(vault, write_artifact):
     """--dry-run produces no writes even when fixes are available."""
     path = write_artifact(vault, "tasks", "t0001-broken.md",
                           {"kind": "task", "id": "t0001", "name": "t0001-broken",
-                           "title": "Test", "created": "2026-01-01", "status": "wip"})
+                           "created": "2026-01-01", "status": "wip"})
     original_content = path.read_text()
 
     # dry-run still reports errors (exits 2), but must not write
@@ -133,11 +133,10 @@ def test_kind_filter(vault, write_artifact, capsys):
     """--kind filter validates only named kind."""
     write_artifact(vault, "tasks", "t0001-good-task.md",
                    {"kind": "task", "id": "t0001", "name": "t0001-good-task",
-                    "title": "Good", "created": "2026-01-01", "status": "ready"})
+                    "created": "2026-01-01", "status": "ready"})
     write_artifact(vault, "agents", "bad-agent.md",
-                   {"kind": "agent", "id": "bad-agent", "name": "bad-agent",
-                    "created": "2026-01-01"})
-    # agent missing title → error, but we only validate "task" kind
+                   {"kind": "agent", "id": "bad-agent", "name": "bad-agent"})
+    # agent missing created → error, but we only validate "task" kind
 
     # Validate only tasks — should exit 0 (task is valid)
     main(["validate", "--kind", "task"])

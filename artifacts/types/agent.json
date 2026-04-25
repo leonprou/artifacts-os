@@ -3,6 +3,7 @@
   "x-prefix": "",
   "x-numbered": false,
   "x-columns": ["name", "description"],
+  "x-required-fields": ["kind", "name"],
   "title": "Agent",
   "type": "object",
   "properties": {

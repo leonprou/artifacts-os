@@ -78,13 +78,13 @@ custom JSON schemas dropped in `artifacts/types/`.
 ## Vault Structure
 
 `artifacts-os` is opinionated about layout. The vault marker is
-`.openstation/` at the project root; `find_vault_root` walks up the
-directory tree until it finds it.
+`artifacts/artifacts.yaml` at the project root; `find_vault_root` walks up
+the directory tree until it finds it.
 
 ```
 <project>/
-  .openstation/          # vault marker
   artifacts/
+    artifacts.yaml       # vault marker
     tasks/               # NNNN-slug.md  (prefix: t)
     specs/               # NNNN-slug.md  (prefix: s)
     research/            # NNNN-slug.md  (prefix: r)

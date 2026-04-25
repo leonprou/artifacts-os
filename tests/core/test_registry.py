@@ -39,7 +39,6 @@ def test_for_dir_lookup() -> None:
 
 def test_vault_types_scan(tmp_path: Path) -> None:
     root = tmp_path / "vault"
-    (root / ".openstation").mkdir(parents=True)
     _write_schema(
         root,
         "changelog",
@@ -63,7 +62,6 @@ def test_vault_types_scan(tmp_path: Path) -> None:
 
 def test_vault_override_caller_kind(tmp_path: Path) -> None:
     root = tmp_path / "vault"
-    (root / ".openstation").mkdir(parents=True)
     _write_schema(
         root,
         "task",
@@ -78,7 +76,6 @@ def test_vault_override_caller_kind(tmp_path: Path) -> None:
 
 def test_missing_x_dir_raises(tmp_path: Path) -> None:
     root = tmp_path / "vault"
-    (root / ".openstation").mkdir(parents=True)
     _write_schema(root, "broken", {"x-prefix": "b"})
     with pytest.raises(ValidationError):
         Registry([], root=root)
@@ -86,7 +83,7 @@ def test_missing_x_dir_raises(tmp_path: Path) -> None:
 
 def test_no_types_dir_is_noop(tmp_path: Path) -> None:
     root = tmp_path / "vault"
-    (root / ".openstation").mkdir(parents=True)
+    root.mkdir(parents=True)
     r = Registry(
         [KindDef(name="task", dir="tasks", prefix="t", numbered=True)],
         root=root,

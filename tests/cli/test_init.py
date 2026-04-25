@@ -12,8 +12,7 @@ def test_init_creates_structure(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     main(["init"])
 
-    assert (tmp_path / ".openstation").is_dir()
-    assert (tmp_path / ".openstation" / "openstation.yaml").is_file()
+    assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
     assert (tmp_path / "artifacts" / "types").is_dir()
     assert (tmp_path / "artifacts" / "tasks").is_dir()
     assert (tmp_path / "artifacts" / "specs").is_dir()
@@ -36,13 +35,12 @@ def test_init_kind_jsons_valid(tmp_path, monkeypatch):
         assert "x-dir" in schema, f"{path.name} missing x-dir"
 
 
-def test_init_settings_uses_name_alias(tmp_path, monkeypatch, capsys):
+def test_init_settings_uses_name(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    main(["init", "--name", "my-proj", "--alias", "mp"])
+    main(["init", "--name", "my-proj"])
 
-    text = (tmp_path / ".openstation" / "openstation.yaml").read_text()
+    text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
     assert "my-proj" in text
-    assert '"mp"' in text
 
 
 def test_init_defaults_dir_name_as_project_name(tmp_path, monkeypatch):
@@ -51,7 +49,7 @@ def test_init_defaults_dir_name_as_project_name(tmp_path, monkeypatch):
     monkeypatch.chdir(project)
     main(["init"])
 
-    text = (project / ".openstation" / "openstation.yaml").read_text()
+    text = (project / "artifacts" / "artifacts.yaml").read_text()
     assert "cool-project" in text
 
 
@@ -61,7 +59,7 @@ def test_init_target_directory_arg(tmp_path, monkeypatch, capsys):
     target.mkdir()
     main(["init", str(target)])
 
-    assert (target / ".openstation").is_dir()
+    assert (target / "artifacts" / "artifacts.yaml").is_file()
     assert (target / "artifacts" / "tasks").is_dir()
 
 

@@ -16,6 +16,8 @@ class KindDef:
     statuses: list[str] = field(default_factory=list)
     schema: dict = field(default_factory=dict)
     meta: dict = field(default_factory=dict)
+    # Per-kind required frontmatter fields; None means use the global default.
+    required_fields: list[str] | None = None
 
 
 @dataclass

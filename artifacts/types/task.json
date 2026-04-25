@@ -8,6 +8,7 @@
     "ready": "cyan",
     "in-progress": "yellow",
     "review": "blue",
+    "verified": "magenta",
     "done": "green",
     "cancelled": "dim strike"
   },
@@ -15,7 +16,7 @@
   "type": "object",
   "properties": {
     "status": {
-      "enum": ["backlog", "ready", "in-progress", "review", "done", "cancelled"]
+      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled"]
     }
   }
 }

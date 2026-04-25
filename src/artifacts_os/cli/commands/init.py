@@ -73,17 +73,13 @@ _DEFAULT_KINDS: dict[str, dict] = {
 }
 
 
-def _default_settings(name: str, alias: str) -> str:
+def _default_settings(name: str, created: str) -> str:
     return f"""\
 layout_version: 1
 
 project:
   name: "{name}"
-  alias: "{alias}"
-
-defaults:
-  show:
-    editor: true
+  created: "{created}"
 """
 
 
@@ -96,32 +92,30 @@ def register(subparsers) -> None:
         help="target directory (default: current directory)",
     )
     p.add_argument("--name", default=None, help="project name (default: directory name)")
-    p.add_argument("--alias", default=None, help="short alias for tmux/display (default: name)")
     p.set_defaults(func=run, _pre_registry=True)
 
 
 def run(args) -> int:  # no registry — called before vault setup
+    import datetime
+
     target = Path(args.directory).resolve()
 
     # Refuse if already initialised
-    if (target / ".openstation").is_dir():
+    if (target / "artifacts" / "artifacts.yaml").is_file():
         print(f"error: already initialised at {target}", file=sys.stderr)
         return 2
 
     name = args.name or target.name
-    alias = args.alias or name[:16]  # keep alias short
+    created = datetime.date.today().isoformat()
 
-    # --- .openstation/ ---
-    openstation_dir = target / ".openstation"
-    openstation_dir.mkdir(parents=True, exist_ok=False)
-    (openstation_dir / "openstation.yaml").write_text(
-        _default_settings(name, alias), encoding="utf-8"
-    )
-
-    # --- artifacts/ with kind subdirs and types ---
+    # --- artifacts/ with kind subdirs, types, and vault marker ---
     artifacts_dir = target / "artifacts"
     types_dir = artifacts_dir / "types"
     types_dir.mkdir(parents=True, exist_ok=True)
+
+    (artifacts_dir / "artifacts.yaml").write_text(
+        _default_settings(name, created), encoding="utf-8"
+    )
 
     for kind_name, schema in _DEFAULT_KINDS.items():
         # type definition
@@ -132,13 +126,13 @@ def run(args) -> int:  # no registry — called before vault setup
         kind_dir = artifacts_dir / schema["x-dir"]
         kind_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- openstation -> artifacts symlink (compat) ---
+    # --- openstation -> artifacts symlink (compat for external openstation CLI) ---
     symlink = target / "openstation"
     if not symlink.exists() and not symlink.is_symlink():
         os.symlink("artifacts", symlink)
 
     print(f"Initialised artifacts-os project: {target}")
-    print(f"  .openstation/openstation.yaml")
+    print(f"  artifacts/artifacts.yaml")
     print(f"  artifacts/types/  ({len(_DEFAULT_KINDS)} kinds)")
     for schema in _DEFAULT_KINDS.values():
         print(f"  artifacts/{schema['x-dir']}/")

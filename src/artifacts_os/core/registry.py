@@ -68,6 +68,7 @@ class Registry:
                 meta["columns"] = schema["x-columns"]
             if "x-status-colors" in schema:
                 meta["status_colors"] = schema["x-status-colors"]
+            required_fields = schema.get("x-required-fields")
             out.append(
                 KindDef(
                     name=path.stem,
@@ -77,6 +78,7 @@ class Registry:
                     statuses=list(statuses),
                     schema=schema,
                     meta=meta,
+                    required_fields=list(required_fields) if required_fields is not None else None,
                 )
             )
         return out

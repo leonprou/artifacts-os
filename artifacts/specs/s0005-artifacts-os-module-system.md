@@ -1,7 +1,7 @@
 ---
 kind: spec
 name: artifacts-os-module-system
-status: final
+status: approved
 created: 2026-04-20
 task: "[[0001-migrate-docs-specs-to-openstation]]"
 agent: manual

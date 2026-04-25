@@ -18,13 +18,17 @@ from artifacts_os.core.ids import validate_slug
 Severity = Literal["error", "warning"]
 
 # Required frontmatter keys for every artifact.
-_REQUIRED_KEYS = ("id", "kind", "title", "created")
+_REQUIRED_KEYS = ("id", "kind", "name", "created")
 
 # Built-in metadata fields recognised regardless of kind schema.
 _BUILTIN_FIELDS = frozenset({
     "id", "kind", "name", "title", "status", "tags", "created", "started",
     "updated", "agent", "task", "parent", "subtasks", "artifacts", "owner",
     "assignee", "type",
+    # Agent-specific fields
+    "aliases", "description", "model", "skills", "tools", "allowed-tools",
+    # Extended task/research fields
+    "summary", "completed", "depends_on",
 })
 
 
@@ -65,21 +69,18 @@ def validate_one(
     issues: list[ValidationIssue] = []
     kind_str = fm.get("kind", "")
 
-    # Rule 1: Required keys
-    for key in _REQUIRED_KEYS:
-        if key not in fm:
-            issues.append(ValidationIssue(
-                field=key,
-                message=f"Required field '{key}' is missing",
-                fixable=False,
-                severity="error",
-            ))
-
-    # Rule 2: kind resolves (only when kind key was present)
-    kind_def = None
+    # Rule 1 (pre-kind): kind must be present to resolve anything else.
     if "kind" not in fm:
-        # Already reported as missing; skip KindDef-dependent rules
+        issues.append(ValidationIssue(
+            field="kind",
+            message="Required field 'kind' is missing",
+            fixable=False,
+            severity="error",
+        ))
         return ValidationResult(name=meta.name, kind=kind_str, issues=issues)
+
+    # Rule 2: kind resolves
+    kind_def = None
     try:
         kind_def = registry.get(kind_str)
     except Exception:
@@ -89,12 +90,24 @@ def validate_one(
             fixable=False,
             severity="error",
         ))
-        # Skip KindDef-dependent rules
         return ValidationResult(name=meta.name, kind=kind_str, issues=issues)
 
-    # Rule 3: status legality
-    if kind_def.statuses:
-        status_val = fm.get("status")
+    # Rule 1 (post-kind): remaining required fields, using per-kind override when set.
+    required = kind_def.required_fields if kind_def.required_fields is not None else list(_REQUIRED_KEYS)
+    for key in required:
+        if key == "kind":
+            continue  # already checked above
+        if key not in fm:
+            issues.append(ValidationIssue(
+                field=key,
+                message=f"Required field '{key}' is missing",
+                fixable=False,
+                severity="error",
+            ))
+
+    # Rule 3: status legality — only when status key is present in frontmatter.
+    if kind_def.statuses and "status" in fm:
+        status_val = fm["status"]
         if status_val not in kind_def.statuses:
             issues.append(ValidationIssue(
                 field="status",

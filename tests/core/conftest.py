@@ -39,8 +39,8 @@ def make_vault(tmp_path: Path):
 
     def _make(kinds: list[KindDef] | None = None) -> tuple[Path, Registry]:
         root = tmp_path / "vault"
-        (root / ".openstation").mkdir(parents=True)
-        (root / "artifacts").mkdir()
+        (root / "artifacts").mkdir(parents=True)
+        (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
         ks = kinds if kinds is not None else _default_kinds()
         for kd in ks:
             (root / "artifacts" / kd.dir).mkdir(parents=True, exist_ok=True)
