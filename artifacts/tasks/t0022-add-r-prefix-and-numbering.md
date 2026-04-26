@@ -3,7 +3,7 @@ kind: task
 id: t0022
 name: add-r-prefix-and-numbering
 type: implementation
-status: verified
+status: done
 assignee: developer
 owner: project-manager
 created: 2026-04-26
@@ -12,6 +12,7 @@ summary: >
   artifacts follow the same naming pattern as tasks (t) and specs
   (s).
 started: 2026-04-26
+completed: 2026-04-26
 ---
 
 # Add `r` Prefix and Numbering to Research Kind
