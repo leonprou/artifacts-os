@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Auto-commit task-related changes using Claude Code.
+#
+# Intended as a post-transition hook on *→done. Reads the task
+# file for context, reviews the git diff, and creates a
+# conventional commit for task-related changes.
+#
+# Required environment (set by the hooks engine):
+#   OS_TASK_NAME  — task name (e.g. 0042-cli-improvements)
+#   OS_TASK_FILE  — absolute path to the task file
+#   OS_VAULT_ROOT — absolute path to the vault root
+#
+# Exit 0 on success or when there are no changes to commit.
+set -euo pipefail
+
+# ── Guard: required env vars ────────────────────────────────
+for var in OS_TASK_NAME OS_TASK_FILE OS_VAULT_ROOT; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "auto-commit: missing required env var $var" >&2
+    exit 1
+  fi
+done
+
+cd "$OS_VAULT_ROOT"
+
+# ── Guard: no uncommitted changes → no-op ───────────────────
+if git diff --quiet && git diff --cached --quiet && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then
+  echo "auto-commit: no uncommitted changes, skipping"
+  exit 0
+fi
+
+# ── Guard: claude binary must be available ───────────────────
+if ! command -v claude >/dev/null 2>&1; then
+  echo "auto-commit: claude not found on PATH, skipping" >&2
+  exit 0
+fi
+
+# ── Build the prompt ─────────────────────────────────────────
+# The task ID is the numeric prefix (e.g. "0042" from "0042-slug").
+TASK_ID="${OS_TASK_NAME%%-*}"
+
+read -r -d '' PROMPT <<'PROMPT_EOF' || true
+You are an auto-commit agent. Your job is to review uncommitted
+changes and create a single git commit for files related to the
+completed task.
+
+## Context
+
+Task: $OS_TASK_NAME
+Task file: $OS_TASK_FILE
+
+## Instructions
+
+1. Read the task file to understand what work was done (look at
+   the title, requirements, and findings sections).
+
+2. Run `git status` and `git diff` to see all uncommitted changes
+   (staged and unstaged). If the diff is very large (>500 lines),
+   use `git diff --stat` first to get an overview, then read
+   specific files as needed.
+
+3. Decide which files are related to this task. Include:
+   - The task file itself (if modified)
+   - Source files created or modified for the task
+   - Test files for the task
+   - Documentation updated as part of the task
+   - Config files changed for the task
+   Exclude files that are clearly unrelated (other tasks,
+   unrelated refactors, editor artifacts).
+
+4. If NO files are related to this task, print
+   "auto-commit: no task-related changes found" and exit
+   without committing.
+
+5. Stage the related files with `git add <file1> <file2> ...`.
+   Use explicit file paths — never `git add -A` or `git add .`.
+
+6. Create a commit with a conventional message:
+   ```
+   chore($TASK_ID): complete $OS_TASK_NAME
+   ```
+   Use a HEREDOC to pass the message:
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   chore($TASK_ID): complete $OS_TASK_NAME
+
+   <one-line summary of what the task accomplished>
+   EOF
+   )"
+   ```
+
+7. Print the commit hash and exit.
+
+## Rules
+
+- Do NOT push to any remote.
+- Do NOT amend existing commits.
+- Do NOT use interactive git commands.
+- Do NOT modify any files — only stage and commit.
+- If in doubt about whether a file belongs, include it.
+PROMPT_EOF
+
+# Expand env vars in the prompt
+PROMPT="${PROMPT//\$OS_TASK_NAME/$OS_TASK_NAME}"
+PROMPT="${PROMPT//\$OS_TASK_FILE/$OS_TASK_FILE}"
+PROMPT="${PROMPT//\$TASK_ID/$TASK_ID}"
+
+# ── Dispatch via tmux ──────────────────────────────────────────
+"${OS_VAULT_ROOT}/bin/os-dispatch" --no-attach "os-commit-${OS_TASK_NAME}" \
+  claude -p "$PROMPT" --allowedTools 'Bash(git:*),Read,Glob,Grep'

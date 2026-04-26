@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# os-dispatch — spawn a command in a named tmux window/session or nohup fallback.
+# Usage: os-dispatch [--no-attach] <window-name> <command...>
+set -euo pipefail
+
+# ── Parse flags ──────────────────────────────────────────────
+NO_ATTACH=false
+if [[ "${1:-}" == "--no-attach" ]]; then
+  NO_ATTACH=true
+  shift
+fi
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: os-dispatch [--no-attach] <window-name> <command...>" >&2
+  exit 1
+fi
+
+WINDOW_NAME="$1"; shift
+
+TMUX_ENV=(
+  -e "CLAUDECODE="
+  -e "OS_HOOK_DEPTH=${OS_HOOK_DEPTH:-0}"
+  -e "OS_DISPATCHED=1"
+)
+
+if tmux info >/dev/null 2>&1; then
+  # Tier 1: tmux server already running — add a new window
+  tmux new-window -d -n "$WINDOW_NAME" "${TMUX_ENV[@]}" "$@"
+elif command -v tmux >/dev/null 2>&1; then
+  # Tier 2: tmux binary available but no server — start a new session
+  tmux new-session -d -s openstation -n "$WINDOW_NAME" "${TMUX_ENV[@]}" "$@"
+  if [[ "$NO_ATTACH" == false ]]; then
+    tmux attach-session -t openstation
+  fi
+else
+  # Tier 3: no tmux binary — nohup fallback
+  LOG_DIR="${OS_VAULT_ROOT:-.}/.openstation/logs"
+  mkdir -p "$LOG_DIR"
+  (env -u CLAUDECODE OS_DISPATCHED=1 nohup "$@" \
+    > "$LOG_DIR/dispatch-${WINDOW_NAME}.log" 2>&1 &)
+  echo "os-dispatch: tmux not found, launched via nohup (log: $LOG_DIR/dispatch-${WINDOW_NAME}.log)"
+fi

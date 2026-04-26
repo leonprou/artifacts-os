@@ -5,7 +5,7 @@ aliases: [pm]
 description: >-
   Project coordinator — manages the task backlog, assigns agents,
   monitors progress, and maintains project documentation.
-model: claude-sonnet-4-6
+model: claude-opus-4-7
 skills:
   - openstation-execute
 tools: Read, Glob, Grep, Write, Edit, Bash

@@ -6,7 +6,7 @@ description: >-
   Technical architect — designs systems, writes specs, chooses
   technology stacks, and sets technical standards before
   implementation begins.
-model: claude-sonnet-4-6
+model: claude-opus-4-7
 skills:
   - openstation-execute
 tools: Read, Glob, Grep, Write, Edit, Bash

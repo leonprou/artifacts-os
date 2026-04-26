@@ -1,5 +1,12 @@
 layout_version: 1
 
+hooks:
+  StatusTransition:
+    - matcher: "*→done"
+      command: bin/hooks/auto-commit
+      phase: post
+      timeout: 120
+
 project:
   name: "artifacts-os"
   alias: "artifact"
