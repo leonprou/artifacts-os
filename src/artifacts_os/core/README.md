@@ -58,7 +58,7 @@ prefixed ID (`t42` → `t0042`) → numeric (`0042-*`) → partial stem.
 ### Registry (`registry.py`)
 
 `Registry` merges caller-provided `KindDef` objects with vault-defined
-kinds loaded from `openstation/types/*.json`.
+kinds loaded from `artifacts/kinds/*.json`.
 
 ```python
 Registry(kinds: list[KindDef], root: Path | None = None)

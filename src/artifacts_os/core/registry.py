@@ -42,11 +42,11 @@ class Registry:
 
     @staticmethod
     def _load_vault_kinds(root: Path) -> list[KindDef]:
-        types_dir = root / "artifacts" / "types"
-        if not types_dir.is_dir():
+        kinds_dir = root / "artifacts" / "kinds"
+        if not kinds_dir.is_dir():
             return []
         out: list[KindDef] = []
-        for path in sorted(types_dir.glob("*.json")):
+        for path in sorted(kinds_dir.glob("*.json")):
             with path.open("r", encoding="utf-8") as f:
                 schema = json.load(f)
             if not isinstance(schema, dict):

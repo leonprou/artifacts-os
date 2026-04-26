@@ -8,9 +8,9 @@ from artifacts_os.core.errors import ValidationError
 
 
 def _write_schema(root: Path, name: str, schema: dict) -> None:
-    types = root / "artifacts" / "types"
-    types.mkdir(parents=True, exist_ok=True)
-    (types / f"{name}.json").write_text(json.dumps(schema), encoding="utf-8")
+    kinds_dir = root / "artifacts" / "kinds"
+    kinds_dir.mkdir(parents=True, exist_ok=True)
+    (kinds_dir / f"{name}.json").write_text(json.dumps(schema), encoding="utf-8")
 
 
 def test_no_root_no_scan() -> None:
@@ -37,7 +37,7 @@ def test_for_dir_lookup() -> None:
     assert r.for_dir("nonexistent") is None
 
 
-def test_vault_types_scan(tmp_path: Path) -> None:
+def test_vault_kinds_scan(tmp_path: Path) -> None:
     root = tmp_path / "vault"
     _write_schema(
         root,
@@ -89,3 +89,20 @@ def test_no_types_dir_is_noop(tmp_path: Path) -> None:
         root=root,
     )
     assert [kd.name for kd in r.all()] == ["task"]
+
+
+def test_types_dir_is_not_scanned(tmp_path: Path) -> None:
+    """artifacts/types/ is not a fallback — only artifacts/kinds/ is scanned."""
+    root = tmp_path / "vault"
+    # Write a schema to the old types/ path only (not kinds/)
+    old_types = root / "artifacts" / "types"
+    old_types.mkdir(parents=True, exist_ok=True)
+    (old_types / "changelog.json").write_text(
+        json.dumps({"x-dir": "changelogs", "x-prefix": "c", "x-numbered": True}),
+        encoding="utf-8",
+    )
+    r = Registry([], root=root)
+    # The schema in types/ must NOT be loaded
+    assert len(r.all()) == 0
+    with pytest.raises(ValueError):
+        r.get("changelog")

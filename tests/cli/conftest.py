@@ -34,12 +34,12 @@ _KINDS = {
 def vault(tmp_path: Path, monkeypatch):
     """Create a minimal vault, chdir into it, clear registered kinds."""
     root = tmp_path / "vault"
-    types_dir = root / "artifacts" / "types"
-    types_dir.mkdir(parents=True)
+    kinds_dir = root / "artifacts" / "kinds"
+    kinds_dir.mkdir(parents=True)
     (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
 
     for name, schema in _KINDS.items():
-        (types_dir / f"{name}.json").write_text(json.dumps(schema))
+        (kinds_dir / f"{name}.json").write_text(json.dumps(schema))
         kind_dir = schema["x-dir"]
         (root / "artifacts" / kind_dir).mkdir(parents=True, exist_ok=True)
 

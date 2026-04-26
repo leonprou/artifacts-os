@@ -108,18 +108,18 @@ def run(args) -> int:  # no registry — called before vault setup
     name = args.name or target.name
     created = datetime.date.today().isoformat()
 
-    # --- artifacts/ with kind subdirs, types, and vault marker ---
+    # --- artifacts/ with kind subdirs, kind schemas, and vault marker ---
     artifacts_dir = target / "artifacts"
-    types_dir = artifacts_dir / "types"
-    types_dir.mkdir(parents=True, exist_ok=True)
+    kinds_dir = artifacts_dir / "kinds"
+    kinds_dir.mkdir(parents=True, exist_ok=True)
 
     (artifacts_dir / "artifacts.yaml").write_text(
         _default_settings(name, created), encoding="utf-8"
     )
 
     for kind_name, schema in _DEFAULT_KINDS.items():
-        # type definition
-        (types_dir / f"{kind_name}.json").write_text(
+        # kind schema definition
+        (kinds_dir / f"{kind_name}.json").write_text(
             json.dumps(schema, indent=2) + "\n", encoding="utf-8"
         )
         # storage directory
@@ -133,7 +133,7 @@ def run(args) -> int:  # no registry — called before vault setup
 
     print(f"Initialised artifacts-os project: {target}")
     print(f"  artifacts/artifacts.yaml")
-    print(f"  artifacts/types/  ({len(_DEFAULT_KINDS)} kinds)")
+    print(f"  artifacts/kinds/  ({len(_DEFAULT_KINDS)} kinds)")
     for schema in _DEFAULT_KINDS.values():
         print(f"  artifacts/{schema['x-dir']}/")
     print(f"  openstation -> artifacts")

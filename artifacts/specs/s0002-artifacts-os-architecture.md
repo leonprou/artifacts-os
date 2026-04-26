@@ -210,7 +210,7 @@ class Registry:
         root: Path | None = None,
     ) -> None:
         """Build registry from caller-provided KindDef list.
-        If root is given, scan root/artifacts/types/*.json and merge
+        If root is given, scan root/artifacts/kinds/*.json and merge
         vault-defined kinds on top (same name → caller kind is replaced).
         root is stored and used by store/discover functions."""
 
@@ -229,7 +229,7 @@ class Registry:
 
 **Vault-defined kind loading** (`root` given):
 
-1. Glob `root/artifacts/types/*.json`.
+1. Glob `root/artifacts/kinds/*.json`.
 2. For each JSON file, read and parse as JSON Schema.
 3. Extract storage fields:
    - `x-prefix` → `prefix` (default `""`)
@@ -448,7 +448,7 @@ __all__ = [
 | `discover.list_artifacts` | all kinds, single kind, status filter |
 | `discover.resolve` | each match strategy, not-found, ambiguous |
 | `discover.search` | multiple matches, zero matches |
-| `registry` | vault types/ scan, caller override, vault override |
+| `registry` | vault kinds/ scan, caller override, vault override |
 
 ---
 

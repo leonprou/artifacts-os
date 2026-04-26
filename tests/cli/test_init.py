@@ -13,7 +13,7 @@ def test_init_creates_structure(tmp_path, monkeypatch, capsys):
     main(["init"])
 
     assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
-    assert (tmp_path / "artifacts" / "types").is_dir()
+    assert (tmp_path / "artifacts" / "kinds").is_dir()
     assert (tmp_path / "artifacts" / "tasks").is_dir()
     assert (tmp_path / "artifacts" / "specs").is_dir()
     assert (tmp_path / "artifacts" / "agents").is_dir()
@@ -27,8 +27,8 @@ def test_init_kind_jsons_valid(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     main(["init"])
 
-    types_dir = tmp_path / "artifacts" / "types"
-    jsons = list(types_dir.glob("*.json"))
+    kinds_dir = tmp_path / "artifacts" / "kinds"
+    jsons = list(kinds_dir.glob("*.json"))
     assert len(jsons) == 4
     for path in jsons:
         schema = json.loads(path.read_text())

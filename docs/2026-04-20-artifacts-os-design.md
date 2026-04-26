@@ -59,7 +59,7 @@ artifacts-os/
       models.py            # KindDef, ArtifactMeta, Artifact
       errors.py            # ArtifactError, NotFoundError, AmbiguousError, ValidationError
       frontmatter.py       # parse/dump via python-frontmatter
-      registry.py          # Registry class — merges caller kinds + vault types/
+      registry.py          # Registry class — merges caller kinds + vault kinds/
       ids.py               # next_prefixed_id, slugify, validate_slug
       store.py             # create, get, update (atomic writes)
       discover.py          # list_artifacts, resolve, search
@@ -71,7 +71,7 @@ artifacts-os/
 `artifacts-os` ships **no built-in kind schemas**. It is kind-agnostic.
 Callers (e.g. OpenStation) define their own kinds as `KindDef` objects
 in code and pass them to the `Registry`. Vault owners extend with
-custom JSON schemas dropped in `artifacts/types/`.
+custom JSON schemas dropped in `artifacts/kinds/`.
 
 ---
 
@@ -91,7 +91,7 @@ the directory tree until it finds it.
     notes/               # NNNN-slug.md  (prefix: n)
     alerts/              # NNNN-slug.md  (prefix: a)
     agents/              # slug.md       (no prefix, no number)
-    types/               # user-defined kind schemas (*.json)
+    kinds/               # user-defined kind schemas (*.json)
 ```
 
 ---
@@ -117,13 +117,13 @@ registry = Registry([
     KindDef(name="research", dir="research", prefix="r", numbered=True,
             statuses=[]),
     # ...
-], root=root)  # root triggers vault types/ scan on top
+], root=root)  # root triggers vault kinds/ scan on top
 ```
 
 ### Vault-defined (extensibility)
 
 Vault owners add custom kinds by dropping a JSON Schema file in
-`artifacts/types/`. The `Registry` merges these on top of the
+`artifacts/kinds/`. The `Registry` merges these on top of the
 caller-provided kinds when `root` is given. Vault schemas can also
 override a caller-provided kind by using the same `name`.
 
@@ -143,9 +143,9 @@ Kinds with no `status` property have `statuses: []`.
 ## Extensibility — Custom Kinds
 
 Vault owners add a kind by dropping a JSON schema file in
-`artifacts/types/`. No Python required.
+`artifacts/kinds/`. No Python required.
 
-**Example — `artifacts/types/changelog.json`:**
+**Example — `artifacts/kinds/changelog.json`:**
 
 ```json
 {
@@ -251,7 +251,7 @@ from artifacts_os import (
 ```
 
 `Registry(kinds, root=root)` — builds from caller-provided `KindDef`
-objects, then scans `root/artifacts/types/*.json` and merges any
+objects, then scans `root/artifacts/kinds/*.json` and merges any
 vault-defined kinds on top. Pass `root=None` to skip vault scanning.
 
 `resolve` accepts prefixed IDs (`t42`, `t0042`), full stems
