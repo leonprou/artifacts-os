@@ -3,7 +3,7 @@ kind: task
 id: t0021
 name: add-artifacts-kinds-subcommand-to
 type: implementation
-status: verified
+status: done
 assignee: developer
 owner: project-manager
 depends_on:
@@ -14,6 +14,7 @@ summary: >
   registered with the active Registry, mirroring the formatting
   options of `artifacts list`.
 started: 2026-04-26
+completed: 2026-04-26
 ---
 
 # Add `artifacts kinds` Subcommand to CLI
