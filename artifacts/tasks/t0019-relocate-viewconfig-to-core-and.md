@@ -3,11 +3,12 @@ kind: task
 id: t0019
 name: relocate-viewconfig-to-core-and
 type: spec
-status: verified
+status: done
 assignee: architect
 owner: user
 created: 2026-04-26
 started: 2026-04-26
+completed: 2026-04-26
 ---
 
 # Relocate Viewconfig To Core And Decouple Config From Views
