@@ -27,6 +27,7 @@ from artifacts_os.cli.commands import status as _status_cmd
 from artifacts_os.cli.commands import verify as _verify_cmd
 from artifacts_os.cli.commands import validate as _validate_cmd
 from artifacts_os.cli.commands import init as _init_cmd
+from artifacts_os.cli.commands import kinds as _kinds_cmd
 
 
 _registered_kinds: list[KindDef] = []
@@ -58,6 +59,7 @@ def _build_parser():
     _status_cmd.register(subparsers)
     _verify_cmd.register(subparsers)
     _validate_cmd.register(subparsers)
+    _kinds_cmd.register(subparsers)
 
     return parser
 

@@ -27,6 +27,14 @@ _KINDS = {
         "x-numbered": True,
         "properties": {},
     },
+    "spec": {
+        "x-dir": "specs",
+        "x-prefix": "s",
+        "x-numbered": True,
+        "properties": {
+            "status": {"enum": ["draft", "accepted"]}
+        },
+    },
 }
 
 

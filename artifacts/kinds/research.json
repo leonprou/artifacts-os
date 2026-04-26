@@ -1,8 +1,8 @@
 {
   "x-dir": "research",
-  "x-prefix": "",
-  "x-numbered": false,
-  "x-columns": ["name", "created:date", "status"],
+  "x-prefix": "r",
+  "x-numbered": true,
+  "x-columns": ["id", "name", "created:date", "status"],
   "title": "Research",
   "type": "object",
   "properties": {

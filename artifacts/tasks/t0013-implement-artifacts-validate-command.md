@@ -3,11 +3,12 @@ kind: task
 id: t0013
 name: implement-artifacts-validate-command
 type: implementation
-status: verified
+status: done
 assignee: developer
 owner: user
 created: 2026-04-23
 started: 2026-04-23
+completed: 2026-04-25
 ---
 
 # Implement Artifacts Validate Command

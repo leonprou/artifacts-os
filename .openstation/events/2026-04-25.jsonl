@@ -5,3 +5,5 @@
 {"ts":"2026-04-25T22:07:39.360311+03:00","event":"status_transition","task":"t0015-replace-openstation-vault-marker-with","old_status":"backlog","new_status":"ready","forced":false}
 {"ts":"2026-04-25T22:07:39.741872+03:00","event":"status_transition","task":"t0015-replace-openstation-vault-marker-with","old_status":"ready","new_status":"in-progress","forced":false}
 {"ts":"2026-04-25T22:07:40.100260+03:00","event":"status_transition","task":"t0015-replace-openstation-vault-marker-with","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-04-25T22:11:49.059701+03:00","event":"status_transition","task":"t0013-implement-artifacts-validate-command","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-04-25T22:11:49.520801+03:00","event":"status_transition","task":"t0014-rename-storage-root-from-openstation","old_status":"verified","new_status":"done","forced":false}

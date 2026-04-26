@@ -3,7 +3,7 @@ kind: task
 id: t0014
 name: rename-storage-root-from-openstation
 type: feature
-status: verified
+status: done
 assignee: developer
 owner: user
 created: 2026-04-23
@@ -11,6 +11,7 @@ summary: >
   Replace all hardcoded openstation/ storage root references with
   artifacts/ across source, tests, and docs.
 started: 2026-04-23
+completed: 2026-04-25
 ---
 
 # Rename Storage Root: openstation/ → artifacts/ in Source, Tests, and Docs

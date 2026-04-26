@@ -63,9 +63,9 @@ _DEFAULT_KINDS: dict[str, dict] = {
     },
     "research": {
         "x-dir": "research",
-        "x-prefix": "",
-        "x-numbered": False,
-        "x-columns": ["name", "created:date", "status"],
+        "x-prefix": "r",
+        "x-numbered": True,
+        "x-columns": ["id", "name", "created:date", "status"],
         "title": "Research",
         "type": "object",
         "properties": {"status": {"enum": ["draft", "done"]}},

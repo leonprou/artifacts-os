@@ -71,6 +71,7 @@ Write `src/artifacts_os/views/README.md` documenting the `views` module.
 
 - Replace `Registry.load("registry.yaml")` with the real constructor: `Registry(kinds=[kind_def], root=vault_path)`
 - Replace `list_artifacts(vault_path, kind_def)` with the real call: `list_artifacts(registry, kind="task")` (first arg is `Registry`, filter by kind name via keyword arg)
+- Expand the "Not Yet Implemented" section. The settings YAML schema is no longer purely deferred — the reference openstation vault already has a working schema in `~/workspace/open-station/.openstation/openstation.yaml` with `views.<name>: { columns, filters, sort? }` and `default_views.<kind>: <view-name>`. Note that ownership of file loading is being moved out of `views` into a new `config` module (see follow-up architect task), and the `views` module will retain only the pure dataclass + dict-parser. Update the wording to reflect "deferred to follow-up specs" with a one-line schema sketch and a pointer to the reference file, rather than "schema not yet defined".
 
 ## Findings
 

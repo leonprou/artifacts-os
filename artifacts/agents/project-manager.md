@@ -59,3 +59,7 @@ monitor progress, and maintain project documentation.
 - When prioritizing, prefer tasks that unblock other work.
 - When assigning, match task type to agent strengths — don't
   overload a single agent when another is available.
+- Use openstation as a reference — artifacts-os is derived from
+  `~/workspace/open-station`. When creating or triaging tasks,
+  consult that repo for prior art, established patterns, and
+  reference implementations.

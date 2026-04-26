@@ -11,8 +11,11 @@ id: s0007
 # artifacts-os: views Module
 
 Spec for `artifacts_os.views`. The `KindDef.meta` key convention is
-defined here. The `ViewConfig` full contract and settings YAML schema
-are deferred to a follow-up spec.
+defined here. `ViewConfig` is a pure data shape defined in `core.models`
+and consumed by `views` for column resolution; parsing and settings-file
+I/O are handled by `artifacts_os.config` (see s0009).
+
+Source reference: `~/workspace/open-station/.openstation/openstation.yaml`
 
 ## Purpose
 
@@ -30,15 +33,17 @@ renderables or strings and print/display them.
 
 ```python
 from artifacts_os.views import (
-    FieldSpec,          # dataclass: key, format, label
-    parse_field_specs,  # (spec_str: str) -> list[FieldSpec]
-    format_field,       # (value: Any, fmt: str | None) -> str
-    render_table,       # (items, columns, *, kind_def) -> rich.Table
-    ViewConfig,         # dataclass: columns, filters, sort
-    load_views,         # (path: Path) -> dict[str, ViewConfig]
-    default_columns,    # (kind_def: KindDef) -> list[FieldSpec]
+    FieldSpec,           # dataclass: key, format, label
+    parse_field_specs,   # (spec_str: str) -> list[FieldSpec]
+    format_field,        # (value: Any, fmt: str | None) -> str
+    render_table,        # (items, columns, *, kind_def) -> rich.Table
+    default_columns,     # (kind_def: KindDef) -> list[FieldSpec]
 )
 ```
+
+`ViewConfig` is defined in `core.models` and consumed by `views` for
+column resolution. Import it from `artifacts_os.core.models`, not from
+`artifacts_os.views`.
 
 ## Key Concepts
 
@@ -53,10 +58,18 @@ Examples: `id`, `created:date`, `created:date as Date`
 
 ### ViewConfig
 
-A named view loaded from a settings file. Contains:
-- `columns` — list of field spec strings
-- `filters` — key/value equality filters (e.g. `status: ready`)
-- `sort` — field name to sort by
+`ViewConfig` is defined in `artifacts_os.core.models` (alongside
+`KindDef` and `ArtifactMeta`). `views` consumes it — specifically its
+`.columns` field — for column resolution in `default_columns` and
+`render_table`. `views` does not own, parse, or construct `ViewConfig`;
+that responsibility belongs to `artifacts_os.config` via its private
+`_parse_view` helper (see s0009 for the parsing path).
+
+`ViewConfig` fields (defined in `core`):
+
+- `columns` — comma-separated field spec string (e.g. `"id,name,status"`)
+- `filters` — key/value equality filters (e.g. `{"status": "ready"}`)
+- `sort` — optional field name; prefix `-` for descending (e.g. `"-started"`)
 
 ### `KindDef.meta` keys consumed by `views`
 
@@ -92,14 +105,55 @@ Accepts `list[ArtifactMeta]` and `list[FieldSpec]`, returns a
 
 ## Scope Boundary
 
-- **In:** column layout, field formatting, named view loading, rich table construction
-- **Out:** argument parsing, I/O, user interaction, filter application
+- **In:** column layout, field formatting, rich table construction
+- **Out:** settings-file I/O (delegated to `artifacts_os.config`),
+  view-config parsing (delegated to `artifacts_os.config`),
+  argument parsing, user interaction, filter application
   (callers filter via `list_artifacts`; `views` only formats results)
 
-## Deferred
+## Settings YAML Schema (views section)
 
-| Item | Notes |
-|------|-------|
-| `ViewConfig` full contract | Settings YAML schema not yet defined |
-| Named view loading format | Tied to settings YAML schema |
-| Filter application in views | Evaluate whether `views` applies filters or delegates to core |
+The `views` key in the settings file maps view names to view dicts.
+Each view dict has the following structure (from the reference
+`openstation.yaml`):
+
+```yaml
+views:
+  <name>:
+    columns: "field1,field2:fmt,field3"  # required; comma-separated spec string
+    filters:                              # optional; key/value equality map
+      <field>: <value>
+    sort: field_name                      # optional; prefix "-" for descending
+```
+
+Examples from the reference:
+
+```yaml
+views:
+  active:
+    columns: id,name,assignee,status
+    filters:
+      status: in-progress
+
+  session-log:
+    columns: id,name,started:datetime,status
+    sort: started
+
+  sessions:
+    columns: id,task,agent,status,started,cost
+    sort: -started
+```
+
+`default_views` maps kind names to a view name:
+
+```yaml
+default_views:
+  session: sessions
+  spec: spec
+  research: research
+  note: note
+  alert: alerts
+```
+
+`artifacts_os.config._parse_view` is called for each entry in the
+`views` dict. `views` itself never reads, writes, or parses config files.

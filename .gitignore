@@ -26,3 +26,12 @@ htmlcov/
 
 # editors
 .DS_Store
+.obsidian/
+
+# openstation runtime
+.openstation/state.db
+.openstation/state.db-shm
+.openstation/state.db-wal
+
+# artifact logs
+artifacts/logs/*.jsonl
