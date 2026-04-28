@@ -17,6 +17,7 @@ from artifacts_os.views._views import (
     parse_field_specs,
     render_table,
 )
+from artifacts_os.views.models import ViewConfig, ViewsConfig, ViewsSettings
 
 __all__ = [
     "FieldSpec",
@@ -24,4 +25,7 @@ __all__ = [
     "format_field",
     "parse_field_specs",
     "render_table",
+    "ViewConfig",
+    "ViewsConfig",
+    "ViewsSettings",
 ]
