@@ -2,12 +2,16 @@
 kind: spec
 id: s0009
 name: artifacts-os-config-module
-status: draft
+status: superseded
 task: "[[t0016-re-scope-s0007-views-spec]]"
 created: 2026-04-26
 ---
 
 # artifacts-os: config Module
+
+> **Superseded by [[s0010-core-settings-module-spec]]** — settings
+> parsing has been folded into `core`; there is no separate `config`
+> module. The body below is preserved for design history.
 
 Spec for `artifacts_os.config`. This module owns settings-file I/O,
 validation, and schema versioning. It produces typed config objects

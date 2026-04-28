@@ -10,10 +10,14 @@ id: s0007
 
 # artifacts-os: views Module
 
-Spec for `artifacts_os.views`. The `KindDef.meta` key convention is
-defined here. `ViewConfig` is a pure data shape defined in `core.models`
-and consumed by `views` for column resolution; parsing and settings-file
-I/O are handled by `artifacts_os.config` (see s0009).
+Spec for `artifacts_os.views`. `views` owns its own settings: it
+defines `ViewConfig`, `ViewsConfig`, and `ViewsSettings` (a subclass
+of `core.Settings`), and parses its own section out of the raw YAML
+loaded by `core.load_settings`. The `KindDef.meta` key convention is
+also defined here.
+
+See [[s0010-core-settings-module-spec]] for the base `Settings`
+class and the extension pattern used by `views`.
 
 Source reference: `~/workspace/open-station/.openstation/openstation.yaml`
 
@@ -26,7 +30,7 @@ renderables or strings and print/display them.
 
 ## Dependencies
 
-- `artifacts_os` (core) — `ArtifactMeta`, `KindDef`
+- `artifacts_os` (core) — `ArtifactMeta`, `KindDef`, `Settings`
 - `rich>=13` — table rendering
 
 ## Public API
@@ -38,12 +42,18 @@ from artifacts_os.views import (
     format_field,        # (value: Any, fmt: str | None) -> str
     render_table,        # (items, columns, *, kind_def) -> rich.Table
     default_columns,     # (kind_def: KindDef) -> list[FieldSpec]
+    ViewConfig,          # dataclass: columns, filters, sort
+    ViewsConfig,         # dataclass: views, default_views
+    ViewsSettings,       # core.Settings subclass with .views: ViewsConfig
 )
 ```
 
-`ViewConfig` is defined in `core.models` and consumed by `views` for
-column resolution. Import it from `artifacts_os.core.models`, not from
-`artifacts_os.views`.
+`ViewConfig`, `ViewsConfig`, and `ViewsSettings` live in
+`artifacts_os.views.models`. `ViewsSettings.from_base(base: Settings)`
+takes the result of `core.load_settings` and parses the `views` /
+`default_views` sections out of `base.raw`. See
+[[s0010-core-settings-module-spec]] for the base `Settings` and the
+extension pattern.
 
 ## Key Concepts
 
@@ -58,18 +68,68 @@ Examples: `id`, `created:date`, `created:date as Date`
 
 ### ViewConfig
 
-`ViewConfig` is defined in `artifacts_os.core.models` (alongside
-`KindDef` and `ArtifactMeta`). `views` consumes it — specifically its
-`.columns` field — for column resolution in `default_columns` and
-`render_table`. `views` does not own, parse, or construct `ViewConfig`;
-that responsibility belongs to `artifacts_os.config` via its private
-`_parse_view` helper (see s0009 for the parsing path).
+`ViewConfig` is defined in `artifacts_os.views.models` and owned by
+the `views` module. It is consumed via its `.columns` field for
+column resolution in `default_columns` and `render_table`, and
+constructed by `ViewsSettings.from_base` when parsing the
+`views` section of the settings file.
 
-`ViewConfig` fields (defined in `core`):
+```python
+@dataclass
+class ViewConfig:
+    columns: str                    # comma-separated field spec string
+    filters: dict[str, Any]         # key/value equality filters; default {}
+    sort: str | None = None         # optional; "-" prefix = descending
+```
+
+Fields:
 
 - `columns` — comma-separated field spec string (e.g. `"id,name,status"`)
 - `filters` — key/value equality filters (e.g. `{"status": "ready"}`)
 - `sort` — optional field name; prefix `-` for descending (e.g. `"-started"`)
+
+### ViewsConfig
+
+`ViewsConfig` groups the parsed `views` and `default_views` maps:
+
+```python
+@dataclass
+class ViewsConfig:
+    views: dict[str, ViewConfig]    # name → ViewConfig
+    default_views: dict[str, str]   # kind → view name
+```
+
+### ViewsSettings
+
+`ViewsSettings` extends `core.Settings` (see s0010) and adds a typed
+`views: ViewsConfig | None` field. It is constructed via
+`ViewsSettings.from_base(base: Settings)`, which reads
+`base.raw["views"]` and `base.raw["default_views"]` and parses each
+view entry through a private `_parse_view` helper local to `views`.
+
+```python
+@dataclass(kw_only=True)
+class ViewsSettings(Settings):
+    views: ViewsConfig | None = None
+
+    @classmethod
+    def from_base(cls, base: Settings) -> "ViewsSettings": ...
+```
+
+Typical caller flow:
+
+```python
+from artifacts_os.core import load_settings
+from artifacts_os.views import ViewsSettings
+
+base = load_settings(path)
+settings = ViewsSettings.from_base(base)
+columns = settings.views.views["active"].columns
+```
+
+`views` is the **only** module that reads or writes the `views` /
+`default_views` sections of the settings file. `core` does not parse
+them; consumers do not parse them.
 
 ### `KindDef.meta` keys consumed by `views`
 
@@ -105,11 +165,14 @@ Accepts `list[ArtifactMeta]` and `list[FieldSpec]`, returns a
 
 ## Scope Boundary
 
-- **In:** column layout, field formatting, rich table construction
-- **Out:** settings-file I/O (delegated to `artifacts_os.config`),
-  view-config parsing (delegated to `artifacts_os.config`),
-  argument parsing, user interaction, filter application
-  (callers filter via `list_artifacts`; `views` only formats results)
+- **In:** column layout, field formatting, rich table construction,
+  ownership of `ViewConfig` / `ViewsConfig` / `ViewsSettings`,
+  parsing the `views` and `default_views` sections of the settings
+  file via `ViewsSettings.from_base`
+- **Out:** raw YAML I/O and `layout_version` validation (handled by
+  `core.load_settings`), argument parsing, user interaction,
+  filter application (callers filter via `list_artifacts`; `views`
+  only formats results)
 
 ## Settings YAML Schema (views section)
 
@@ -155,5 +218,7 @@ default_views:
   alert: alerts
 ```
 
-`artifacts_os.config._parse_view` is called for each entry in the
-`views` dict. `views` itself never reads, writes, or parses config files.
+`ViewsSettings.from_base` calls a private `_parse_view` helper local
+to `views` for each entry in the `views` dict. `core.load_settings`
+performs the raw YAML read; `views` performs the section-level
+parsing on top of `Settings.raw`.

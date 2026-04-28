@@ -3,7 +3,7 @@ kind: task
 id: t0019
 name: relocate-viewconfig-to-core-and
 type: spec
-status: done
+status: rejected
 assignee: architect
 owner: user
 created: 2026-04-26
@@ -129,3 +129,14 @@ Key decisions recorded:
   s0009 rationale references s0007.
 
 No source code was touched — this is a spec-only change.
+
+## Resolution
+
+Closed as obsolete (status: rejected). The DAG fix this task proposed
+is subsumed by [[s0010-core-settings-module-spec]], which folds
+settings parsing into `core` directly — there is no longer a separate
+`config` module to decouple from `views`. `ViewConfig` lands in
+`core.models` as part of that spec.
+
+See also `t0024-spec-core-settings-module-supersede` for the decision
+to fold settings into `core`.
