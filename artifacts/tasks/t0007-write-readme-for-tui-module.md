@@ -3,7 +3,7 @@ kind: task
 id: t0007
 name: write-readme-for-tui-module
 type: documentation
-status: ready
+status: rejected
 assignee: author
 owner: user
 created: 2026-04-22

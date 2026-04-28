@@ -19,6 +19,9 @@ from artifacts_os.views import (
     format_field,
     default_columns,
     render_table,
+    ViewConfig,
+    ViewsConfig,
+    ViewsSettings,
 )
 ```
 
@@ -135,17 +138,26 @@ KindDef(
 End-to-end: list artifacts, build columns, render, print.
 
 ```python
+from pathlib import Path
 from rich.console import Console
-from artifacts_os.core import Registry, list_artifacts
+from artifacts_os.core import Registry, KindDef, find_vault_root, list_artifacts
 from artifacts_os.views import default_columns, render_table
 
-console = Console()
-registry = Registry.load("registry.yaml")
-kind_def = registry.get("task")
+root = find_vault_root()
+kind_def = KindDef(
+    name="task", dir="tasks", prefix="t", numbered=True,
+    statuses=["backlog", "ready", "in-progress", "done"],
+    meta={
+        "columns": ["id", "status", "name"],
+        "status_colors": {"done": "green", "in-progress": "yellow"},
+    },
+)
+registry = Registry(kinds=[kind_def], root=root)
 
-items = list_artifacts(vault_path, kind_def)
-columns = default_columns(kind_def)           # reads meta["columns"]
-table = render_table(items, columns, kind_def=kind_def)  # applies status_colors
+console = Console()
+items = list_artifacts(registry, kind="task")
+columns = default_columns(kind_def)                          # reads meta["columns"]
+table = render_table(items, columns, kind_def=kind_def)      # applies status_colors
 console.print(table)
 ```
 
@@ -161,12 +173,82 @@ console.print(table)
 
 ---
 
-## Not Yet Implemented
+## Settings Extension
 
-| Name | Notes |
-|------|-------|
-| `ViewConfig` | Named view dataclass (columns, filters, sort) — deferred pending settings YAML schema |
-| `load_views` | Loads named views from a settings file — blocked on `ViewConfig` |
+`views` owns the `views` and `default_views` top-level keys of
+`artifacts.yaml` end-to-end. `core.load_settings` parses the global
+section (`layout_version`, `project`) and stores the rest of the
+YAML document on `Settings.raw`; `views` reads its sections out of
+that dict and produces a typed `ViewsSettings` via
+`ViewsSettings.from_base`.
 
-These are intentionally omitted from `__all__` until the settings YAML
-schema is defined.
+### `ViewConfig`
+
+```python
+@dataclass
+class ViewConfig:
+    columns: str                              # e.g. "id, status, created:date as Date"
+    filters: dict[str, Any]                   # frontmatter-key → expected value (default: {})
+    sort: str | None = None                   # field key to sort by
+```
+
+A single named view's configuration. `columns` is a comma-separated
+field-spec string in the same syntax accepted by
+`parse_field_specs` above; the caller is responsible for parsing it
+when it needs `FieldSpec` objects.
+
+### `ViewsConfig`
+
+```python
+@dataclass
+class ViewsConfig:
+    views: dict[str, ViewConfig]              # view name → config
+    default_views: dict[str, str]             # kind name → view name
+```
+
+The parsed `views` and `default_views` sections of the settings
+file, bundled together. `default_views` maps a kind to the name of
+the view from `views` that should be used by default.
+
+### `ViewsSettings`
+
+```python
+@dataclass(kw_only=True)
+class ViewsSettings(Settings):
+    views: ViewsConfig | None = None
+```
+
+Subclass of `core.Settings`. The `views` field is `None` when
+neither `views` nor `default_views` is present in the settings
+file; otherwise it holds a populated `ViewsConfig`.
+
+#### `ViewsSettings.from_base(base: Settings) -> ViewsSettings`
+
+Constructs a `ViewsSettings` by reading the `views` and
+`default_views` sections out of `base.raw`. Chain it with
+`core.load_settings`:
+
+```python
+from pathlib import Path
+from artifacts_os.core import load_settings
+from artifacts_os.views import ViewsSettings
+
+base = load_settings(Path("artifacts/artifacts.yaml"))
+settings = ViewsSettings.from_base(base)
+
+if settings.views is not None:
+    active = settings.views.views["active"]   # ViewConfig
+    active.columns                            # "id, status, created:date as Date"
+
+    default_view = settings.views.default_views.get("task", "active")
+```
+
+If a view entry is missing the required `columns` key,
+`from_base` raises `ValueError`. Validation of any other view
+fields is the caller's responsibility.
+
+A consumer that needs more than one module's settings at once can
+either compose subclasses —
+`RunSettings.from_base(ViewsSettings.from_base(base))` — or define
+a single subclass that adds all the fields it cares about. The
+library does not prescribe one or the other.

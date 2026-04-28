@@ -3,9 +3,9 @@
 Storage, discovery, and registry for artifacts-os. This is the
 foundational layer; all other modules depend on it.
 
-For architecture details see
-`artifacts/specs/s0002-artifacts-os-architecture.md` and
-`artifacts/specs/s0005-artifacts-os-module-system.md`.
+For architecture details see specs `s2060-artifacts-os-architecture`
+and `s2061-artifacts-os-module-system`, or
+[docs/architecture.md](../../../../docs/architecture.md).
 
 ---
 
@@ -21,8 +21,12 @@ from artifacts_os.core import (
     create, get, update,
     # discovery
     list_artifacts, resolve, search,
+    # settings
+    load_settings, Settings, ProjectConfig, UnsupportedSchemaVersion,
     # models
     Artifact, ArtifactMeta, KindDef,
+    # validation
+    validate_one, validate_many, ValidationIssue, ValidationResult,
     # errors
     ArtifactError, NotFoundError, AmbiguousError, ValidationError,
 )
@@ -35,6 +39,8 @@ from artifacts_os.core import (
 | `KindDef` | Describes an artifact kind: directory, ID prefix, numbering, allowed statuses, JSON Schema. |
 | `ArtifactMeta` | Lightweight view populated from frontmatter only (no body read). |
 | `Artifact` | Full artifact — extends `ArtifactMeta` with `body: str`. |
+| `Settings` | Base settings dataclass parsed from `artifacts.yaml`. Designed for extension by other modules. |
+| `ProjectConfig` | Project identity section: `name` (required) and `alias` (optional). |
 
 ### CRUD (`store.py`)
 
@@ -77,7 +83,7 @@ find_vault_root(start: Path | None = None) → Path | None
 ```
 
 Walks up from `start` (default: `cwd`) until a directory containing
-`.openstation/` is found. Returns it, or `None`.
+`artifacts/artifacts.yaml` is found. Returns it, or `None`.
 
 ### Errors (`errors.py`)
 
@@ -87,6 +93,101 @@ Walks up from `start` (default: `cwd`) until a directory containing
 | `ValidationError` | 2 | Frontmatter failed schema or status validation. |
 | `NotFoundError` | 3 | No artifact matches the query. |
 | `AmbiguousError` | 4 | Query matched multiple artifacts. |
+
+### Validation (`validate.py`)
+
+| Function / Class | Description |
+|---|---|
+| `validate_one(meta, registry) → ValidationResult` | Validate frontmatter of a single `ArtifactMeta`. Pure; no I/O. |
+| `validate_many(metas, registry) → list[ValidationResult]` | Validate a list of artifacts; returns one result per artifact. |
+| `ValidationIssue` | Single issue: `field`, `message`, `fixable`, `severity` (`"error"` or `"warning"`). |
+| `ValidationResult` | Per-artifact result: `name`, `kind`, `issues`. Properties: `.errors`, `.warnings`, `.valid`. |
+
+`validate_one` checks (in order): `kind` present and registered → required fields present → status
+in allowed set → ID format → JSON Schema constraints → unknown fields (as warnings). Schema
+validation requires `jsonschema`; skipped silently if not installed.
+
+---
+
+### Settings (`settings.py`)
+
+`core` owns the project settings file (`artifacts.yaml` at the vault
+root) end-to-end: vault discovery, kinds loading, init-time YAML
+writes, and runtime parsing all live in this module.
+
+```python
+load_settings(path: Path) -> Settings
+```
+
+Reads the YAML file at *path*, validates `layout_version`, builds a
+`ProjectConfig` from the required `project` section, and returns a
+populated `Settings` whose `raw` field holds the full parsed
+document. `core` does not parse, type, or validate sections it does
+not own (e.g. `views`, `default_views`, consumer-defined keys) —
+those live in `Settings.raw` for extension subclasses to read.
+
+```python
+from pathlib import Path
+from artifacts_os.core import load_settings
+
+base = load_settings(Path("artifacts/artifacts.yaml"))
+base.layout_version    # 1
+base.project.name      # "my-project"
+base.project.alias     # "mp" or None
+base.raw["views"]      # untyped — owned by views module
+```
+
+#### `Settings` — base for extension
+
+`Settings` is a `kw_only=True` dataclass intentionally designed as a
+**base class** that other modules subclass. The base contains only
+what `core` itself reads:
+
+```python
+@dataclass(kw_only=True)
+class Settings:
+    layout_version: int
+    project: ProjectConfig
+    raw: dict[str, Any] = field(default_factory=dict)
+```
+
+Each module owns one or more top-level keys of `artifacts.yaml`
+end-to-end — the dataclass(es) for that section, its parser, and
+(eventually) its writer. `core` parses nothing it does not own.
+
+| Module    | Owns top-level key(s)         | Subclass                      |
+|-----------|-------------------------------|-------------------------------|
+| `core`    | `layout_version`, `project`   | `Settings` (base)             |
+| `views`   | `views`, `default_views`      | `ViewsSettings`               |
+| consumer  | `<their key(s)>`              | their own `Settings` subclass |
+
+A module subclass adds its own typed fields and a
+`from_base(base: Settings) -> Self` parser that reads the relevant
+section from `base.raw`. See `views.ViewsSettings` for the
+canonical example, and `s0010-core-settings-module-spec` for the
+full extension pattern (including how consumers chain or compose
+multiple subclasses).
+
+The convention is **structural, not enforced** — `Settings.raw` is
+plain data and any caller can read any field. Following the
+convention keeps the eventual write API tractable.
+
+#### Schema versioning
+
+The settings file must contain `layout_version: <int>` at the top
+level. The current supported version is **1**.
+
+| Condition                    | Behaviour                                                          |
+|------------------------------|--------------------------------------------------------------------|
+| `layout_version` absent      | Raise `UnsupportedSchemaVersion("missing layout_version")`         |
+| `layout_version: 1`          | Proceed normally                                                   |
+| `layout_version: N` (N > 1)  | Raise `UnsupportedSchemaVersion(f"unsupported version {N}")`       |
+
+`UnsupportedSchemaVersion` is a `ValueError` subclass exported from
+`artifacts_os.core`. Callers catch it and surface a user-facing
+error before exiting. `core` validates only `layout_version` and
+`project`; schema validation for other sections is the
+responsibility of the module that owns them.
 
 ---
 

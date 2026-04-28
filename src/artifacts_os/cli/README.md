@@ -43,10 +43,10 @@ That's it. No configuration file is needed.
 ## Project Detection
 
 `artifacts` finds your project automatically. Starting from the current
-directory, it walks up the directory tree until it finds a `.openstation`
-marker. You can run the command from anywhere inside the project — root,
-a subdirectory, or a nested worktree — and it will always find the right
-place.
+directory, it walks up the directory tree until it finds a directory
+containing `artifacts/artifacts.yaml`. You can run the command from
+anywhere inside the project — root, a subdirectory, or a nested
+worktree — and it will always find the right place.
 
 ---
 
@@ -238,6 +238,100 @@ artifacts verify --kind task --all
 
 # JSON output for automation
 artifacts verify t0042 -j
+```
+
+---
+
+### `init` — Bootstrap a new project
+
+```
+artifacts init [DIRECTORY] [--name NAME]
+```
+
+Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
+Writes `artifacts/artifacts.yaml`, per-kind storage directories, per-kind JSON
+schemas under `artifacts/kinds/`, and an `openstation → artifacts` symlink for
+external tooling compatibility.
+
+| Flag | Description |
+|------|-------------|
+| `directory` | Target directory (default: `.`) |
+| `--name NAME` | Project name (default: directory name) |
+
+**Example:**
+
+```bash
+# Bootstrap a project in the current directory
+artifacts init
+
+# Bootstrap a named project in a new directory
+artifacts init my-project --name "My Project"
+```
+
+---
+
+### `validate` — Check artifact frontmatter correctness
+
+```
+artifacts validate [<ref>] [--kind KIND] [--fix | --dry-run] [--all] [-j]
+```
+
+Validates frontmatter fields against the kind's schema. Reports errors
+(required fields missing, invalid status values) and warnings. Exits 0
+when no errors are found; exits 2 when any errors are found.
+
+| Flag | Description |
+|------|-------------|
+| `ref` | Artifact to validate (omit to validate all) |
+| `--kind KIND`, `-k` | Filter by kind |
+| `--fix` | Auto-correct fixable issues (e.g. missing `status` → first allowed value) |
+| `--dry-run` | Preview fixes without writing |
+| `--all` | Explicitly validate every artifact |
+| `-j`, `--json` | JSON output — only artifacts with issues |
+
+**Examples:**
+
+```bash
+# Validate all artifacts
+artifacts validate
+
+# Validate only tasks
+artifacts validate --kind task
+
+# Preview auto-fix for a single artifact
+artifacts validate t0042 --dry-run
+
+# Apply auto-fix
+artifacts validate t0042 --fix
+```
+
+---
+
+### `kinds` — List registered artifact kinds
+
+```
+artifacts kinds [-q | -j]
+```
+
+Lists all artifact kinds registered in the active project, including
+any vault-defined kinds loaded from `artifacts/kinds/*.json`.
+
+| Flag | Description |
+|------|-------------|
+| `-q`, `--quiet` | One kind name per line — good for scripts |
+| `-j`, `--json` | JSON array with full kind metadata |
+
+**Examples:**
+
+```bash
+# Table of all kinds
+artifacts kinds
+
+# Just the names
+artifacts kinds -q
+
+# JSON (includes dir, prefix, numbered, statuses)
+artifacts kinds -j
 ```
 
 ---

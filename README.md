@@ -61,13 +61,13 @@ artifacts status t0001 in-progress
 src/artifacts_os/
   __init__.py    # re-exports core public API
   core/          # storage, discovery, registry (fully implemented)
-  views/         # column layout, rendering (stub — spec: s0002)
-  log/           # JSONL operation log (stub — spec: s0005)
-  cli/           # argument parsing, command dispatch (stub)
-  tui/           # interactive terminal browser (stub)
-  ai/            # agent context and execution (stub)
+  views/         # formatting layer — column layout, Rich rendering (shipped)
+  log/           # JSONL operation log (stub — spec: s2063)
+  cli/           # command-line interface — argument parsing, dispatch (shipped)
+  tui/           # interactive terminal browser (stub — spec: s2065)
+  ai/            # agent context and execution (stub — spec: s2066)
 tests/           # mirrors src/; uses tmp_path + make_vault fixture, no mocking
-artifacts/specs/ # architecture and module specs
+docs/            # architecture, settings, per-module guides
 ```
 
 ## Development
@@ -85,9 +85,19 @@ Coding conventions:
 - Atomic writes: `O_CREAT | O_EXCL` for create, `os.replace` for update
 - No mocking in tests — all tests operate on real temp-dir vaults
 
-## Architecture
+## Documentation
 
-See `artifacts/specs/` for deep dives:
+### Guides
 
-- [`s0002-artifacts-os-architecture.md`](artifacts/specs/s0002-artifacts-os-architecture.md) — module contracts, storage model, public API
-- [`s0005-artifacts-os-module-system.md`](artifacts/specs/s0005-artifacts-os-module-system.md) — module inventory, dependency DAG, extensibility model
+| Page | Summary |
+|------|---------|
+| [docs/architecture.md](docs/architecture.md) | Package overview, module map, dependency DAG, design principles |
+| [docs/settings.md](docs/settings.md) | Cross-cutting settings: public API, extension pattern, schema versioning |
+
+### Module References
+
+| Module | Summary |
+|--------|---------|
+| [core](src/artifacts_os/core/README.md) | Storage, discovery, registry, settings, validation — foundational layer |
+| [views](src/artifacts_os/views/README.md) | Formatting layer — column specs, field formatting, Rich table rendering, `ViewsSettings` |
+| [cli](src/artifacts_os/cli/README.md) | `artifacts` CLI — all commands with flags and examples |

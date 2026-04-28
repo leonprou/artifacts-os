@@ -18,13 +18,13 @@ it finds this file.
 src/artifacts_os/
   __init__.py    # re-exports core public API
   core/          # fully implemented — storage, discovery, registry
-  views/         # stub — column layout, rendering (spec: s2062)
+  views/         # shipped — formatting layer, Rich rendering (spec: s2062)
   log/           # stub — JSONL operation log (spec: s2063)
-  cli/           # stub — argument parsing, command dispatch (spec: s2064)
+  cli/           # shipped — argument parsing, command dispatch (spec: s2064)
   tui/           # stub — interactive terminal browser (spec: s2065)
   ai/            # stub — agent context and execution (spec: s2066)
 tests/           # mirrors src; uses tmp_path + make_vault fixture, no mocking
-docs/            # specs: s2060 (architecture), s2061 (module system), s2062–s2066
+docs/            # architecture overview, settings guide, per-module references
 ```
 
 ## Common Commands
@@ -34,6 +34,14 @@ pip install -e ".[dev]"           # install with dev deps
 pytest                            # run all tests
 pytest tests/core/test_store.py  # run a single test file
 ```
+
+## Settings
+
+Settings are parsed from `artifacts/artifacts.yaml` using a base-class +
+extension-subclass pattern: `core` owns `Settings` and `load_settings`;
+other modules extend via a `from_base` classmethod without coupling to
+the library's release cycle. See [`docs/settings.md`](docs/settings.md)
+for the full API, worked example, and extension rules.
 
 ## Coding Style
 

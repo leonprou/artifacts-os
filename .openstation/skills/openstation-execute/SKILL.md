@@ -252,6 +252,21 @@ See `docs/storage-query-layer.md` § 5 for the full
 sub-task storage model and `docs/lifecycle.md` § "Sub-Tasks"
 for blocking rules.
 
+### Task + Plan Convention
+
+When a task is backed by a design doc in `docs/plans/`, link to the plan
+from the task's `## Requirements` section rather than duplicating
+requirements inline. Keep the verification checklist in the task file.
+
+```markdown
+## Requirements
+See [`docs/plans/YYYY-MM-DD-<topic>-design.md`](<relative-path>) for full
+scope, approach, and conventions.
+
+## Verification
+- [ ] ...
+```
+
 ### 9. Update Documentation
 
 If your changes affect behavior, conventions, or structures

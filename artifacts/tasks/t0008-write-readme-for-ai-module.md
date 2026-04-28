@@ -3,7 +3,7 @@ kind: task
 id: t0008
 name: write-readme-for-ai-module
 type: documentation
-status: ready
+status: rejected
 assignee: author
 owner: user
 created: 2026-04-22
