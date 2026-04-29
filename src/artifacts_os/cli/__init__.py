@@ -14,6 +14,7 @@ from typing import Sequence
 
 from artifacts_os.core import (
     find_vault_root,
+    load_settings,
     Registry,
     KindDef,
     NotFoundError,
@@ -28,9 +29,32 @@ from artifacts_os.cli.commands import verify as _verify_cmd
 from artifacts_os.cli.commands import validate as _validate_cmd
 from artifacts_os.cli.commands import init as _init_cmd
 from artifacts_os.cli.commands import kinds as _kinds_cmd
+from artifacts_os.cli.settings import CliSettings
 
 
 _registered_kinds: list[KindDef] = []
+
+
+def _load_cli_settings(root) -> CliSettings | None:
+    """Try to load CliSettings from the vault at *root*.
+
+    Returns ``None`` on any error so callers can proceed without settings.
+    """
+    try:
+        from pathlib import Path
+        settings_path = Path(root) / "artifacts" / "artifacts.yaml"
+        base = load_settings(settings_path)
+        return CliSettings.from_base(base)
+    except Exception:
+        return None
+
+
+def _apply_aliases(argv: list[str], aliases: dict[str, str]) -> list[str]:
+    """Replace ``argv[0]`` with its mapped value if a matching alias exists."""
+    if not argv:
+        return argv
+    mapped = aliases.get(argv[0])
+    return [str(mapped)] + argv[1:] if mapped is not None else argv
 
 
 def register_kinds(kinds: list[KindDef]) -> None:
@@ -65,15 +89,24 @@ def _build_parser():
 
 
 def _run(argv: Sequence[str]) -> int:
+    argv = list(argv)
+
+    # Find vault root early so aliases can be applied before argparse sees argv.
+    # Aliases and defaults are silently ignored when no vault is found.
+    root = find_vault_root()
+    cli_settings = _load_cli_settings(root) if root is not None else None
+    if cli_settings is not None:
+        argv = _apply_aliases(argv, cli_settings.aliases)
+
     parser = _build_parser()
-    args = parser.parse_args(list(argv))
+    args = parser.parse_args(argv)
+    args.cli_settings = cli_settings
 
     try:
         # Pre-registry commands (e.g. init) run before vault/registry setup.
         if getattr(args, "_pre_registry", False):
             return args.func(args) or 0
 
-        root = find_vault_root()
         if root is None:
             print("error: not in an artifacts-os project", file=sys.stderr)
             return 2

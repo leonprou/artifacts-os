@@ -3,3 +3,16 @@ layout_version: 1
 project:
   name: "artifacts-os"
   created: "2026-04-20"
+
+cli:
+  defaults:
+    show:
+      editor: true
+  aliases:
+    ls: list
+    sh: show
+    new: create
+    st: status
+    v: verify
+    va: validate
+    k: kinds

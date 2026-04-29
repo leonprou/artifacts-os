@@ -145,7 +145,14 @@ artifacts show t0042 -e
 ### `create` — Add a new artifact
 
 ```
-artifacts create <title> [--kind KIND] [--body BODY] [--fields KEY=VALUE ...]
+artifacts create <title> [--kind KIND]
+                         [--body BODY | --body-file PATH]
+                         [--name SLUG]
+                         [--assignee USER] [--owner USER]
+                         [--parent REF] [--depends-on REF ...]
+                         [--type TYPE]
+                         [--fields KEY=VALUE ...]
+                         [--dry-run]
 ```
 
 Creates an artifact file and prints its name. Numbered kinds (like `task`)
@@ -157,7 +164,24 @@ as the filename directly.
 | `title` | Human-readable title; used to derive the filename slug |
 | `--kind KIND`, `-k` | Artifact kind (default: `task`) |
 | `--body BODY`, `-b` | Initial body text |
-| `--fields KEY=VALUE`, `-f` | Set extra frontmatter fields; repeat for multiple |
+| `--body-file PATH` | Read body from *PATH*; use `'-'` to read from stdin |
+| `--name SLUG` | Override the auto-derived slug (controls the name portion of the filename) |
+| `--assignee USER` | Set `assignee` in frontmatter |
+| `--owner USER` | Set `owner` in frontmatter |
+| `--parent REF` | Set `parent` in frontmatter; bare refs are auto-wrapped as `[[REF]]` |
+| `--depends-on REF` | Add a dependency; repeat for multiple; bare refs auto-wrapped |
+| `--type TYPE` | Set `type` in frontmatter |
+| `--fields KEY=VALUE`, `-f` | Set extra frontmatter fields; comma-separated values produce a list |
+| `--dry-run`, `-n` | Print resolved frontmatter and body without writing any file |
+
+**Wikilink auto-wrapping** — `--parent` and `--depends-on` accept bare
+artifact refs (e.g. `t0042`) and wrap them as `[[t0042]]` automatically.
+Passing an already-wrapped value like `[[t0042]]` is also fine.
+
+**Comma-list values** — `--fields depends_on=t0001,t0002` produces a YAML
+list `["[[t0001]]", "[[t0002]]"]`. Any field with commas in the value is
+split the same way; wikilink wrapping applies only to `parent` and
+`depends_on`.
 
 **Examples:**
 
@@ -170,10 +194,32 @@ artifacts create "Fix login bug"
 artifacts create "my-researcher" --kind agent
 # → my-researcher
 
-# Create with initial status and body
+# Create with initial status and convenience flags
 artifacts create "Deploy pipeline" \
   --fields status=ready \
-  --body "## Steps\n\n- Step 1\n- Step 2"
+  --assignee alice \
+  --parent t0010 \
+  --type feature
+
+# Read body from a markdown file
+artifacts create "Big spec" --body-file spec-draft.md
+
+# Read body from stdin
+echo "## Notes" | artifacts create "Scratch pad" --body-file -
+
+# Override the auto-derived slug
+artifacts create "Improve CLI ergonomics" --name improve-cli
+# → t0001-improve-cli
+
+# Preview without writing
+artifacts create "Test task" --dry-run --assignee carol
+
+# Multiple dependencies
+artifacts create "Blocked task" \
+  --depends-on t0001 --depends-on t0002
+
+# Comma-list dependencies via --fields
+artifacts create "Blocked task" --fields depends_on=t0001,t0002
 ```
 
 ---
@@ -332,6 +378,59 @@ artifacts kinds -q
 
 # JSON (includes dir, prefix, numbered, statuses)
 artifacts kinds -j
+```
+
+---
+
+## Project Configuration (`cli` section)
+
+The `cli` top-level key in `artifacts/artifacts.yaml` lets you set
+per-command defaults and command aliases.  Both sections are optional;
+if the key is absent entirely, the CLI behaves as if neither were configured.
+
+### Per-command defaults
+
+```yaml
+cli:
+  defaults:
+    show:
+      editor: true   # behave as if -e were always passed to `show`
+```
+
+| Setting | Type | Effect |
+|---------|------|--------|
+| `cli.defaults.show.editor` | bool | Open `$EDITOR` automatically on `show`, unless `-j` is also passed. |
+
+Explicit flags always take precedence over defaults. Passing `-j` to `show`
+prints JSON regardless of the `editor` default.
+
+### Command aliases
+
+```yaml
+cli:
+  aliases:
+    ls: list          # `artifacts ls` → runs `list`
+    t: status         # `artifacts t` → runs `status`
+```
+
+Aliases are applied to the first argument before argparse sees it.
+An alias that maps to an unrecognised command produces the same error as
+typing that command directly (argparse exits with code 2).
+
+### Complete example
+
+```yaml
+layout_version: 1
+project:
+  name: my-project
+
+cli:
+  defaults:
+    show:
+      editor: true
+  aliases:
+    ls: list
+    t: status
 ```
 
 ---

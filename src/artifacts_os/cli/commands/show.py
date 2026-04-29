@@ -29,7 +29,15 @@ def run(args, registry: Registry) -> int:
         print(json.dumps(data, default=str))
         return 0
 
-    if args.editor:
+    # editor mode: explicit -e flag, or default from cli settings (unless -j was given)
+    open_editor = args.editor
+    if not open_editor:
+        cli_settings = getattr(args, "cli_settings", None)
+        if cli_settings is not None:
+            show_defaults = cli_settings.defaults.get("show") or {}
+            open_editor = bool(show_defaults.get("editor", False))
+
+    if open_editor:
         editor = os.environ.get("EDITOR", "vi")
         subprocess.run([editor, str(artifact.path)], check=False)
         return 0
