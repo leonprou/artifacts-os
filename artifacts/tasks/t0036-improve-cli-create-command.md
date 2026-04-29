@@ -2,7 +2,7 @@
 assignee: developer
 id: t0036
 kind: task
-name: t0036-improve-cli-create-command
+name: improve-cli-create-command
 owner: user
 status: backlog
 type: feature
@@ -30,8 +30,10 @@ Triage and pick the subset to ship. Refine before promoting to ready.
   them automatically — or accept the full `[[…]]` form.
 - **List values.** Allow `--fields depends_on=t0001,t0002` (comma-list)
   or repeated `--depends-on t0001 --depends-on t0002`.
-- **Slug override.** `--slug <slug>` to override the slug derived from
-  the title.
+- **Name override.** `--name <name>` to override the auto-derived
+  `name` (slug). Depends on **t0037** which makes `name` slug-only
+  across all kinds. Filename stem stays `{id}-{name}.md` for numbered
+  kinds; the override controls the slug portion.
 - **Dry run.** `--dry-run` prints the resolved name, kind, frontmatter,
   and body without writing the file.
 - **Templates.** `--template <name>` scaffolds a default body

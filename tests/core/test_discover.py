@@ -42,13 +42,15 @@ def test_list_tag_filter(make_vault) -> None:
     create(registry, "task", "B", fields={"tags": ["later"]})
     items = list_artifacts(registry, tag="urgent")
     assert len(items) == 1
-    assert items[0].name.endswith("-a")
+    # `name` is slug-only; the full stem lives in path.stem.
+    assert items[0].name == "a"
+    assert items[0].path.stem == "t0001-a"
 
 
 def test_resolve_exact_stem(make_vault) -> None:
     _, registry = make_vault()
     a = create(registry, "task", "Fix thing")
-    assert resolve(registry, a.name) == a.path
+    assert resolve(registry, a.path.stem) == a.path
 
 
 def test_resolve_prefixed_short_id(make_vault) -> None:

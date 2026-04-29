@@ -86,12 +86,15 @@ def create(
     if not slug:
         raise ValidationError(f"Cannot derive slug from title: {title!r}")
 
+    # Persisted `name` is slug-only across all kinds. The file path stem
+    # encodes the full identifier — `{id}-{slug}` for numbered, `{slug}`
+    # for non-numbered. See spec s0002 § Frontmatter — `name` field.
     if kd.numbered:
         last_err: OSError | None = None
         for _ in range(5):
             aid = next_prefixed_id(subdir, kd.prefix)
-            name = f"{aid}-{slug}"
-            path = subdir / f"{name}.md"
+            stem = f"{aid}-{slug}"
+            path = subdir / f"{stem}.md"
             try:
                 fd = os.open(
                     path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
@@ -106,11 +109,10 @@ def create(
             )
     else:
         aid = slug
-        name = slug
-        path = subdir / f"{name}.md"
+        path = subdir / f"{slug}.md"
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
 
-    fm_dict: dict = {"kind": kind, "id": aid, "name": name, **fields}
+    fm_dict: dict = {"kind": kind, "id": aid, "name": slug, **fields}
     _validate_schema(kd, fm_dict)
 
     text = _frontmatter.dump(fm_dict, body)

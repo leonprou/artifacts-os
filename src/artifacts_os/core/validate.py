@@ -77,7 +77,7 @@ def validate_one(
             fixable=False,
             severity="error",
         ))
-        return ValidationResult(name=meta.name, kind=kind_str, issues=issues)
+        return ValidationResult(name=meta.path.stem, kind=kind_str, issues=issues)
 
     # Rule 2: kind resolves
     kind_def = None
@@ -90,7 +90,7 @@ def validate_one(
             fixable=False,
             severity="error",
         ))
-        return ValidationResult(name=meta.name, kind=kind_str, issues=issues)
+        return ValidationResult(name=meta.path.stem, kind=kind_str, issues=issues)
 
     # Rule 1 (post-kind): remaining required fields, using per-kind override when set.
     required = kind_def.required_fields if kind_def.required_fields is not None else list(_REQUIRED_KEYS)
@@ -178,7 +178,7 @@ def validate_one(
                     severity="warning",
                 ))
 
-    return ValidationResult(name=meta.name, kind=kind_str, issues=issues)
+    return ValidationResult(name=meta.path.stem, kind=kind_str, issues=issues)
 
 
 def validate_many(

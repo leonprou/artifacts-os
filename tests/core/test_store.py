@@ -10,7 +10,9 @@ def test_create_numbered(make_vault) -> None:
     root, registry = make_vault()
     a = create(registry, "task", "Fix the bug")
     assert a.id == "t0001"
-    assert a.name == "t0001-fix-the-bug"
+    # Persisted `name` is slug-only; the id-prefixed stem lives in the path.
+    assert a.name == "fix-the-bug"
+    assert a.path.stem == "t0001-fix-the-bug"
     assert a.path.name == "t0001-fix-the-bug.md"
     assert a.path.parent == root / "artifacts" / "tasks"
 

@@ -27,6 +27,7 @@ reference.
 | 4 | `list_artifacts` / `resolve` / `search` | All three in public API; grep-based |
 | 5 | Wikilink stripping | Caller's concern — library returns raw strings |
 | 6 | `ArtifactMeta.id` source | Frontmatter `id:` field (written by `create`) |
+| 7 | Frontmatter `name` shape | Slug-only across all kinds; full stem = `path.stem` (t0037) |
 
 ---
 
@@ -139,7 +140,9 @@ class ArtifactMeta:
     """Lightweight view populated from frontmatter only (no body read)."""
     id: str           # from frontmatter `id:` field
     kind: str         # from frontmatter `kind:` field
-    name: str         # from frontmatter `name:` field (slug)
+    name: str         # from frontmatter `name:` field — slug only,
+                      # never includes the `id` prefix. Use
+                      # `path.stem` when the full file stem is needed.
     title: str        # first H1 from body; falls back to name
     status: str | None
     tags: list[str]
@@ -272,19 +275,34 @@ Steps:
      filename `{id}-{slug}.md`; retry up to 5× on `EEXIST`.
    - `numbered=False`: `id = slug` → filename `{slug}.md`; raise
      `FileExistsError` on collision (no retry).
-4. Build frontmatter dict: `{"kind": kind, "id": id, "name": name,
-   **fields}` where `name = id` for numbered kinds (e.g. `"t0042"`) is
-   **wrong** — see note below.
+4. Build frontmatter dict: `{"kind": kind, "id": id, "name": slug,
+   **fields}` — the persisted `name` is **slug-only** for both numbered
+   and non-numbered kinds (see "`name` field" below).
 5. Validate frontmatter against `kd.schema` using `jsonschema.validate`.
    Skip validation when `kd.schema == {}`.
 6. Serialise with `frontmatter.dump` and write atomically:
    `O_CREAT | O_EXCL | O_WRONLY`.
 7. Parse and return `Artifact`.
 
-**`name` field clarification:** For numbered kinds the `name` frontmatter
-field is `"{id}-{slug}"` (e.g. `"t0042-fix-the-bug"`), matching the
-filename stem. For non-numbered kinds `name = slug` (e.g. `"researcher"`).
-This matches OpenStation's existing convention.
+**`name` field — slug-only across all kinds.** The frontmatter `name`
+holds the slug only; it never embeds `id`. The full filename stem
+(`{id}-{slug}` for numbered kinds, `{slug}` for non-numbered) is the
+canonical reference for resolution and wikilinks and is recovered from
+`Artifact.path.stem`. Examples:
+
+```yaml
+# numbered (file: artifacts/tasks/t0042-fix-the-bug.md)
+id:   t0042
+name: fix-the-bug
+
+# non-numbered (file: artifacts/agents/researcher.md)
+id:   researcher
+name: researcher
+```
+
+Consumers that need the stem (display, wikilink target, ref-passing)
+must use `path.stem` rather than concatenating `id` and `name`
+themselves.
 
 #### `get`
 

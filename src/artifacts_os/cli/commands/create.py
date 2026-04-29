@@ -39,5 +39,7 @@ def run(args, registry: Registry) -> int:
         body=args.body,
         fields=fields,
     )
-    print(artifact.name)
+    # Print the file stem so callers can pass it back as a ref. With
+    # slug-only `name` the stem is `{id}-{name}` for numbered kinds.
+    print(artifact.path.stem)
     return 0

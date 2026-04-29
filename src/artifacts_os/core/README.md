@@ -202,8 +202,9 @@ registry = Registry(kinds=[task_kind], root=Path("/path/to/vault"))
 
 # 2. Create an artifact
 artifact = create(registry, "task", "Fix login bug", body="## Details\n…")
-print(artifact.id)    # e.g. "t0001"
-print(artifact.name)  # e.g. "t0001-fix-login-bug"
+print(artifact.id)         # e.g. "t0001"
+print(artifact.name)       # slug only, e.g. "fix-login-bug"
+print(artifact.path.stem)  # full stem, e.g. "t0001-fix-login-bug"
 
 # 3. Read it back
 loaded = get(registry, "t0001")

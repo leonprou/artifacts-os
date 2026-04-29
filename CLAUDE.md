@@ -55,10 +55,16 @@ for the full API, worked example, and extension rules.
 
 ## Naming Conventions
 
-- Numbered artifacts: `{prefix}{NNNN}-{slug}.md` (e.g. `t0042-fix-bug.md`)
-- Non-numbered artifacts: `{slug}.md` (e.g. `researcher.md`)
+- Numbered artifacts: filename `{prefix}{NNNN}-{slug}.md` (e.g.
+  `t0042-fix-bug.md`); frontmatter `id: t0042`, `name: fix-bug`
+- Non-numbered artifacts: filename `{slug}.md` (e.g. `researcher.md`);
+  frontmatter `id: researcher`, `name: researcher`
 - Slugs: lowercase, hyphenated, max 5 words
 - Spec docs: `s{NNNN}-{topic}.md`
+- The frontmatter `name` field stores the **slug only** — no `id`
+  prefix. The full file stem (`{id}-{name}` for numbered kinds) is
+  the canonical reference for resolution and wikilinks; derive it
+  from `path.stem` rather than concatenating manually.
 
 ## Constraints
 

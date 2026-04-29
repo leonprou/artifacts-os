@@ -12,5 +12,5 @@ def register(subparsers) -> None:
 
 def run(args, registry: Registry) -> int:
     artifact = update(registry, args.ref, status=args.new_status)
-    print(f"{artifact.name}: {artifact.status}")
+    print(f"{artifact.path.stem}: {artifact.status}")
     return 0

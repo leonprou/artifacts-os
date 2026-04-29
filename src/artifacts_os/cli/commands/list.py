@@ -29,7 +29,8 @@ def run(args, registry: Registry) -> int:
 
     if args.quiet:
         for item in items:
-            print(item.name)
+            # Use path stem so output is a valid ref for downstream commands.
+            print(item.path.stem)
         return 0
 
     if args.json_out:

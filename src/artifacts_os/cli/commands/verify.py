@@ -26,7 +26,9 @@ def _verify_artifact(artifact: Artifact) -> dict:
     total = len(items)
     done = sum(1 for i in items if i["checked"])
     return {
-        "name": artifact.name,
+        # Use path stem — the canonical identifier — rather than the
+        # slug-only frontmatter `name`.
+        "name": artifact.path.stem,
         "kind": artifact.kind,
         "total": total,
         "done": done,
@@ -66,7 +68,7 @@ def run(args, registry: Registry) -> int:
 
     results = []
     for meta in metas:
-        artifact = get(registry, meta.name, kind=meta.kind or None)
+        artifact = get(registry, meta.path.stem, kind=meta.kind or None)
         r = _verify_artifact(artifact)
         if r["total"] > 0:
             results.append(r)

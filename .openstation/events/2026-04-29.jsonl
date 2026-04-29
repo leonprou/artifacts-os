@@ -6,3 +6,17 @@
 {"ts":"2026-04-29T22:28:43.371114+03:00","event":"run_started","task":"t0004-write-readme-for-views-module","agent":"project-manager","run_id":"r0041","mode":"verify","context_only":false,"detached":true}
 {"ts":"2026-04-29T22:31:13.594176+03:00","event":"status_transition","task":"t0004-write-readme-for-views-module","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-04-29T22:31:23.635660+03:00","event":"run_complete","task":"t0004-write-readme-for-views-module","agent":"","run_id":"r0041","run_status":"complete","cost":"1.14","turns":20}
+{"ts":"2026-04-29T23:40:50.371012+03:00","event":"status_transition","task":"t0037-redefine-name-field-as-slug","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-04-29T23:40:54.154063+03:00","event":"run_started","task":"t0037-redefine-name-field-as-slug","agent":"architect","run_id":"r0042","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-04-29T23:41:13.066366+03:00","event":"status_transition","task":"t0037-redefine-name-field-as-slug","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-04-29T23:45:45.103387+03:00","event":"run_complete","task":"t0037-redefine-name-field-as-slug","agent":"architect","run_id":"r0042","run_status":"failed","cost":"3.07","turns":51}
+{"ts":"2026-04-29T23:51:18.825036+03:00","event":"status_transition","task":"t0037-redefine-name-field-as-slug","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-04-29T23:52:28.404564+03:00","event":"run_started","task":"t0037-redefine-name-field-as-slug","agent":"project-manager","run_id":"r0043","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-04-29T23:54:23.079996+03:00","event":"status_transition","task":"t0037-redefine-name-field-as-slug","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-04-29T23:54:35.639562+03:00","event":"run_complete","task":"t0037-redefine-name-field-as-slug","agent":"","run_id":"r0043","run_status":"complete","cost":"0.98","turns":21}
+{"ts":"2026-04-29T23:55:45.244891+03:00","event":"status_transition","task":"t0037-redefine-name-field-as-slug","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-04-29T23:55:45.475412+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0037-redefine-name-field-as-slug","duration_ms":228}
+{"ts":"2026-04-29T23:56:09.837660+03:00","event":"status_transition","task":"t0027-document-settings-loader-and-extension","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-04-29T23:56:09.972214+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0027-document-settings-loader-and-extension","duration_ms":131}
+{"ts":"2026-04-29T23:56:23.686053+03:00","event":"status_transition","task":"t0016-re-scope-s0007-views-spec","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-04-29T23:56:23.870450+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0016-re-scope-s0007-views-spec","duration_ms":182}
