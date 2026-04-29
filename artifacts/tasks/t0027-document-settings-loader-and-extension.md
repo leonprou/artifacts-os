@@ -3,13 +3,14 @@ kind: task
 id: t0027
 name: document-settings-loader-and-extension
 type: documentation
-status: verified
+status: done
 assignee: technical-writer
 owner: user
 depends_on:
   - "[[t0026-implement-views-viewssettings]]"
 created: 2026-04-28
 started: 2026-04-28
+completed: 2026-04-29
 ---
 
 # Document Settings Loader And Extension Pattern
