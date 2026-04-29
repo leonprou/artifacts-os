@@ -5,21 +5,20 @@ requires-python = ">=3.11"
 dependencies = [
     "python-frontmatter>=1.1",
     "jsonschema>=4.23",
+    "rich>=13",
 ]
 
 [project.optional-dependencies]
-views = ["rich>=13"]
+views = []
 log   = []
-cli   = ["rich>=13"]
-tui   = ["rich>=13", "textual>=0.50"]
+cli   = []
+tui   = ["textual>=0.50"]
 ai    = []
 dev   = [
     "pytest>=8",
-    "rich>=13",
     "textual>=0.50",
 ]
 all   = [
-    "rich>=13",
     "textual>=0.50",
 ]
 
