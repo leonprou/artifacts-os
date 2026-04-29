@@ -3,7 +3,7 @@ kind: task
 id: t0016
 name: re-scope-s0007-views-spec
 type: spec
-status: verified
+status: done
 assignee: architect
 owner: user
 created: 2026-04-26
@@ -11,6 +11,7 @@ started: 2026-04-26
 artifacts:
   - "[[s0007-artifacts-os-views-module]]"
   - "[[artifacts/specs/s0009-artifacts-os-config-module]]"
+completed: 2026-04-29
 ---
 
 # Re-Scope S0007 Views Spec And Define New Config Module
