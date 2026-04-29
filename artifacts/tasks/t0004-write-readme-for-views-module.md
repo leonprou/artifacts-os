@@ -3,11 +3,12 @@ kind: task
 id: t0004
 name: write-readme-for-views-module
 type: documentation
-status: verified
+status: done
 assignee: author
 owner: user
 created: 2026-04-22
 started: 2026-04-23
+completed: 2026-04-29
 ---
 
 # Write Readme For Views Module
