@@ -9,7 +9,7 @@ hooks:
 
 project:
   name: "artifacts-os"
-  alias: "artifact"
+  alias: "artifacts"
 
 defaults:
   show:

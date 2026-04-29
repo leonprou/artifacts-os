@@ -1,0 +1,8 @@
+{"ts":"2026-04-29T00:06:32.638534+03:00","event":"status_transition","task":"t0017-stub-artifacts-os-config-module","old_status":"backlog","new_status":"rejected","forced":false}
+{"ts":"2026-04-29T00:06:35.146531+03:00","event":"status_transition","task":"t0028-decouple-claude-md-from-vault","old_status":"ready","new_status":"backlog","forced":false}
+{"ts":"2026-04-29T22:27:59.820793+03:00","event":"status_transition","task":"t0005-write-readme-for-log-module","old_status":"ready","new_status":"backlog","forced":false}
+{"ts":"2026-04-29T22:28:01.847505+03:00","event":"status_transition","task":"t0018-improve-init-handle-vim-obsidian","old_status":"ready","new_status":"backlog","forced":false}
+{"ts":"2026-04-29T22:28:19.877661+03:00","event":"status_transition","task":"t0004-write-readme-for-views-module","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-04-29T22:28:43.371114+03:00","event":"run_started","task":"t0004-write-readme-for-views-module","agent":"project-manager","run_id":"r0041","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-04-29T22:31:13.594176+03:00","event":"status_transition","task":"t0004-write-readme-for-views-module","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-04-29T22:31:23.635660+03:00","event":"run_complete","task":"t0004-write-readme-for-views-module","agent":"","run_id":"r0041","run_status":"complete","cost":"1.14","turns":20}

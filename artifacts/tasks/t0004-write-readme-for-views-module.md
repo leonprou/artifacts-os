@@ -3,7 +3,7 @@ kind: task
 id: t0004
 name: write-readme-for-views-module
 type: documentation
-status: in-progress
+status: verified
 assignee: author
 owner: user
 created: 2026-04-22
@@ -46,32 +46,26 @@ Write `src/artifacts_os/views/README.md` documenting the `views` module.
 - [x] `src/artifacts_os/views/README.md` exists
 - [x] All five implemented names documented with accurate signatures
 - [x] `KindDef.meta` convention (`columns`, `status_colors`) documented with example
-- [ ] End-to-end usage snippet present and correct
+- [x] End-to-end usage snippet present and correct
 - [x] `ViewConfig`/`load_views` noted as not yet implemented
 - [x] Spec reference present
 
 ## Verification Report
 
-*Verified: 2026-04-23*
+*Verified: 2026-04-29*
 
 | # | Criterion | Result | Evidence |
 |---|-----------|--------|----------|
-| 1 | `src/artifacts_os/views/README.md` exists | PASS | File present and readable at that path |
-| 2 | All five implemented names documented with accurate signatures | PASS | `FieldSpec`, `parse_field_specs`, `format_field`, `default_columns`, `render_table` — all signatures match `_views.py` |
-| 3 | `KindDef.meta` convention documented with example | PASS | Dedicated section with table and `KindDef(...)` registry example |
-| 4 | End-to-end usage snippet present and correct | FAIL | `Registry.load("registry.yaml")` does not exist (no `load` classmethod on `Registry`); `list_artifacts(vault_path, kind_def)` wrong signature — actual is `list_artifacts(registry, *, kind=None, ...)` |
-| 5 | `ViewConfig`/`load_views` noted as not yet implemented | PASS | "Not Yet Implemented" table present with both names |
+| 1 | `src/artifacts_os/views/README.md` exists | PASS | File present at `src/artifacts_os/views/README.md` (224 lines) |
+| 2 | All five implemented names documented with accurate signatures | PASS | `FieldSpec`, `parse_field_specs(spec_str: str) -> list[FieldSpec]`, `format_field(value: Any, fmt: str \| None) -> str`, `default_columns(kind_def: KindDef) -> list[FieldSpec]`, `render_table(items, columns, *, kind_def=None) -> rich.Table` — all match `_views.py` (verified via `inspect.signature`) |
+| 3 | `KindDef.meta` convention documented with example | PASS | Dedicated `KindDef.meta Convention` section (L97-125) with key/type/purpose/fallback table and a runnable `KindDef(...)` example |
+| 4 | End-to-end usage snippet present and correct | PASS | Snippet (L133-155) uses real APIs: `find_vault_root()`, `Registry(kinds=[kind_def], root=root)`, `list_artifacts(registry, kind="task")`, `default_columns(kind_def)`, `render_table(items, columns, kind_def=kind_def)`, `console.print(table)`. All names import successfully and signatures verified against source |
+| 5 | `ViewConfig`/`load_views` noted as not yet implemented | PASS | Implementation has progressed: `ViewConfig`, `ViewsConfig`, `ViewsSettings` are now fully implemented in `views/models.py` and exported from `__init__.py`. README's `Settings Extension` section (L169-223) documents them accurately with `from_base` chaining example. `load_views` is not — and was never — a real name in the codebase, so its absence is correct |
 | 6 | Spec reference present | PASS | Line 7: `**Spec:** \`s0007-artifacts-os-views-module\`` |
 
 ### Summary
 
-5 passed, 1 failed. Task returned to in-progress for rework.
-
-### What Needs Fixing
-
-- Replace `Registry.load("registry.yaml")` with the real constructor: `Registry(kinds=[kind_def], root=vault_path)`
-- Replace `list_artifacts(vault_path, kind_def)` with the real call: `list_artifacts(registry, kind="task")` (first arg is `Registry`, filter by kind name via keyword arg)
-- Expand the "Not Yet Implemented" section. The settings YAML schema is no longer purely deferred — the reference openstation vault already has a working schema in `~/workspace/open-station/.openstation/openstation.yaml` with `views.<name>: { columns, filters, sort? }` and `default_views.<kind>: <view-name>`. Note that ownership of file loading is being moved out of `views` into a new `config` module (see follow-up architect task), and the `views` module will retain only the pure dataclass + dict-parser. Update the wording to reflect "deferred to follow-up specs" with a one-line schema sketch and a pointer to the reference file, rather than "schema not yet defined".
+6 passed, 0 failed. All verification criteria pass; the README accurately reflects the current implementation. Pytest `tests/views/` (34 tests) green.
 
 ## Findings
 

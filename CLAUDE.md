@@ -27,6 +27,10 @@ tests/           # mirrors src; uses tmp_path + make_vault fixture, no mocking
 docs/            # architecture overview, settings guide, per-module references
 ```
 
+## Documentation First
+
+Read `docs/` and module `README.md` files before answering questions or starting tasks.
+
 ## Common Commands
 
 ```bash
@@ -62,3 +66,5 @@ for the full API, worked example, and extension rules.
 - Module dependency DAG must be respected (no peer imports outside declared deps):
   `core` → `views` → `cli`, `tui`; `core` → `log` → `ai`
 - No lifecycle logic in `cli` (status transitions stay in OpenStation)
+- Doc updates accompany API changes — when a public API, re-export surface,
+  or vault behaviour changes, update the corresponding doc in the same commit

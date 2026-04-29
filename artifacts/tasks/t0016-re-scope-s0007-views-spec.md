@@ -3,7 +3,7 @@ kind: task
 id: t0016
 name: re-scope-s0007-views-spec
 type: spec
-status: review
+status: verified
 assignee: architect
 owner: user
 created: 2026-04-26
@@ -99,13 +99,30 @@ Document the decision in the new config spec with brief rationale.
 
 ## Verification
 
-- [ ] s0007 Scope Boundary updated to put settings-file loading Out of scope
-- [ ] s0007 Public API replaces `load_views` with `parse_view_config`
-- [ ] s0007 Deferred section replaced with concrete schema (or removed)
-- [ ] New spec `sNNNN-artifacts-os-config-module.md` exists with purpose,
+- [x] s0007 Scope Boundary updated to put settings-file loading Out of scope
+- [x] s0007 Public API replaces `load_views` with `parse_view_config`
+- [x] s0007 Deferred section replaced with concrete schema (or removed)
+- [x] New spec `sNNNN-artifacts-os-config-module.md` exists with purpose,
       public API sketch, module dependency, and scope boundary
-- [ ] Decision recorded for which file(s) hold views config
-- [ ] Both spec files reference the openstation.yaml source
+- [x] Decision recorded for which file(s) hold views config
+- [x] Both spec files reference the openstation.yaml source
+
+## Verification Report
+
+*Verified: 2026-04-26*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | s0007 Scope Boundary puts settings-file loading Out of scope | PASS | s0007 lines 106-112: Out lists "settings-file I/O (delegated to `artifacts_os.config`)" and "view-config parsing (delegated to `artifacts_os.config`)" |
+| 2 | s0007 Public API replaces `load_views` with `parse_view_config` | PASS | s0007 lines 32-46: `load_views` removed from public API. View-dict parsing moved to `artifacts_os.config._parse_view` (s0007 lines 64-66, 158) — going beyond the rename to keep `views` strictly I/O-free as required by the rescope. |
+| 3 | s0007 Deferred section replaced with concrete schema | PASS | Old Deferred row removed. s0007 lines 114-156 add "Settings YAML Schema (views section)" with real `openstation.yaml` examples (`active`, `session-log`, `sessions`, `default_views`). |
+| 4 | New spec s0009 exists with purpose, public API sketch, module dependency, scope boundary | PASS | `artifacts/specs/s0009-artifacts-os-config-module.md` exists. Purpose (line 20), Public API (line 43, with `Settings`, `ProjectConfig`, `RunConfig`, `TmuxConfig`, `ViewsConfig`, `load_settings`), Module Dependency (line 102, acyclic DAG), Scope Boundary (line 185). |
+| 5 | Decision recorded for views config file | PASS | s0009 lines 26-40: explicit "Decision: `artifacts.yaml` absorbs all config (option a — single file)" with three-bullet rationale. |
+| 6 | Both spec files reference the openstation.yaml source | PASS | s0007 line 18 and s0009 line 17 both contain `Source reference: ~/workspace/open-station/.openstation/openstation.yaml`. |
+
+### Summary
+
+6 passed, 0 failed. All verification criteria are satisfied; the rescope of s0007 and the new s0009 config spec are coherent and ready to drive follow-up implementation tasks.
 
 ## Findings
 

@@ -3,7 +3,7 @@ kind: task
 id: t0005
 name: write-readme-for-log-module
 type: documentation
-status: ready
+status: backlog
 assignee: author
 owner: user
 created: 2026-04-22

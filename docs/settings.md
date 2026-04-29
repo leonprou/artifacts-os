@@ -28,32 +28,23 @@ section is absent.
 
 ### `Settings`
 
-```python
-@dataclass(kw_only=True)
-class Settings:
-    layout_version: int
-    project: ProjectConfig
-    raw: dict[str, Any]      # full parsed YAML, for module extensions
-```
+Fields: `layout_version: int`, `project: ProjectConfig`, `raw: dict` (full parsed YAML; default `{}`).
 
 ### `ProjectConfig`
 
-```python
-@dataclass
-class ProjectConfig:
-    name: str
-    alias: str | None = None
-```
+Fields: `name: str` (required), `alias: str | None` (default `None`).
 
 ---
 
 ## Worked Example
 
 ```python
-from pathlib import Path
 from artifacts_os.core import find_vault_root, load_settings
 
 root = find_vault_root()
+if root is None:
+    raise RuntimeError("No artifacts vault found")
+
 settings = load_settings(root / "artifacts" / "artifacts.yaml")
 
 print(settings.project.name)       # "my-project"

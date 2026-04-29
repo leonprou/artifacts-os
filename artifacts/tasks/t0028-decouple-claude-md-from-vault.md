@@ -3,7 +3,7 @@ kind: task
 id: t0028
 name: decouple-claude-md-from-vault
 type: documentation
-status: ready
+status: backlog
 assignee: technical-writer
 owner: user
 created: 2026-04-28

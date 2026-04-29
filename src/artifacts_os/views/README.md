@@ -27,16 +27,9 @@ from artifacts_os.views import (
 
 ### `FieldSpec`
 
-```python
-@dataclass
-class FieldSpec:
-    key: str        # frontmatter key to read from ArtifactMeta.frontmatter
-    fmt: str | None # format hint: "date", "datetime", or None
-    label: str      # column header text
-```
-
-Describes one display column. Created by `parse_field_specs`; consumed by
-`render_table` and `default_columns`.
+One display column: `key` (frontmatter key), `fmt` (`"date"`, `"datetime"`, or `None`),
+`label` (column header). Created by `parse_field_specs`; consumed by `render_table` and
+`default_columns`.
 
 ---
 
@@ -184,43 +177,19 @@ that dict and produces a typed `ViewsSettings` via
 
 ### `ViewConfig`
 
-```python
-@dataclass
-class ViewConfig:
-    columns: str                              # e.g. "id, status, created:date as Date"
-    filters: dict[str, Any]                   # frontmatter-key → expected value (default: {})
-    sort: str | None = None                   # field key to sort by
-```
-
-A single named view's configuration. `columns` is a comma-separated
-field-spec string in the same syntax accepted by
-`parse_field_specs` above; the caller is responsible for parsing it
-when it needs `FieldSpec` objects.
+A single named view: `columns` (field-spec string, same syntax as `parse_field_specs`),
+`filters` (frontmatter-key → expected value, default `{}`), `sort` (field key, default `None`).
+The caller parses `columns` into `FieldSpec` objects when needed.
 
 ### `ViewsConfig`
 
-```python
-@dataclass
-class ViewsConfig:
-    views: dict[str, ViewConfig]              # view name → config
-    default_views: dict[str, str]             # kind name → view name
-```
-
-The parsed `views` and `default_views` sections of the settings
-file, bundled together. `default_views` maps a kind to the name of
-the view from `views` that should be used by default.
+Holds both parsed sections: `views` (`dict[str, ViewConfig]`) and
+`default_views` (`dict[str, str]` mapping kind name → view name).
 
 ### `ViewsSettings`
 
-```python
-@dataclass(kw_only=True)
-class ViewsSettings(Settings):
-    views: ViewsConfig | None = None
-```
-
-Subclass of `core.Settings`. The `views` field is `None` when
-neither `views` nor `default_views` is present in the settings
-file; otherwise it holds a populated `ViewsConfig`.
+Subclass of `core.Settings`. Adds `views: ViewsConfig | None` — `None` when neither
+`views` nor `default_views` is present in the settings file.
 
 #### `ViewsSettings.from_base(base: Settings) -> ViewsSettings`
 

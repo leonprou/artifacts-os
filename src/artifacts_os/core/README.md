@@ -140,16 +140,9 @@ base.raw["views"]      # untyped — owned by views module
 #### `Settings` — base for extension
 
 `Settings` is a `kw_only=True` dataclass intentionally designed as a
-**base class** that other modules subclass. The base contains only
-what `core` itself reads:
-
-```python
-@dataclass(kw_only=True)
-class Settings:
-    layout_version: int
-    project: ProjectConfig
-    raw: dict[str, Any] = field(default_factory=dict)
-```
+**base class** that other modules subclass. Fields: `layout_version: int`,
+`project: ProjectConfig`, `raw: dict` (full parsed YAML; default `{}`).
+The base contains only what `core` itself reads:
 
 Each module owns one or more top-level keys of `artifacts.yaml`
 end-to-end — the dataclass(es) for that section, its parser, and

@@ -3,7 +3,7 @@ kind: task
 id: t0017
 name: stub-artifacts-os-config-module
 type: implementation
-status: backlog
+status: rejected
 assignee: developer
 owner: user
 depends_on:

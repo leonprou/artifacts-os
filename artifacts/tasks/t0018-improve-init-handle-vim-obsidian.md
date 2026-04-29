@@ -3,7 +3,7 @@ kind: task
 id: t0018
 name: improve-init-handle-vim-obsidian
 type: feature
-status: ready
+status: backlog
 assignee: developer
 owner: user
 created: 2026-04-26
