@@ -8,6 +8,8 @@ cli:
   defaults:
     show:
       editor: true
+    create:
+      kind: note   # `artifacts create "..."` now creates a note by default
   aliases:
     ls: list
     sh: show

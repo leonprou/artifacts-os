@@ -400,6 +400,7 @@ cli:
 | Setting | Type | Effect |
 |---------|------|--------|
 | `cli.defaults.show.editor` | bool | Open `$EDITOR` automatically on `show`, unless `-j` is also passed. |
+| `cli.defaults.create.kind` | string | Default artifact kind for `create` when `--kind` is not passed (e.g. `note`). Falls back to `task` when absent. |
 
 Explicit flags always take precedence over defaults. Passing `-j` to `show`
 prints JSON regardless of the `editor` default.
@@ -428,6 +429,8 @@ cli:
   defaults:
     show:
       editor: true
+    create:
+      kind: note   # `artifacts create "…"` creates a note by default
   aliases:
     ls: list
     t: status
