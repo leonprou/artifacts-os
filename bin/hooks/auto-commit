@@ -105,6 +105,7 @@ PROMPT="${PROMPT//\$OS_TASK_NAME/$OS_TASK_NAME}"
 PROMPT="${PROMPT//\$OS_TASK_FILE/$OS_TASK_FILE}"
 PROMPT="${PROMPT//\$TASK_ID/$TASK_ID}"
 
-# ── Dispatch via tmux ──────────────────────────────────────────
-"${OS_VAULT_ROOT}/bin/os-dispatch" --no-attach "os-commit-${OS_TASK_NAME}" \
-  claude -p "$PROMPT" --allowedTools 'Bash(git:*),Read,Glob,Grep'
+# ── Run claude directly (blocking) ────────────────────────────
+# Post-hook failure is a warning only — blocking here is safe and gives
+# the user visible output rather than a silent detached tmux window.
+claude -p "$PROMPT" --allowedTools 'Bash(git:*),Read,Glob,Grep'
