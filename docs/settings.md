@@ -98,6 +98,48 @@ Or define a single subclass that reads all relevant sections at once.
 
 ---
 
+## Views Section
+
+The `views` and `default_views` top-level keys configure named views for
+`artifacts list --view`. Views pre-bundle filters, columns, and sort order
+so common queries become a single flag.
+
+```yaml
+layout_version: 1
+project:
+  name: my-project
+
+views:
+  active:
+    columns: id,name,status,assignee   # columns shown in table mode
+    filters:
+      status: ready                    # pre-filter by status
+      assignee: alice                  # post-discovery equality filter
+    sort: name                         # ascending; prefix with "-" for descending
+
+default_views:
+  task: active   # auto-applies "active" view when --kind task is given
+```
+
+**Usage:**
+
+```bash
+# Explicit view
+artifacts list --view active
+
+# Auto-bound view (fires when --kind task is passed)
+artifacts list --kind task
+
+# Explicit flag overrides view filter for that key only
+artifacts list --view active --status done
+```
+
+`ViewsSettings.from_base` parses these sections from `base.raw`. See
+[../src/artifacts_os/cli/README.md](../src/artifacts_os/cli/README.md)
+for the full precedence model, error handling, and `-j`/`-q` contract.
+
+---
+
 ## Schema Versioning
 
 `artifacts.yaml` must begin with `layout_version: 1`. Any other value (or

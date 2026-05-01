@@ -75,7 +75,8 @@ artifacts show fix-login --kind task
 ### `list` — Browse and filter artifacts
 
 ```
-artifacts list [--kind KIND] [--status STATUS] [--fields FIELDS] [-q | -j]
+artifacts list [--kind KIND] [--status STATUS] [--fields FIELDS]
+               [--view NAME] [-q | -j]
 ```
 
 Lists all artifacts as a table. Use filters to narrow the results.
@@ -85,6 +86,7 @@ Lists all artifacts as a table. Use filters to narrow the results.
 | `--kind KIND`, `-k` | Show only artifacts of this kind (e.g. `task`, `agent`) |
 | `--status STATUS`, `-s` | Show only artifacts with this status |
 | `--fields FIELDS`, `-f` | Choose which columns to display (comma-separated) |
+| `--view NAME`, `-V` | Apply a named view from `artifacts.yaml` (filters, columns, sort) |
 | `-q`, `--quiet` | One artifact name per line — good for scripts |
 | `-j`, `--json` | JSON array — good for pipelines |
 
@@ -100,9 +102,70 @@ artifacts list --kind task --status ready
 # Pick specific columns
 artifacts list --fields id,name,status,created
 
+# Apply a named view (uses its filters, columns, and sort)
+artifacts list --view active
+
+# Named view with explicit flag override (--status wins, other view filters kept)
+artifacts list --view active --status done
+
 # Quiet list for scripting
 artifacts list --kind task -q
 ```
+
+#### Views
+
+Named views let you pre-configure filters, columns, and sort order in
+`artifacts/artifacts.yaml` and invoke them with a single flag.
+
+**Defining views:**
+
+```yaml
+views:
+  active:
+    columns: id,name,status,assignee
+    filters:
+      status: ready
+    sort: name
+
+  my-tasks:
+    columns: id,name,status
+    filters:
+      status: in-progress
+      assignee: alice
+    sort: -created
+```
+
+**Binding a view to a kind** — `default_views` automatically activates
+a view when `--kind` matches, without requiring `--view`:
+
+```yaml
+default_views:
+  task: active   # `artifacts list --kind task` applies the "active" view
+```
+
+**Precedence rules:**
+
+| Setting | Precedence |
+|---------|-----------|
+| `--view NAME` (explicit) | Beats `default_views` binding |
+| `default_views[kind]` | Applied when `--kind` matches and no `--view` given |
+| `--status`, `--kind` (explicit flags) | Win over the view's own `filters` for those keys |
+| `--fields` | Wins over `view.columns` |
+
+**Filter merging** is per-key: `--status done --view active` uses
+`status=done` from the flag but keeps all other `view.filters` entries.
+
+**JSON / quiet contract** — `-j` and `-q` ignore `view.columns` but
+still apply `view.filters` and `view.sort`, so machine consumers see
+view-filtered, view-sorted data.
+
+**Error handling:**
+
+| Condition | Exit |
+|-----------|------|
+| `--view foo` and `foo` not found | `2` |
+| `--view foo` and no `views:` section | `2` |
+| `default_views.k = "v"` and `v` not found | `2` |
 
 ---
 
