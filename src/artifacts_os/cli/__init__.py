@@ -36,6 +36,22 @@ from artifacts_os.cli.settings import CliSettings
 _registered_kinds: list[KindDef] = []
 
 
+def _load_views_settings(root) -> "ViewsSettings | None":
+    """Try to load ViewsSettings from the vault at *root*.
+
+    Returns ``None`` on any error so callers can proceed without views config.
+    Lazily imported so only the ``list`` command pays the import cost.
+    """
+    try:
+        from pathlib import Path
+        from artifacts_os.views.models import ViewsSettings
+        settings_path = Path(root) / "artifacts" / "artifacts.yaml"
+        base = load_settings(settings_path)
+        return ViewsSettings.from_base(base)
+    except Exception:
+        return None
+
+
 def _load_cli_settings(root) -> CliSettings | None:
     """Try to load CliSettings from the vault at *root*.
 

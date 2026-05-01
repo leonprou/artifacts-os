@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 _PREFIXED_ID_RE = re.compile(r"^([a-z]+)(\d+)$")
 _ALL_DIGITS_RE = re.compile(r"^\d+$")
+_WIKILINK_RE = re.compile(r"^\[\[(.+?)\]\]$")
 
 
 def _require_root(registry: "Registry") -> Path:
@@ -185,3 +186,102 @@ def search(
                 all_matches.append(path)
 
     return [_meta_from_file(p) for p in sorted(all_matches)]
+
+
+# ---------------------------------------------------------------------------
+# Graph traversal — parent / children
+# ---------------------------------------------------------------------------
+
+def _unwrap_wikilink(value: str) -> str:
+    """Return the inner ref of ``[[ref]]``, or the value unchanged."""
+    m = _WIKILINK_RE.match(value.strip())
+    return m.group(1) if m else value.strip()
+
+
+def _ensure_meta(
+    registry: "Registry",
+    ref: "str | ArtifactMeta | Path",
+    *,
+    kind: str | None = None,
+) -> ArtifactMeta:
+    """Coerce *ref* to an ArtifactMeta."""
+    if isinstance(ref, ArtifactMeta):
+        return ref
+    if isinstance(ref, Path):
+        return _meta_from_file(ref)
+    # String ref — resolve and read.
+    path = resolve(registry, ref, kind=kind)
+    return _meta_from_file(path)
+
+
+def parent(
+    registry: "Registry",
+    ref: "str | ArtifactMeta | Path",
+    *,
+    kind: str | None = None,
+) -> ArtifactMeta | None:
+    """Resolve and return the parent ArtifactMeta of *ref*.
+
+    Reads the ``parent`` frontmatter field (Obsidian wikilink ``[[ref]]`` or
+    bare ref string), unwraps it to a bare ref, and resolves cross-kind via
+    :func:`resolve` (no ``kind`` restriction so task → spec works).
+
+    Returns ``None`` if the artifact has no ``parent`` field at all.
+    Raises :class:`~artifacts_os.core.errors.NotFoundError` if the field
+    exists but the wikilink does not resolve (broken link).
+    Raises :class:`~artifacts_os.core.errors.AmbiguousError` if the
+    wikilink resolves to multiple artifacts.
+    """
+    meta = _ensure_meta(registry, ref, kind=kind)
+    parent_val = meta.frontmatter.get("parent")
+    if not parent_val:
+        return None
+    bare_ref = _unwrap_wikilink(str(parent_val))
+    try:
+        parent_path = resolve(registry, bare_ref)
+    except NotFoundError:
+        raise NotFoundError(
+            f"parent of '{meta.path.stem}' refers to '{bare_ref}' which does not exist"
+        )
+    except AmbiguousError as exc:
+        raise AmbiguousError(
+            f"parent of '{meta.path.stem}' refers to '{bare_ref}' which is ambiguous:\n  {exc}"
+        ) from exc
+    return _meta_from_file(parent_path)
+
+
+def children(
+    registry: "Registry",
+    ref: "str | ArtifactMeta | Path",
+    *,
+    kind: str | None = None,
+    status: str | None = None,
+) -> list[ArtifactMeta]:
+    """List direct children of *ref*.
+
+    Iterates :func:`list_artifacts` filtered by *kind* and *status*, then
+    returns those whose ``parent`` frontmatter field resolves to the same
+    artifact as *ref*.  Resolution uses :func:`resolve` for identity
+    comparison by canonical path, so different ref forms (``t36``,
+    ``t0036``, ``t0036-name``, ``[[t0036-name]]``) all match correctly.
+
+    Returns ``[]`` if the artifact has no children.  Never raises on an
+    empty result — empty is a valid answer to a predicate query.
+    """
+    parent_meta = _ensure_meta(registry, ref, kind=None)
+    parent_path = parent_meta.path
+
+    items = list_artifacts(registry, kind=kind, status=status)
+    result: list[ArtifactMeta] = []
+    for item in items:
+        raw_parent = item.frontmatter.get("parent")
+        if not raw_parent:
+            continue
+        bare_ref = _unwrap_wikilink(str(raw_parent))
+        try:
+            resolved_path = resolve(registry, bare_ref)
+        except (NotFoundError, AmbiguousError):
+            continue
+        if resolved_path == parent_path:
+            result.append(item)
+    return result

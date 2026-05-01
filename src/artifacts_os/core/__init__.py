@@ -6,7 +6,7 @@ Spec: s2060-artifacts-os-architecture, s2061-artifacts-os-module-system
 from artifacts_os.core.vault import find_vault_root
 from artifacts_os.core.registry import Registry
 from artifacts_os.core.store import create, get, update
-from artifacts_os.core.discover import list_artifacts, resolve, search
+from artifacts_os.core.discover import list_artifacts, resolve, search, parent, children
 from artifacts_os.core.models import Artifact, ArtifactMeta, KindDef, Settings, ProjectConfig
 from artifacts_os.core.settings import load_settings, UnsupportedSchemaVersion
 from artifacts_os.core.errors import (
@@ -26,6 +26,8 @@ __all__ = [
     "list_artifacts",
     "resolve",
     "search",
+    "parent",
+    "children",
     "Artifact",
     "ArtifactMeta",
     "KindDef",

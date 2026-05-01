@@ -1,5 +1,6 @@
 """cli show command — display a single artifact."""
 
+import argparse
 import json
 import os
 import sys
@@ -8,6 +9,7 @@ from rich.console import Console
 
 import artifacts_os.views as views
 from artifacts_os.core import get, Registry
+from artifacts_os.core.errors import NotFoundError, ValidationError
 from artifacts_os.core.models import Artifact
 
 
@@ -15,14 +17,44 @@ def register(subparsers) -> None:
     p = subparsers.add_parser("show", help="show an artifact")
     p.add_argument("ref", help="artifact reference (name, id, or partial)")
     p.add_argument("--kind", "-k", help="narrow to a specific kind")
+    p.add_argument("--meta", action="store_true",
+                   help="frontmatter only (no body)")
+    # Rejected flags: parsed (suppressed) so we can emit clear error messages.
+    p.add_argument("--view", "-V", dest="_view_reject", default=None,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--status", "-s", dest="_status_reject", default=None,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--children", dest="_children_reject", default=None,
+                   help=argparse.SUPPRESS)
+    p.add_argument("--parent", dest="_parent_reject", action="store_true",
+                   help=argparse.SUPPRESS)
     mode = p.add_mutually_exclusive_group()
-    mode.add_argument("-j", "--json", action="store_true", dest="json_out", help="JSON output")
-    mode.add_argument("-e", "--editor", action="store_true", help="open in $EDITOR")
+    mode.add_argument("-j", "--json", action="store_true", dest="json_out",
+                      help="JSON output")
+    mode.add_argument("-e", "--editor", action="store_true",
+                      help="open in $EDITOR")
     p.set_defaults(func=run)
 
 
 def run(args, registry: Registry) -> int:
+    # Reject flags that are not valid on 'show'.
+    if getattr(args, "_view_reject", None) is not None:
+        raise ValidationError("--view is not valid on 'show' (use 'list --view')")
+    if getattr(args, "_status_reject", None) is not None:
+        raise ValidationError("--status is not valid on 'show'")
+    if getattr(args, "_children_reject", None) is not None:
+        raise ValidationError(
+            "--children is not valid on 'show' (use 'list --children <ref>')"
+        )
+    if getattr(args, "_parent_reject", False):
+        raise ValidationError(
+            "--parent is not valid on 'show' (use 'list --parent <ref>')"
+        )
+
     artifact: Artifact = get(registry, args.ref, kind=args.kind or None)
+
+    if args.meta:
+        return _render_meta(args, artifact, registry)
 
     if args.json_out:
         data = dict(artifact.frontmatter, body=artifact.body)
@@ -70,4 +102,40 @@ def run(args, registry: Registry) -> int:
         console.print()
         console.print(artifact.body)
 
+    return 0
+
+
+def _render_meta(args, artifact: Artifact, registry: Registry) -> int:
+    """Render frontmatter only (no body).
+
+    JSON mode: emit ``json.dumps(frontmatter)``.
+    Editor mode: open the artifact file directly (TTY-gated).
+    Table mode: render all frontmatter keys as a one-row table.
+    """
+    if args.json_out:
+        print(json.dumps(artifact.frontmatter, default=str))
+        return 0
+
+    # Editor mode: open the resolved file (--parent already redirected artifact).
+    open_editor = args.editor
+    if open_editor and not sys.stdout.isatty():
+        open_editor = False
+    if open_editor:
+        editor = os.environ.get("EDITOR", "vi")
+        os.execvp(editor, [editor, str(artifact.path)])
+
+    # Table: all frontmatter keys in a deterministic order.
+    kind_def = None
+    try:
+        kind_def = registry.get(artifact.kind)
+    except ValueError:
+        pass
+
+    fm_keys = list(artifact.frontmatter.keys())
+    columns = views.parse_field_specs(",".join(fm_keys)) if fm_keys else \
+        views.parse_field_specs("id,kind,name,status")
+
+    console = Console()
+    table = views.render_table([artifact], columns, kind_def=kind_def)
+    console.print(table)
     return 0
