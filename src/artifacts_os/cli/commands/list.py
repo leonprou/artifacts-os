@@ -17,6 +17,14 @@ def register(subparsers) -> None:
     p = subparsers.add_parser("list", help="list artifacts")
     p.add_argument("--kind", "-k", help="filter by kind")
     p.add_argument("--status", "-s", help="filter by status")
+    p.add_argument(
+        "--filter",
+        dest="filter",
+        action="append",
+        metavar="K=V",
+        help="repeatable frontmatter-equality filter; e.g. --filter assignee=alice "
+             "--filter type=feature. Last value wins per key.",
+    )
     p.add_argument("--children", help="direct children of <ref> (selection predicate)")
     p.add_argument("--parent", help="parent of <ref> (returns 0 or 1 records as array)")
     p.add_argument("--view", "-V", help="named view from artifacts.yaml")
@@ -32,6 +40,44 @@ def register(subparsers) -> None:
     mode.add_argument("-j", "--json", action="store_true", dest="json_out",
                       help="JSON output")
     p.set_defaults(func=run)
+
+
+def resolve_filters(
+    args: Any,
+    view_cfg: "ViewConfig | None",
+) -> "tuple[str | None, dict[str, Any]]":
+    """Compose the effective (kind, filters) from view config and CLI flags.
+
+    Resolution order (per-key, last wins):
+    1. View config ``filters`` dict — seeded first.
+    2. Explicit ``--kind`` / ``--status`` CLI flags — override per key.
+    3. Repeated ``--filter k=v`` tokens — override per key, last wins.
+
+    ``kind`` is then popped from the dict and returned as the first element
+    of the tuple (directory-selection axis, not a frontmatter predicate).
+
+    Raises ``ValidationError`` on malformed ``--filter`` tokens (missing ``=``).
+    """
+    # 1. Seed from view config.
+    filters: dict[str, Any] = dict(view_cfg.filters) if view_cfg else {}
+
+    # 2. Apply explicit CLI flag overrides per-key.
+    if args.kind is not None:
+        filters["kind"] = args.kind
+    if args.status is not None:
+        filters["status"] = args.status
+
+    # 3. Apply --filter k=v tokens; last value wins per key.
+    for token in (getattr(args, "filter", None) or []):
+        if "=" not in token:
+            raise ValidationError(f"--filter expects key=value, got: {token}")
+        k, _, v = token.partition("=")
+        filters[k] = v
+
+    # 4. Split kind out (directory axis — s0014 §5).
+    kind = filters.pop("kind", None)
+
+    return kind, filters
 
 
 def run(args, registry: Registry) -> int:
@@ -54,12 +100,15 @@ def run(args, registry: Registry) -> int:
         parent_requested = True
         parent_meta = _parent_fn(registry, args.parent)
 
+    # Compose effective (kind, filters) from view + CLI flags.
+    view_cfg: ViewConfig | None = getattr(args, "_view_cfg", None)
+    effective_kind, effective_filters = resolve_filters(args, view_cfg)
+
     items = list_artifacts(
         registry,
-        kind=args.kind or None,
-        status=args.status or None,
+        kind=effective_kind,
+        filters=effective_filters or None,
     )
-    items = _apply_extra_filters(items, getattr(args, "_extra_filters", {}))
     items = _apply_sort(items, getattr(args, "_sort", None))
 
     # Apply --children predicate as a post-discovery filter.
@@ -87,8 +136,7 @@ def run(args, registry: Registry) -> int:
         else:
             # Match the parent record from items by path; honor kind/status filters.
             items = [m for m in items if m.path == parent_meta.path]
-            if not items and (args.kind is None and args.status is None
-                              and not getattr(args, "_extra_filters", {})):
+            if not items and effective_kind is None and not effective_filters:
                 # No filters in play: include the parent directly.
                 items = [parent_meta]
 
@@ -105,12 +153,10 @@ def run(args, registry: Registry) -> int:
     if not items:
         return 0
 
-    view_cfg: ViewConfig | None = getattr(args, "_view_cfg", None)
-
     kind_def: KindDef | None = None
-    if args.kind:
+    if effective_kind:
         try:
-            kind_def = registry.get(args.kind)
+            kind_def = registry.get(effective_kind)
         except ValueError:
             pass
     elif items:
@@ -153,12 +199,15 @@ def _meta_columns(items: list) -> list:
 
 
 def _apply_view(args: Any, settings: ViewsSettings | None) -> None:
-    """Resolve the active view and mutate *args* with merged filters/sort/cfg.
+    """Resolve the active view and mutate *args* with sort cfg.
+
+    Sets ``args._view_cfg`` and ``args._sort``.  Filter seeds are no
+    longer stashed here — ``resolve_filters`` reads ``view_cfg.filters``
+    directly (s0014 §8.3).
 
     Raises ValidationError on unknown view names so the caller's except
     cascade surfaces it as exit 2.
     """
-    args._extra_filters = {}
     args._sort = None
     args._view_cfg = None
 
@@ -192,30 +241,8 @@ def _apply_view(args: Any, settings: ViewsSettings | None) -> None:
     if view_cfg is None:
         return
 
-    # Per-key filter merge — explicit CLI flags win.
-    for key, val in view_cfg.filters.items():
-        if key == "status":
-            if args.status is None:
-                args.status = str(val)
-        elif key == "kind":
-            if args.kind is None:
-                args.kind = str(val)
-        else:
-            # Non-native key: stash for post-discovery filtering.
-            args._extra_filters[key] = val
-
     args._sort = view_cfg.sort
     args._view_cfg = view_cfg
-
-
-def _apply_extra_filters(items: list, extra: dict[str, Any]) -> list:
-    """Post-discovery equality filter for non-native frontmatter keys."""
-    if not extra:
-        return items
-    return [
-        m for m in items
-        if all(str(m.frontmatter.get(k, "")) == str(v) for k, v in extra.items())
-    ]
 
 
 def _apply_sort(items: list, sort_key: str | None) -> list:

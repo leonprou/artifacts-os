@@ -54,12 +54,66 @@ from artifacts_os.core import (
 
 | Function | Signature | Description |
 |---|---|---|
-| `list_artifacts` | `(registry, *, kind=None, status=None, tag=None) → list[ArtifactMeta]` | List artifacts, optionally filtered. |
+| `list_artifacts` | `(registry, kind=None, *, filters=None) → list[ArtifactMeta]` | List artifacts, optionally filtered by kind and/or frontmatter predicates. |
 | `resolve` | `(registry, query, *, kind=None) → Path` | Resolve a query to a single `Path`. Raises `NotFoundError` or `AmbiguousError`. |
 | `search` | `(registry, query, *, kind=None) → list[ArtifactMeta]` | Like `resolve` but returns all matches without raising. |
 
 `resolve` applies match strategies in priority order: exact stem →
 prefixed ID (`t42` → `t0042`) → numeric (`0042-*`) → partial stem.
+
+#### `list_artifacts` — unified filter API (s0014)
+
+```python
+def list_artifacts(
+    registry: Registry,
+    kind: str | None = None,
+    *,
+    filters: dict[str, Any] | None = None,
+) -> list[ArtifactMeta]:
+```
+
+`kind` controls **which directory subtree** is walked (I/O axis).
+`filters` is a dict of frontmatter-equality predicates — every
+`(key, value)` pair must match for an artifact to be included.
+
+```python
+from artifacts_os.core import Registry, KindDef, list_artifacts
+
+# All tasks with status=ready
+tasks = list_artifacts(registry, kind="task", filters={"status": "ready"})
+
+# Cross-kind: any artifact assigned to alice
+assigned = list_artifacts(registry, filters={"assignee": "alice"})
+
+# Conjunction: ready tasks assigned to alice
+ready_alice = list_artifacts(
+    registry, kind="task",
+    filters={"status": "ready", "assignee": "alice"},
+)
+
+# Tags membership (filters["tags"] uses list-membership semantics)
+urgent = list_artifacts(registry, filters={"tags": "urgent"})
+
+# kind can also be passed inside filters dict (sugar form):
+tasks_alt = list_artifacts(registry, filters={"kind": "task"})
+```
+
+**Validation** — unknown filter keys raise `ValidationError` (exit 2).
+Cross-kind queries (no `kind`) accept a key if it is known for at
+least one registered kind.
+
+**Deprecated kwargs** — `status=` and `tag=` still work through one
+minor release but emit `DeprecationWarning`. Migrate to `filters=`:
+
+```python
+# Old — deprecated
+list_artifacts(registry, status="ready")
+list_artifacts(registry, tag="urgent")
+
+# New
+list_artifacts(registry, filters={"status": "ready"})
+list_artifacts(registry, filters={"tags": "urgent"})
+```
 
 ### Registry (`registry.py`)
 
@@ -214,7 +268,7 @@ print(loaded.body)
 updated = update(registry, "t0001", status="in-progress", fields={"assignee": "alice"})
 
 # 5. List and filter
-tasks = list_artifacts(registry, kind="task", status="ready")
+tasks = list_artifacts(registry, kind="task", filters={"status": "ready"})
 for t in tasks:
     print(t.name, t.status)
 ```

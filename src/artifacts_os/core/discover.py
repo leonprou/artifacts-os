@@ -4,11 +4,12 @@ Spec: s2060-artifacts-os-architecture § discover.py
 """
 
 import re
+import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from artifacts_os.core import frontmatter as _frontmatter
-from artifacts_os.core.errors import AmbiguousError, NotFoundError
+from artifacts_os.core.errors import AmbiguousError, NotFoundError, ValidationError
 from artifacts_os.core.models import ArtifactMeta, KindDef
 
 if TYPE_CHECKING:
@@ -18,6 +19,11 @@ if TYPE_CHECKING:
 _PREFIXED_ID_RE = re.compile(r"^([a-z]+)(\d+)$")
 _ALL_DIGITS_RE = re.compile(r"^\d+$")
 _WIKILINK_RE = re.compile(r"^\[\[(.+?)\]\]$")
+
+# Built-in ArtifactMeta fields always accepted as filter keys.
+_BUILTIN_FILTER_KEYS: frozenset[str] = frozenset(
+    {"id", "kind", "name", "title", "status", "tags", "created"}
+)
 
 
 def _require_root(registry: "Registry") -> Path:
@@ -48,15 +54,95 @@ def _meta_from_file(path: Path) -> ArtifactMeta:
     )
 
 
+def _known_keys_for_kind(registry: "Registry", kind_name: str) -> set[str]:
+    """Return the set of known filter keys for a given kind name."""
+    known: set[str] = set(_BUILTIN_FILTER_KEYS)
+    try:
+        kd = registry.get(kind_name)
+    except ValueError:
+        return known
+    schema = kd.schema
+    known |= set(schema.get("properties", {}).keys())
+    known |= set(schema.get("required", []))
+    return known
+
+
+def _validate_filters(
+    registry: "Registry",
+    kind: str | None,
+    filters: dict[str, Any],
+) -> None:
+    """Raise ValidationError if *filters* contains keys unknown for *kind*.
+
+    When *kind* is None (cross-kind query), a key is known if it is known
+    for at least one registered kind — per s0014 §6.3.
+    """
+    if not filters:
+        return
+    if kind is not None:
+        known = _known_keys_for_kind(registry, kind)
+    else:
+        known = set()
+        for kd in registry.all():
+            known |= _known_keys_for_kind(registry, kd.name)
+    for key in filters:
+        if key not in known:
+            raise ValidationError(
+                f"unknown filter key {key!r} for kind {kind!r}; "
+                f"known keys: {sorted(known)}"
+            )
+
+
 def list_artifacts(
     registry: "Registry",
-    *,
     kind: str | None = None,
-    status: str | None = None,
-    tag: str | None = None,
+    *,
+    filters: dict[str, Any] | None = None,
+    status: str | None = None,   # deprecated — use filters={"status": ...}
+    tag: str | None = None,      # deprecated — use filters={"tags": ...}
 ) -> list[ArtifactMeta]:
-    """List artifacts; optionally filter by kind, status, or tag."""
+    """List artifacts; optionally filter by kind and/or frontmatter predicates.
+
+    Parameters
+    ----------
+    registry:
+        Vault registry.
+    kind:
+        Restrict to this kind's directory (see s0014 §5 for why ``kind``
+        is a named parameter rather than living inside ``filters``).
+    filters:
+        Keyword-only dict of frontmatter-equality predicates.  Every
+        ``(key, value)`` pair must match for an artifact to be included.
+        The special key ``"tags"`` uses list-membership semantics
+        (``str(value) in meta.tags``); all other keys use stringified
+        equality (``str(meta.frontmatter.get(key, "")) == str(value)``).
+
+    Deprecated
+    ----------
+    status:
+        Use ``filters={"status": ...}`` instead.  Emits
+        ``DeprecationWarning`` when passed.  Scheduled for removal in
+        the next minor release (v0.N+1).
+    tag:
+        Use ``filters={"tags": ...}`` instead.  Same deprecation policy.
+    """
+    # Deprecation shim — fold legacy kwargs into filters.
+    if status is not None or tag is not None:
+        warnings.warn(
+            "list_artifacts(status=..., tag=...) is deprecated; "
+            "use filters={'status': ..., 'tags': ...} instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        filters = dict(filters or {})
+        if status is not None:
+            filters.setdefault("status", status)
+        if tag is not None:
+            filters.setdefault("tags", tag)
+
     _require_root(registry)
+    _validate_filters(registry, kind, filters or {})
+
     kinds = [registry.get(kind)] if kind else registry.all()
 
     results: list[ArtifactMeta] = []
@@ -66,10 +152,19 @@ def list_artifacts(
             continue
         for path in sorted(subdir.glob("*.md")):
             meta = _meta_from_file(path)
-            if status is not None and meta.status != status:
-                continue
-            if tag is not None and tag not in meta.tags:
-                continue
+            if filters:
+                match = True
+                for k, v in filters.items():
+                    if k == "tags":
+                        if str(v) not in (meta.frontmatter.get("tags") or []):
+                            match = False
+                            break
+                    else:
+                        if str(meta.frontmatter.get(k, "")) != str(v):
+                            match = False
+                            break
+                if not match:
+                    continue
             results.append(meta)
     return results
 
@@ -271,7 +366,11 @@ def children(
     parent_meta = _ensure_meta(registry, ref, kind=None)
     parent_path = parent_meta.path
 
-    items = list_artifacts(registry, kind=kind, status=status)
+    items = list_artifacts(
+        registry,
+        kind=kind,
+        filters={"status": status} if status is not None else None,
+    )
     result: list[ArtifactMeta] = []
     for item in items:
         raw_parent = item.frontmatter.get("parent")

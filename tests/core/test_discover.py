@@ -32,7 +32,21 @@ def test_list_status_filter(make_vault) -> None:
     from artifacts_os import update
 
     update(registry, a.id, status="ready")
-    items = list_artifacts(registry, status="ready")
+    # New API: filters dict
+    items = list_artifacts(registry, filters={"status": "ready"})
+    assert [i.id for i in items] == ["t0001"]
+
+
+def test_list_status_filter_deprecated_kwarg(make_vault) -> None:
+    """Legacy status= kwarg emits DeprecationWarning but returns same result."""
+    _, registry = make_vault()
+    a = create(registry, "task", "A")
+    create(registry, "task", "B")
+    from artifacts_os import update
+
+    update(registry, a.id, status="ready")
+    with pytest.warns(DeprecationWarning, match="list_artifacts"):
+        items = list_artifacts(registry, status="ready")
     assert [i.id for i in items] == ["t0001"]
 
 
@@ -40,11 +54,23 @@ def test_list_tag_filter(make_vault) -> None:
     _, registry = make_vault()
     create(registry, "task", "A", fields={"tags": ["urgent"]})
     create(registry, "task", "B", fields={"tags": ["later"]})
-    items = list_artifacts(registry, tag="urgent")
+    # New API: filters dict using "tags" key
+    items = list_artifacts(registry, filters={"tags": "urgent"})
     assert len(items) == 1
     # `name` is slug-only; the full stem lives in path.stem.
     assert items[0].name == "a"
     assert items[0].path.stem == "t0001-a"
+
+
+def test_list_tag_filter_deprecated_kwarg(make_vault) -> None:
+    """Legacy tag= kwarg emits DeprecationWarning but returns same result."""
+    _, registry = make_vault()
+    create(registry, "task", "A", fields={"tags": ["urgent"]})
+    create(registry, "task", "B", fields={"tags": ["later"]})
+    with pytest.warns(DeprecationWarning, match="list_artifacts"):
+        items = list_artifacts(registry, tag="urgent")
+    assert len(items) == 1
+    assert items[0].name == "a"
 
 
 def test_resolve_exact_stem(make_vault) -> None:

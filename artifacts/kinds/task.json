@@ -22,6 +22,18 @@
     "priority": {
       "type": "string",
       "description": "Optional priority hint (free-form, e.g. low, normal, high, urgent)"
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Agent or person assigned to work on this task"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Agent or person who owns/verifies this task"
+    },
+    "type": {
+      "type": "string",
+      "description": "Task type (e.g. implementation, documentation, feature, research)"
     }
   }
 }

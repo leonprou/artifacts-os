@@ -12,7 +12,11 @@ _KINDS = {
         "x-prefix": "t",
         "x-numbered": True,
         "properties": {
-            "status": {"enum": ["backlog", "ready", "in-progress", "done"]}
+            "status": {"enum": ["backlog", "ready", "in-progress", "done"]},
+            "assignee": {"type": "string"},
+            "owner": {"type": "string"},
+            "type": {"type": "string"},
+            "priority": {"type": "string"},
         },
     },
     "agent": {

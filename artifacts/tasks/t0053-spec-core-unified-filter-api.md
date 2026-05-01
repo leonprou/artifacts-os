@@ -10,6 +10,7 @@ created: 2026-05-01
 started: 2026-05-01
 artifacts:
   - "[[s0014-core-unified-filter-api]]"
+parent: "[[t0056-core-unified-filter-api]]"
 completed: 2026-05-01
 ---
 

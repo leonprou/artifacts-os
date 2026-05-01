@@ -75,8 +75,8 @@ artifacts show fix-login --kind task
 ### `list` — Browse and filter artifacts
 
 ```
-artifacts list [--kind KIND] [--status STATUS] [--fields FIELDS]
-               [--view NAME] [-q | -j]
+artifacts list [--kind KIND] [--status STATUS] [--filter K=V]...
+               [--view NAME] [--fields FIELDS] [-q | -j]
 ```
 
 Lists all artifacts as a table. Use filters to narrow the results.
@@ -85,6 +85,7 @@ Lists all artifacts as a table. Use filters to narrow the results.
 |------|-------------|
 | `--kind KIND`, `-k` | Show only artifacts of this kind (e.g. `task`, `agent`) |
 | `--status STATUS`, `-s` | Show only artifacts with this status |
+| `--filter K=V` | Frontmatter-equality filter (repeatable; last value per key wins) |
 | `--fields FIELDS`, `-f` | Choose which columns to display (comma-separated) |
 | `--view NAME`, `-V` | Apply a named view from `artifacts.yaml` (filters, columns, sort) |
 | `-q`, `--quiet` | One artifact name per line — good for scripts |
@@ -98,6 +99,10 @@ artifacts list --kind task
 
 # Only tasks that are ready to work on
 artifacts list --kind task --status ready
+
+# Filter by any frontmatter key
+artifacts list --filter assignee=alice
+artifacts list --kind task --filter assignee=alice --filter type=feature
 
 # Pick specific columns
 artifacts list --fields id,name,status,created
