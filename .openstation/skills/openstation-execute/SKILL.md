@@ -46,6 +46,17 @@ Key commands:
 | `openstation status <task> <new-status>` | Transition lifecycle state |
 | `openstation create "<desc>" [--parent <p>]` | Create a task or sub-task |
 
+**Never run `openstation create` unprompted.** Use it only when:
+
+- the operator explicitly asks for a new task (e.g., "create a task
+  for X", "spawn a sub-task"), or
+- you are already inside a task and decomposition is required per
+  `docs/decomposition.md`'s sizing heuristics.
+
+If the operator asks you to author, implement, review, or debug a
+specific artifact, do the work directly — do not wrap the request in
+a new sub-task.
+
 ## Available Slash Commands
 
 These are user-invocable commands you may also use during

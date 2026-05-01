@@ -1,11 +1,27 @@
-"""artifacts-os ai module.
+"""artifacts-os ai module — install, list, and remove AI command assets.
 
-Loads task context and invokes an agent to execute it.
+Provides install machinery for copying or linking slash-command prompt
+files (``*.md``) into a vault's ``.claude/commands/`` directory.
 
-Depends on `core` + `log`. Agent backend is deferred.
+Depends on ``core`` only. No imports from ``cli``, ``views``, or ``tui``.
 
-Spec: s2061-artifacts-os-module-system § ai
-Implementation spec: s2066-artifacts-os-ai-module
+Spec: s2066-artifacts-os-ai-module
 """
 
-__all__: list[str] = []
+from artifacts_os.ai.install import (
+    install,
+    uninstall,
+    list_installed,
+    InstallReport,
+    InstalledAsset,
+    AssetAction,
+)
+
+__all__ = [
+    "install",
+    "uninstall",
+    "list_installed",
+    "InstallReport",
+    "InstalledAsset",
+    "AssetAction",
+]

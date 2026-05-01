@@ -42,10 +42,29 @@ def main() -> None: ...
 |---------|----------|-----------|
 | `list` | `list [--kind KIND] [--status S] [--fields F] [--view V] [-q\|-j]` | `list_artifacts` + `views.render_table` |
 | `show` | `show <ref> [--kind KIND] [-j\|-e]` | `get` |
-| `create` | `create <title> [--kind KIND] [--body B] [--fields F]` | `create` |
+| `create` | `create <title> [--kind KIND] [--body B\|--body-file P] [--name SLUG] [--assignee U] [--owner U] [--parent REF] [--depends-on REF …] [--type T] [--fields F] [--dry-run]` | `create` |
 | `status` | `status <ref> <new-status>` | `update(status=...)` |
 | `verify` | `verify [<ref>] [--kind KIND] [--all] [-j]` | `list_artifacts` + frontmatter checks |
 | `agents` | `agents [list\|-show <name>] [-q\|-j\|-e]` | `list_artifacts(kind="agent")` / `get` |
+
+### `create` flags
+
+| Flag | Description |
+|------|-------------|
+| `--body BODY`, `-b` | Initial body text |
+| `--body-file PATH` | Read body from PATH; `'-'` reads from stdin |
+| `--name SLUG` | Override the auto-derived slug; controls the name portion of the filename |
+| `--assignee USER` | Set `assignee` in frontmatter |
+| `--owner USER` | Set `owner` in frontmatter |
+| `--parent REF` | Set `parent`; bare refs auto-wrapped as `[[REF]]` |
+| `--depends-on REF` | Add a dependency (repeatable); bare refs auto-wrapped |
+| `--type TYPE` | Set `type` in frontmatter |
+| `--fields KEY=VALUE`, `-f` | Extra frontmatter; comma values produce lists; wikilink wrapping applies to `parent` and `depends_on` |
+| `--dry-run`, `-n` | Print resolved frontmatter + body without writing |
+
+**Wikilink convention** — `parent` and `depends_on` fields store
+Obsidian-style wikilinks (`[[ref]]`). The CLI auto-wraps bare refs and
+leaves already-wrapped values unchanged.
 
 ### Output modes
 

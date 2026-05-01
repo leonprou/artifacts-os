@@ -1,0 +1,5 @@
+{"ts":"2026-05-01T10:41:09.374074+03:00","event":"status_transition","task":"t0048-spec-cli-list-named-views","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-01T10:47:45.258166+03:00","event":"status_transition","task":"t0048-spec-cli-list-named-views","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-01T10:59:48.322062+03:00","event":"run_started","task":"t0048-spec-cli-list-named-views","agent":"project-manager","run_id":"r0058","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-01T11:01:18.900988+03:00","event":"status_transition","task":"t0048-spec-cli-list-named-views","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-01T11:01:30.503933+03:00","event":"run_complete","task":"t0048-spec-cli-list-named-views","agent":"","run_id":"r0058","run_status":"complete","cost":"0.87","turns":14}

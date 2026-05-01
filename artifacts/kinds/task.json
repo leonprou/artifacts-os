@@ -10,13 +10,18 @@
     "review": "blue",
     "verified": "magenta",
     "done": "green",
-    "cancelled": "dim strike"
+    "cancelled": "dim strike",
+    "rejected": "red strike"
   },
   "title": "Task",
   "type": "object",
   "properties": {
     "status": {
-      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled"]
+      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled", "rejected"]
+    },
+    "priority": {
+      "type": "string",
+      "description": "Optional priority hint (free-form, e.g. low, normal, high, urgent)"
     }
   }
 }

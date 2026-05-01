@@ -4,6 +4,7 @@ id: t0037
 kind: task
 name: redefine-name-field-as-slug
 owner: user
+created: 2026-04-29
 started: 2026-04-29
 status: done
 type: refactor

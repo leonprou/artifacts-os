@@ -174,6 +174,25 @@ as the filename directly.
 | `--fields KEY=VALUE`, `-f` | Set extra frontmatter fields; comma-separated values produce a list |
 | `--dry-run`, `-n` | Print resolved frontmatter and body without writing any file |
 
+**Kind-aware help** — `--help` renders a flag list tailored to the
+requested kind. Pass `--kind` before `--help` to see the flags for a
+specific kind:
+
+```bash
+artifacts create --kind task --help   # task-specific flags
+artifacts create --kind note --help   # note-specific flags
+artifacts create --help               # defaults to the project's default kind
+```
+
+Kind-aware help has two effects:
+
+- **Filter (Variant A)** — convenience flags that don't apply to the
+  kind (based on its `x-columns` declaration) are hidden from the flag
+  list. They remain available via `--fields KEY=VALUE` as an escape hatch.
+- **Augment (Variant B)** — schema properties without a dedicated flag
+  get one automatically. For example, a `task` kind with a `priority`
+  property gains a `--priority` flag.
+
 **Wikilink auto-wrapping** — `--parent` and `--depends-on` accept bare
 artifact refs (e.g. `t0042`) and wrap them as `[[t0042]]` automatically.
 Passing an already-wrapped value like `[[t0042]]` is also fine.

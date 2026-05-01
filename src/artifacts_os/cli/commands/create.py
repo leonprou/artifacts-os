@@ -13,6 +13,16 @@ from artifacts_os.core import frontmatter as _frontmatter
 # Fields whose values are stored as wikilinks in frontmatter.
 _WIKILINK_FIELDS = frozenset({"parent", "depends_on"})
 
+# Schema property names that already have dedicated convenience flags.
+# Augment (Variant B) skips these to avoid double-registration.
+_CONVENIENCE_FIELD_NAMES = frozenset({"assignee", "owner", "parent", "depends_on", "type"})
+
+# Flag names that must never be re-registered by augment (conflict avoidance).
+_RESERVED_FLAGS = frozenset({
+    "help", "version", "kind", "body", "body_file", "name",
+    "fields", "dry_run", "title",
+})
+
 
 def _wrap_wikilink(value: str) -> str:
     """Wrap *value* as ``[[value]]`` unless it is already wrapped."""
@@ -22,8 +32,80 @@ def _wrap_wikilink(value: str) -> str:
     return f"[[{value}]]"
 
 
-def register(subparsers) -> None:
-    p = subparsers.add_parser("create", help="create a new artifact")
+def _field_in_schema(field: str, schema: dict) -> bool:
+    """Return True if *field* is declared in schema properties or x-columns."""
+    if field in schema.get("properties", {}):
+        return True
+    for col in schema.get("x-columns", []):
+        col_name = col.split(":")[0]
+        if col_name == field:
+            return True
+    return False
+
+
+def _schema_has_columns(schema: dict) -> bool:
+    """Return True when the schema has explicit x-columns declarations.
+
+    The filter (Variant A) is applied only when x-columns is present —
+    that signals the kind has an explicit opinion about which fields matter.
+    Schemas with only ``properties`` (e.g. minimal test schemas) are treated
+    as generic and show all convenience flags.
+    """
+    return bool(schema.get("x-columns"))
+
+
+def _metavar_for_prop(prop: dict) -> str:
+    t = prop.get("type", "string")
+    if t == "integer":
+        return "INT"
+    enum = prop.get("enum")
+    if enum:
+        return "|".join(str(v) for v in enum)
+    return "TEXT"
+
+
+def _add_kind_flags(p, schema: dict) -> list[str]:
+    """Add kind-specific flags from schema properties (Variant B).
+
+    Returns the list of field names that were added as dedicated flags.
+    """
+    kind_fields: list[str] = []
+    for field, prop in schema.get("properties", {}).items():
+        if field in _CONVENIENCE_FIELD_NAMES:
+            continue
+        dest = field  # dest uses the raw field name (underscores)
+        if dest in _RESERVED_FLAGS:
+            continue
+        flag = f"--{field.replace('_', '-')}"
+        help_text = prop.get("description", f"set frontmatter {field}")
+        enum = prop.get("enum")
+        if prop.get("type") == "array" or "items" in prop:
+            p.add_argument(flag, dest=dest, action="append", metavar="VAL", help=help_text)
+        elif enum:
+            p.add_argument(flag, dest=dest, choices=enum, metavar="|".join(str(v) for v in enum), help=help_text)
+        else:
+            p.add_argument(flag, dest=dest, metavar=_metavar_for_prop(prop), help=help_text)
+        kind_fields.append(field)
+    return kind_fields
+
+
+def register(subparsers, kind: str | None = None, schema: dict | None = None) -> None:
+    """Register the ``create`` sub-command.
+
+    When *kind* and *schema* are provided (Phase 2 of two-phase parsing)
+    the parser is built with kind-aware flags (Variant A filter + Variant B
+    augment).  When *schema* is ``None`` the parser falls back to the static
+    flag set so that unknown-kind errors surface cleanly in ``run()``.
+    """
+    kind_title = schema.get("title", kind) if schema and kind else None
+    description = (
+        f"Create a new {kind_title} artifact." if kind_title else None
+    )
+    p = subparsers.add_parser(
+        "create",
+        help="create a new artifact",
+        description=description,
+    )
     p.add_argument("title", help="artifact title")
     p.add_argument(
         "--kind", "-k",
@@ -43,26 +125,44 @@ def register(subparsers) -> None:
         help="read body from PATH; use '-' to read from stdin",
     )
 
-    # Convenience flags for common frontmatter fields
-    p.add_argument("--assignee", help="set frontmatter assignee")
-    p.add_argument("--owner", help="set frontmatter owner")
-    p.add_argument(
-        "--parent",
-        help="set frontmatter parent (bare ref auto-wrapped as [[…]])",
-    )
-    p.add_argument(
-        "--depends-on",
-        dest="depends_on",
-        action="append",
-        metavar="REF",
-        help="add a dependency (auto-wrapped as [[…]]); repeat for multiple",
-    )
-    p.add_argument("--type", dest="type_", help="set frontmatter type")
+    # Determine which convenience flags to show (Variant A filter).
+    # Filter only applies when schema has x-columns (explicit column declarations).
+    # Schemas without x-columns are treated as generic: show all convenience flags.
+    show_all = schema is None or not _schema_has_columns(schema)
 
-    # Name (slug) override
+    if show_all or _field_in_schema("assignee", schema):
+        p.add_argument("--assignee", help="set frontmatter assignee")
+
+    if show_all or _field_in_schema("owner", schema):
+        p.add_argument("--owner", help="set frontmatter owner")
+
+    if show_all or _field_in_schema("parent", schema):
+        p.add_argument(
+            "--parent",
+            help="set frontmatter parent (bare ref auto-wrapped as [[…]])",
+        )
+
+    if show_all or _field_in_schema("depends_on", schema):
+        p.add_argument(
+            "--depends-on",
+            dest="depends_on",
+            action="append",
+            metavar="REF",
+            help="add a dependency (auto-wrapped as [[…]]); repeat for multiple",
+        )
+
+    if show_all or _field_in_schema("type", schema):
+        p.add_argument("--type", dest="type_", help="set frontmatter type")
+
+    # Variant B: augment with kind-specific flags from schema properties.
+    kind_fields: list[str] = []
+    if schema:
+        kind_fields = _add_kind_flags(p, schema)
+
+    # Name (slug) override — always shown
     p.add_argument("--name", help="override the auto-derived slug")
 
-    # Generic key=value fields
+    # Generic key=value fields — always shown (universal escape hatch)
     p.add_argument(
         "--fields",
         "-f",
@@ -72,14 +172,14 @@ def register(subparsers) -> None:
              "comma-separated values produce a list (e.g. tags=a,b,c)",
     )
 
-    # Dry run
+    # Dry run — always shown
     p.add_argument(
         "--dry-run",
         "-n",
         action="store_true",
         help="print resolved frontmatter and body without writing",
     )
-    p.set_defaults(func=run)
+    p.set_defaults(func=run, _kind_specific_fields=kind_fields)
 
 
 def _parse_fields(field_args: list[str] | None) -> dict:
@@ -122,21 +222,31 @@ def _read_body(args) -> str:
 
 
 def _build_fields(args) -> dict:
-    """Merge ``--fields`` and convenience flags into a single dict.
+    """Merge ``--fields``, convenience flags, and kind-specific flags into a dict.
 
     Convenience flags take precedence over ``--fields`` for the same key.
+    Kind-specific flags (Variant B) also take precedence over ``--fields``.
     """
     fields = _parse_fields(args.fields)
-    if args.assignee is not None:
+
+    # Convenience flags (may be absent from namespace if filtered out).
+    if getattr(args, "assignee", None) is not None:
         fields["assignee"] = args.assignee
-    if args.owner is not None:
+    if getattr(args, "owner", None) is not None:
         fields["owner"] = args.owner
-    if args.parent is not None:
+    if getattr(args, "parent", None) is not None:
         fields["parent"] = _wrap_wikilink(args.parent)
     if getattr(args, "depends_on", None):
         fields["depends_on"] = [_wrap_wikilink(d) for d in args.depends_on]
-    if args.type_ is not None:
+    if getattr(args, "type_", None) is not None:
         fields["type"] = args.type_
+
+    # Kind-specific flags added by Variant B augment.
+    for field in getattr(args, "_kind_specific_fields", []):
+        val = getattr(args, field, None)
+        if val is not None:
+            fields[field] = val
+
     # Auto-populate `created` with today's date unless the user supplied
     # one.  Pass a `date` object so YAML emits the value unquoted
     # (`created: 2026-04-30`) — PyYAML otherwise wraps a date-looking

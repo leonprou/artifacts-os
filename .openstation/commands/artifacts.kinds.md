@@ -1,0 +1,1 @@
+../../src/artifacts_os/ai/claude/commands/artifacts.kinds.md

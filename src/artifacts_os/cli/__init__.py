@@ -29,6 +29,7 @@ from artifacts_os.cli.commands import verify as _verify_cmd
 from artifacts_os.cli.commands import validate as _validate_cmd
 from artifacts_os.cli.commands import init as _init_cmd
 from artifacts_os.cli.commands import kinds as _kinds_cmd
+from artifacts_os.cli.commands import ai as _ai_cmd
 from artifacts_os.cli.settings import CliSettings
 
 
@@ -66,7 +67,54 @@ def register_kinds(kinds: list[KindDef]) -> None:
     _registered_kinds.extend(kinds)
 
 
-def _build_parser():
+def _peek_create_kind_schema(
+    argv: list[str],
+    cli_settings,
+    root,
+) -> tuple[str | None, dict | None]:
+    """Phase 1: pre-parse to extract --kind and load its schema.
+
+    Returns ``(kind, schema)`` when argv starts with ``"create"``, or
+    ``(None, None)`` for any other command.  An unknown kind (no schema
+    file) returns ``(kind, None)`` so Phase 2 falls back to static flags
+    and the error surfaces cleanly in ``run()``.
+    """
+    if not argv or argv[0] != "create":
+        return None, None
+
+    import argparse
+    import json
+    from pathlib import Path
+
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--kind", "-k", default=None)
+    pre.add_argument("title", nargs="?", default=None)
+    known, _ = pre.parse_known_args(argv[1:])
+
+    kind: str | None = known.kind
+    if kind is None and cli_settings is not None:
+        create_defaults = cli_settings.defaults.get("create") or {}
+        kind = create_defaults.get("kind")
+    if kind is None:
+        kind = "task"
+
+    schema: dict | None = None
+    if root is not None:
+        schema_path = Path(root) / "artifacts" / "kinds" / f"{kind}.json"
+        if schema_path.exists():
+            try:
+                with open(schema_path) as fh:
+                    schema = json.load(fh)
+            except Exception:
+                schema = None
+
+    return kind, schema
+
+
+def _build_parser(
+    create_kind: str | None = None,
+    create_schema: dict | None = None,
+):
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -79,11 +127,12 @@ def _build_parser():
     _init_cmd.register(subparsers)
     _list_cmd.register(subparsers)
     _show_cmd.register(subparsers)
-    _create_cmd.register(subparsers)
+    _create_cmd.register(subparsers, kind=create_kind, schema=create_schema)
     _status_cmd.register(subparsers)
     _verify_cmd.register(subparsers)
     _validate_cmd.register(subparsers)
     _kinds_cmd.register(subparsers)
+    _ai_cmd.register(subparsers)
 
     return parser
 
@@ -98,7 +147,10 @@ def _run(argv: Sequence[str]) -> int:
     if cli_settings is not None:
         argv = _apply_aliases(argv, cli_settings.aliases)
 
-    parser = _build_parser()
+    # Phase 1 — peek at create --kind to enable kind-aware help and flags.
+    create_kind, create_schema = _peek_create_kind_schema(argv, cli_settings, root)
+
+    parser = _build_parser(create_kind=create_kind, create_schema=create_schema)
     args = parser.parse_args(argv)
     args.cli_settings = cli_settings
 

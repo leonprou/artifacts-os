@@ -82,21 +82,79 @@ use `artifacts show -j` so frontmatter and body come back parsed.
 ### Create — `artifacts create`
 
 ```bash
-artifacts create "<title>" [--kind KIND] [--body TEXT] [--fields KEY=VALUE …]
+artifacts create "<title>" [--kind KIND]
+    [--body TEXT | --body-file PATH]
+    [--name SLUG] [--dry-run | -n]
+    [--assignee USER] [--owner USER]
+    [--parent REF] [--depends-on REF …]
+    [--type TYPE]
+    [--fields KEY=VALUE …]
 ```
 
-- Default kind is `task`.
-- For numbered kinds (e.g. `task`, `spec`) the ID is auto-assigned.
-- For non-numbered kinds (e.g. `agent`) the title becomes the slug.
-- `--fields` accepts multiple `KEY=VALUE` pairs after a single flag.
+| Flag                     | Purpose                                                          |
+|--------------------------|------------------------------------------------------------------|
+| `--kind`, `-k`           | Artifact kind (default: `task`)                                  |
+| `--body`, `-b`           | Inline body text                                                 |
+| `--body-file PATH`       | Read body from *PATH*; use `'-'` to read from stdin             |
+| `--name SLUG`            | Override the auto-derived slug (controls `{id}-{slug}.md`)      |
+| `--dry-run`, `-n`        | Print resolved frontmatter + body without writing any file       |
+| `--assignee USER`        | Set `assignee` frontmatter field                                 |
+| `--owner USER`           | Set `owner` frontmatter field                                    |
+| `--parent REF`           | Set `parent` (bare refs like `t0042` are auto-wrapped as `[[t0042]]`) |
+| `--depends-on REF`       | Add a dependency; repeat for multiple (auto-wrapped as `[[…]]`) |
+| `--type TYPE`            | Set `type` frontmatter field                                     |
+| `--fields KEY=VALUE …`   | Extra frontmatter; convenience flags override same-key entries  |
+
+**Kind-aware help** — `--help` is schema-driven. Use `--kind` before
+`--help` to see the exact flags for a kind:
 
 ```bash
-artifacts create "Fix login bug"                                  # → t0043
-artifacts create "researcher" --kind agent                        # → researcher
+artifacts create --kind task --help   # task flags (e.g. --priority, --status)
+artifacts create --kind note --help   # note flags only
+```
+
+Convenience flags not declared in the kind's `x-columns` are hidden but
+remain accessible via `--fields`. Schema properties without a convenience
+flag get their own dedicated flag (e.g. `--priority` for task).
+
+**Wikilink auto-wrap** — `--parent` and `--depends-on` accept bare refs
+(`t0042`) or the full `[[t0042]]` form; both are stored correctly.
+The same wrapping applies to `parent` and `depends_on` inside `--fields`.
+
+**Comma-list values** — `--fields tags=a,b,c` stores the value as a YAML
+list `[a, b, c]`. Wikilink wrapping is applied per-element when the field
+is `parent` or `depends_on`.
+
+```bash
+# Minimal — numbered kind, auto-assigned ID
+artifacts create "Fix login bug"                          # → t0043
+
+# Non-numbered kind — title becomes the slug
+artifacts create "researcher" --kind agent               # → researcher.md
+
+# Convenience flags
 artifacts create "Deploy pipeline" \
   --kind task \
-  --fields status=ready assignee=developer \
-  --body "## Steps\n- Step 1\n- Step 2"
+  --assignee developer \
+  --owner user \
+  --parent t0010 \
+  --depends-on t0001 --depends-on t0002 \
+  --type feature
+
+# Body from file
+artifacts create "Spec draft" --kind spec --body-file spec-draft.md
+
+# Body from stdin
+echo "## Notes" | artifacts create "Scratch note" --body-file -
+
+# Preview without writing (dry run)
+artifacts create "Try me" --assignee alice --dry-run
+
+# Override slug
+artifacts create "Fix very long title" --name fix-title  # stem: t0044-fix-title
+
+# Comma-list via --fields
+artifacts create "Blocked task" --fields depends_on=t0001,t0002
 ```
 
 ### Update status — `artifacts status`

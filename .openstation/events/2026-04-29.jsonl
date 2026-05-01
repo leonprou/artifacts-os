@@ -20,3 +20,6 @@
 {"ts":"2026-04-29T23:56:09.972214+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0027-document-settings-loader-and-extension","duration_ms":131}
 {"ts":"2026-04-29T23:56:23.686053+03:00","event":"status_transition","task":"t0016-re-scope-s0007-views-spec","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-04-29T23:56:23.870450+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0016-re-scope-s0007-views-spec","duration_ms":182}
+{"ts":"2026-04-29T23:56:32.269676+03:00","event":"status_transition","task":"t0004-write-readme-for-views-module","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-04-29T23:56:32.452983+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0004-write-readme-for-views-module","duration_ms":181}
+{"ts":"2026-04-29T23:57:27.693635+03:00","event":"status_transition","task":"t0036-improve-cli-create-command","old_status":"backlog","new_status":"ready","forced":false}

@@ -2,7 +2,7 @@
 
 import json
 import os
-import subprocess
+import sys
 
 from rich.console import Console
 
@@ -37,10 +37,18 @@ def run(args, registry: Registry) -> int:
             show_defaults = cli_settings.defaults.get("show") or {}
             open_editor = bool(show_defaults.get("editor", False))
 
+    # Never open an editor in non-interactive contexts (pipes, slash commands,
+    # CI). The implicit settings-based default is silently downgraded to text
+    # output; an explicit -e is treated the same way to avoid hanging.
+    if open_editor and not sys.stdout.isatty():
+        open_editor = False
+
     if open_editor:
         editor = os.environ.get("EDITOR", "vi")
-        subprocess.run([editor, str(artifact.path)], check=False)
-        return 0
+        # Use execvp so the editor inherits the terminal directly. subprocess.run
+        # keeps Python as the parent and confuses interactive prompts (e.g. nvim's
+        # swap-file dialog) when Rich's Console has already touched terminal state.
+        os.execvp(editor, [editor, str(artifact.path)])
 
     # Default: render frontmatter as a one-row table, then print body
     kind_def = None

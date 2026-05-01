@@ -92,6 +92,7 @@ def register(subparsers) -> None:
         help="target directory (default: current directory)",
     )
     p.add_argument("--name", default=None, help="project name (default: directory name)")
+    p.add_argument("--no-ai", action="store_true", help="skip AI command installation")
     p.set_defaults(func=run, _pre_registry=True)
 
 
@@ -137,4 +138,13 @@ def run(args) -> int:  # no registry — called before vault setup
     for schema in _DEFAULT_KINDS.values():
         print(f"  artifacts/{schema['x-dir']}/")
     print(f"  openstation -> artifacts")
+
+    # Install AI commands (unless opted out)
+    if not getattr(args, "no_ai", False):
+        try:
+            from artifacts_os.ai import install as ai_install
+            ai_install(target, mode="link", dry_run=False)
+        except Exception:
+            pass  # best-effort; don't fail init if AI install fails
+
     return 0
