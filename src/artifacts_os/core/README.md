@@ -130,6 +130,20 @@ Registry(kinds: list[KindDef], root: Path | None = None)
 | `all() → list[KindDef]` | All registered kinds. |
 | `for_dir(dir_name) → KindDef | None` | Find the kind that owns a given directory. |
 
+#### Duplicate-name contract
+
+`Registry.__init__` raises `ValueError` if the caller-supplied `kinds`
+list contains two entries with the same `name`:
+
+```
+ValueError: duplicate kind '<name>' in Registry kinds list
+```
+
+This is a defense-in-depth check for programmatic callers that bypass
+`register_kinds()`. Vault kinds (loaded from `artifacts/kinds/*.json`)
+that share a name with a caller kind **silently override** the caller
+kind — this override semantic is intentional and does not raise.
+
 ### Vault (`vault.py`)
 
 ```python

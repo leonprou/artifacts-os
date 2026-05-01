@@ -106,3 +106,48 @@ def test_types_dir_is_not_scanned(tmp_path: Path) -> None:
     assert len(r.all()) == 0
     with pytest.raises(ValueError):
         r.get("changelog")
+
+
+# ---------------------------------------------------------------------------
+# Duplicate name validation
+# ---------------------------------------------------------------------------
+
+def _task_kind(name: str = "task") -> KindDef:
+    return KindDef(name=name, dir=f"{name}s", prefix=name[0], numbered=True)
+
+
+def test_registry_duplicate_kinds_raises() -> None:
+    """Registry.__init__ raises ValueError for duplicate kind names in the list."""
+    k = _task_kind("task")
+    with pytest.raises(ValueError, match="duplicate kind 'task' in Registry kinds list"):
+        Registry(kinds=[k, k])
+
+
+def test_registry_duplicate_kinds_same_name_different_object() -> None:
+    """Duplicate detected by name, not identity."""
+    k1 = KindDef(name="task", dir="tasks", prefix="t", numbered=True)
+    k2 = KindDef(name="task", dir="other", prefix="x", numbered=False)
+    with pytest.raises(ValueError, match="duplicate kind 'task' in Registry kinds list"):
+        Registry(kinds=[k1, k2])
+
+
+def test_registry_no_duplicate_kinds_passes() -> None:
+    """Distinct kind names are accepted without error."""
+    k1 = _task_kind("task")
+    k2 = _task_kind("agent")
+    r = Registry(kinds=[k1, k2])
+    assert len(r.all()) == 2
+
+
+def test_vault_override_caller_kind_no_error(tmp_path: Path) -> None:
+    """Vault kind overriding a caller kind is silent — no ValueError raised."""
+    root = tmp_path / "vault"
+    _write_schema(
+        root,
+        "task",
+        {"x-prefix": "xx", "x-numbered": True, "x-dir": "custom"},
+    )
+    caller_kinds = [KindDef(name="task", dir="tasks", prefix="t", numbered=True)]
+    # Must not raise; vault kind wins silently
+    r = Registry(caller_kinds, root=root)
+    assert r.get("task").prefix == "xx"

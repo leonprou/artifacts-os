@@ -525,6 +525,40 @@ cli:
 
 ---
 
+## Extending the CLI — `register_kinds()`
+
+Host applications inject custom `KindDef` objects before the CLI
+dispatches by calling `register_kinds()`:
+
+```python
+from artifacts_os.cli import register_kinds, main
+from artifacts_os.core import KindDef
+
+register_kinds([
+    KindDef(name="note", dir="notes", prefix="n", numbered=True,
+            statuses=["draft", "published"]),
+])
+main()
+```
+
+Kinds registered this way are merged with any vault-defined kinds at
+startup. When a vault kind shares the same name as a caller kind, the
+**vault kind wins** (silent override — no error).
+
+### Validation
+
+`register_kinds()` raises `ValueError` on two classes of duplicates:
+
+| Scenario | Message |
+|----------|---------|
+| Input list contains the same name twice | `"duplicate kind '<name>' in register_kinds() input"` |
+| A name is already registered from a previous `register_kinds()` call | `"kind '<name>' is already registered"` |
+
+These checks make duplicate registrations a hard error so bugs surface at
+startup rather than at runtime.
+
+---
+
 ## Output Formats
 
 | Mode | Flag | Best for |

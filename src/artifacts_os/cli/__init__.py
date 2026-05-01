@@ -79,7 +79,21 @@ def register_kinds(kinds: list[KindDef]) -> None:
 
     Stores kind definitions so the Registry is built with them at startup.
     Call before main() to inject application-specific KindDefs.
+
+    Raises ``ValueError`` if any kind in *kinds* shares a name with an
+    already-registered kind, or if *kinds* itself contains duplicate names.
     """
+    # Check for duplicates within the incoming list.
+    seen: set[str] = set()
+    for kd in kinds:
+        if kd.name in seen:
+            raise ValueError(f"duplicate kind '{kd.name}' in register_kinds() input")
+        seen.add(kd.name)
+    # Check for conflicts with already-registered kinds.
+    existing = {kd.name for kd in _registered_kinds}
+    for kd in kinds:
+        if kd.name in existing:
+            raise ValueError(f"kind '{kd.name}' is already registered")
     _registered_kinds.extend(kinds)
 
 

@@ -17,6 +17,11 @@ class Registry:
         root: Path | None = None,
     ) -> None:
         self._root = Path(root).resolve() if root is not None else None
+        seen: set[str] = set()
+        for kd in kinds:
+            if kd.name in seen:
+                raise ValueError(f"duplicate kind '{kd.name}' in Registry kinds list")
+            seen.add(kd.name)
         self._kinds: dict[str, KindDef] = {kd.name: kd for kd in kinds}
         if self._root is not None:
             for kd in self._load_vault_kinds(self._root):
