@@ -1,0 +1,5 @@
+{"ts":"2026-05-02T00:00:43.020684+03:00","event":"status_transition","task":"t0056-core-unified-filter-api","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T00:00:54.261780+03:00","event":"run_complete","task":"t0056-core-unified-filter-api","agent":"","run_id":"r0073","run_status":"complete","cost":"1.62","turns":34}
+{"ts":"2026-05-02T00:01:49.635683+03:00","event":"status_transition","task":"t0058-register-kinds-duplicate-name-validation","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T00:02:03.799271+03:00","event":"status_transition","task":"t0056-core-unified-filter-api","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T00:03:02.928377+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0058-register-kinds-duplicate-name-validation","duration_ms":73289}
