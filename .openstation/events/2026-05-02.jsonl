@@ -3,3 +3,12 @@
 {"ts":"2026-05-02T00:01:49.635683+03:00","event":"status_transition","task":"t0058-register-kinds-duplicate-name-validation","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-02T00:02:03.799271+03:00","event":"status_transition","task":"t0056-core-unified-filter-api","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-02T00:03:02.928377+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0058-register-kinds-duplicate-name-validation","duration_ms":73289}
+{"ts":"2026-05-02T00:03:23.261649+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0056-core-unified-filter-api","duration_ms":79458}
+{"ts":"2026-05-02T00:04:11.623470+03:00","event":"run_started","task":"t0047-cli-list-named-views","agent":"project-manager","run_id":"r0075","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T00:07:28.076197+03:00","event":"run_started","task":"t0047-cli-list-named-views","agent":"project-manager","run_id":"r0076","mode":"verify","context_only":false,"detached":false}
+{"ts":"2026-05-02T00:07:35.977754+03:00","event":"status_transition","task":"t0047-cli-list-named-views","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T00:07:51.513567+03:00","event":"run_complete","task":"t0047-cli-list-named-views","agent":"","run_id":"r0075","run_status":"complete","cost":"1.60","turns":27}
+{"ts":"2026-05-02T00:08:49.487133+03:00","event":"status_transition","task":"t0055-spec-cli-schema-derived-filter","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-02T00:08:57.229031+03:00","event":"run_started","task":"t0055-spec-cli-schema-derived-filter","agent":"architect","run_id":"r0077","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-02T00:09:22.623232+03:00","event":"status_transition","task":"t0047-cli-list-named-views","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T00:09:23.967030+03:00","event":"status_transition","task":"t0055-spec-cli-schema-derived-filter","old_status":"ready","new_status":"in-progress","forced":false}
