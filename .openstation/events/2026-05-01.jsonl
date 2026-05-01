@@ -45,3 +45,17 @@
 {"ts":"2026-05-01T23:15:32.571503+03:00","event":"task_created","task":"t0055-spec-cli-schema-derived-filter","status":"backlog","assignee":"architect","parent":""}
 {"ts":"2026-05-01T23:16:21.380223+03:00","event":"status_transition","task":"t0053-spec-core-unified-filter-api","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-01T23:16:21.937364+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0053-spec-core-unified-filter-api","duration_ms":555}
+{"ts":"2026-05-01T23:18:17.966650+03:00","event":"task_created","task":"t0056-core-unified-filter-api","status":"ready","assignee":"developer","parent":""}
+{"ts":"2026-05-01T23:18:50.954320+03:00","event":"task_created","task":"t0057-implement-core-unified-filter-api","status":"ready","assignee":"developer","parent":"t0056-core-unified-filter-api"}
+{"ts":"2026-05-01T23:21:35.534798+03:00","event":"run_started","task":"t0057-implement-core-unified-filter-api","agent":"developer","run_id":"r0068","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-01T23:22:35.772504+03:00","event":"status_transition","task":"t0057-implement-core-unified-filter-api","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-01T23:23:01.435337+03:00","event":"run_started","task":"t0050-programmatic-cli-access-for-frontmatter","agent":"project-manager","run_id":"r0069","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-01T23:31:52.675839+03:00","event":"status_transition","task":"t0050-programmatic-cli-access-for-frontmatter","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-01T23:32:12.518346+03:00","event":"run_complete","task":"t0050-programmatic-cli-access-for-frontmatter","agent":"","run_id":"r0069","run_status":"complete","cost":"2.67","turns":52}
+{"ts":"2026-05-01T23:33:31.521943+03:00","event":"status_transition","task":"t0057-implement-core-unified-filter-api","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-01T23:33:46.444476+03:00","event":"run_complete","task":"t0057-implement-core-unified-filter-api","agent":"developer","run_id":"r0068","run_status":"complete","cost":"2.56","turns":60}
+{"ts":"2026-05-01T23:37:30.866335+03:00","event":"task_created","task":"t0058-register-kinds-duplicate-name-validation","status":"ready","assignee":"developer","parent":""}
+{"ts":"2026-05-01T23:38:26.677793+03:00","event":"status_transition","task":"t0049-implement-cli-list-named-views","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-01T23:39:00.745711+03:00","event":"status_transition","task":"t0050-programmatic-cli-access-for-frontmatter","old_status":"in-progress","new_status":"done","forced":true}
+{"ts":"2026-05-01T23:40:05.464519+03:00","event":"run_started","task":"t0057-implement-core-unified-filter-api","agent":"project-manager","run_id":"r0070","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-01T23:40:07.132265+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0050-programmatic-cli-access-for-frontmatter","duration_ms":66383}

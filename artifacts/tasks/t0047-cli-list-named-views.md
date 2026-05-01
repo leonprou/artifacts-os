@@ -5,10 +5,11 @@ id: t0047
 kind: task
 name: cli-list-named-views
 owner: user
-status: ready
+status: review
 type: feature
 subtasks:
   - "[[t0048-spec-cli-list-named-views]]"
+  - "[[t0049-implement-cli-list-named-views]]"
 artifacts:
   - "[[artifacts/specs/s0012-cli-list-named-views]]"
 ---
@@ -44,9 +45,11 @@ them as ergonomic slash commands without retyping flags.
 
 ## Sub-tasks
 
-- [[t0048-spec-cli-list-named-views]] — architect produces the spec; once
-  approved, this task's tech requirements are finalized and it
-  promotes from `backlog` to `ready`.
+- [[t0048-spec-cli-list-named-views]] — architect produced the spec
+  (`s0012`); status: `done`.
+- [[t0049-implement-cli-list-named-views]] — developer implements
+  the spec end-to-end (single pass per architect's note); status:
+  `ready`.
 
 ## Tech Requirements (finalized)
 
