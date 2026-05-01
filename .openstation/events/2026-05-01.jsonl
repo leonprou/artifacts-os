@@ -34,3 +34,14 @@
 {"ts":"2026-05-01T22:53:28.712622+03:00","event":"status_transition","task":"t0052-implement-programmatic-cli-access-frontmatter","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-01T22:53:29.011508+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0052-implement-programmatic-cli-access-frontmatter","duration_ms":296}
 {"ts":"2026-05-01T23:00:43.354465+03:00","event":"task_created","task":"t0053-spec-core-unified-filter-api","status":"ready","assignee":"architect","parent":""}
+{"ts":"2026-05-01T23:05:31.175732+03:00","event":"run_started","task":"t0053-spec-core-unified-filter-api","agent":"architect","run_id":"r0066","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-01T23:05:48.298290+03:00","event":"status_transition","task":"t0053-spec-core-unified-filter-api","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-01T23:11:51.888523+03:00","event":"status_transition","task":"t0053-spec-core-unified-filter-api","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-01T23:12:11.494052+03:00","event":"run_complete","task":"t0053-spec-core-unified-filter-api","agent":"architect","run_id":"r0066","run_status":"complete","cost":"2.48","turns":37}
+{"ts":"2026-05-01T23:13:53.936373+03:00","event":"run_started","task":"t0053-spec-core-unified-filter-api","agent":"project-manager","run_id":"r0067","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-01T23:14:38.739245+03:00","event":"task_created","task":"t0054-complete-kind-schemas","status":"ready","assignee":"architect","parent":""}
+{"ts":"2026-05-01T23:15:11.701424+03:00","event":"status_transition","task":"t0053-spec-core-unified-filter-api","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-01T23:15:23.574136+03:00","event":"run_complete","task":"t0053-spec-core-unified-filter-api","agent":"","run_id":"r0067","run_status":"complete","cost":"0.64","turns":10}
+{"ts":"2026-05-01T23:15:32.571503+03:00","event":"task_created","task":"t0055-spec-cli-schema-derived-filter","status":"backlog","assignee":"architect","parent":""}
+{"ts":"2026-05-01T23:16:21.380223+03:00","event":"status_transition","task":"t0053-spec-core-unified-filter-api","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-01T23:16:21.937364+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0053-spec-core-unified-filter-api","duration_ms":555}
