@@ -342,10 +342,12 @@ malformed.
 These are noted explicitly so the implementation sub-task does
 not accidentally pick them up:
 
-- **`artifacts views show <name>`** — detail view of a single
-  view (full filters dict, parsed columns, formatted sort).
-  Useful, but a separate UX problem (single-record rendering).
-  Defer until a user asks.
+- **Detail mode for a single view** — full filters dict, parsed
+  columns, formatted sort. **Status: spec'd in §15** as a
+  positional `artifacts views <view_name>` (not a `show`
+  sub-subcommand) per user request. Delivered by
+  [[t0069-spec-cli-views-detail-by]] and a follow-up
+  implementation sub-task.
 - **`artifacts views --validate`** — flag dangling bindings
   (`default_views[k] = "v"` where `v ∉ views`), warn on unused
   views, etc. Belongs under `validate`, not `views`.
@@ -577,6 +579,585 @@ include at least:
 
 | Marker | Items |
 |--------|-------|
-| **Decided** | Subcommand name `views`. Five-column table (`name`, `kind`, `columns`, `sort`, `default-for`). `-q` is name-only; `-j` is `{views: [...], default_views: {...}}`. Empty / missing-views state is exit 0 with stderr hint. Malformed view entries exit 1 via the `ValueError` cascade. Sort: alphabetical by `name`. No `--sort` / `--defaults` / positional flags. |
+| **Decided** | Subcommand name `views`. Five-column table (`name`, `kind`, `columns`, `sort`, `default-for`). `-q` is name-only; `-j` is `{views: [...], default_views: {...}}`. Empty / missing-views state is exit 0 with stderr hint. Malformed view entries exit 1 via the `ValueError` cascade. Sort: alphabetical by `name`. No `--sort` / `--defaults` / positional flags in list mode. |
 | **Recommended** | Reuse the existing `_load_views_settings(root)` helper rather than introducing a new loader. Place the new command file at `src/artifacts_os/cli/commands/views.py` and the test file at `tests/cli/test_views_cmd.py`. |
-| **Deferred** | `artifacts views show <name>` (detail view). `--validate` flag (belongs under `validate`). `--kind` filter (use `jq`). Sort-by-`default-for`. CLI-level alias (per-vault choice, not library default). |
+| **Deferred** | `--validate` flag (belongs under `validate`). `--kind` filter (use `jq`). Sort-by-`default-for`. CLI-level alias (per-vault choice, not library default). |
+| **Iteration 2** | Detail mode added in §15: positional `artifacts views <view_name>` for full single-view inspection (untruncated `columns`, full `filters` dict). |
+
+---
+
+## 15. Detail Mode — Iteration 2 Addendum
+
+> **Provenance.** This section was added under
+> [[t0069-spec-cli-views-detail-by]] to spec the detail-mode
+> follow-up that §11 originally deferred. The list-mode contract
+> in §§1–13 is unchanged.
+
+### 15.1 Goal
+
+Extend `artifacts views` so a vault user who has already
+discovered a view (via `artifacts views`) can inspect that view's
+**full** definition — including the `filters` dict (which the
+list-mode table omits entirely) and the **untruncated** `columns`
+field-spec (which the table truncates at 60 chars per §4.1).
+
+The detail surface lives on the **same** subcommand and reuses
+the same loader, the same mutually-exclusive `-q` / `-j` group,
+the same registry path, and the same per-view JSON object schema
+defined in §6.1. It adds one positional argument and one new
+error path (unknown view name).
+
+### 15.2 CLI Surface
+
+```text
+artifacts views [<view_name>] [-q | -j]
+```
+
+| Position | Type   | Description |
+|----------|--------|-------------|
+| `view_name` | str (optional, `nargs="?"`) | Name of a single defined view. When supplied, switches to **detail mode**. When absent, the command behaves exactly as specified in §§3–10 (list mode). |
+
+#### 15.2.1 Decision — positional vs. `show` sub-subcommand
+
+**Decided: positional `artifacts views <view_name>`** (the user's
+ask). Rejected alternative: `artifacts views show <view_name>`.
+
+Rationale:
+
+| Axis | Positional | `show` sub-subcommand |
+|------|------------|------------------------|
+| Typing length | Shorter (`art views ready`) | Longer (`art views show ready`) |
+| User's stated preference | ✅ asked for this shape | ✗ not asked |
+| Argparse ergonomics | `nargs="?"` on the existing parser; no new sub-subparser | Requires nested `add_subparsers` on the views parser, doubling the help-tree depth |
+| Symmetry with `artifacts kinds` | `kinds` has no detail mode today; either choice is unprecedented | same |
+| Symmetry with `artifacts show <ref>` | Mismatched (`show` is a top-level command, not a verb on `views`) | Mismatched in a different direction (would imply `kinds show <name>` for parity, which we don't want) |
+| Future ergonomic cost | If we later add `artifacts views <verb>` (e.g. `validate`), the positional shadows verb dispatch — but we have explicitly deferred such verbs (§11), and adding one would be a breaking change either way | None |
+
+The shadowing risk in the last row is real but distant.
+`artifacts views --validate` is already deferred to the `validate`
+command per §11, so the `views` subparser is unlikely to grow
+verbs. If a future feature genuinely needs a verb namespace, the
+clean migration is to introduce it as a flag (`artifacts views
+<name> --action`) rather than break the positional contract.
+
+#### 15.2.2 Decision — `nargs="?"`, single name only
+
+**Decided: single optional name** (`nargs="?"`).
+
+Rejected: `nargs="+"` (multi-name detail mode). Multi-name
+introduces three problems without solving any:
+
+1. **Output-shape ambiguity.** Three plausible default-mode
+   shapes (one detail block per name; a multi-row table; a
+   panel grid) all add complexity. `-j` would have to choose
+   between an array and a dict, neither of which matches §6.1.
+2. **Error-path ambiguity.** If `art views a b c` and `b` is
+   unknown, do we abort, skip, or partial-succeed? Each answer
+   is defensible; none is obvious.
+3. **No real ergonomic gap.** Users wanting multi-view JSON can
+   already run `artifacts views -j | jq '.views[] | select(...)'`
+   from the list-mode payload. Users wanting human-readable
+   detail typically inspect one view at a time.
+
+A user explicitly asking for multi-name later can be served by
+adding `nargs` widening; the inverse migration is harder.
+
+### 15.3 Default Output (Rich Table — Two Columns)
+
+When `<view_name>` is supplied and neither `-q` nor `-j` is
+passed, render a **two-column key/value Rich table** with one row
+per field. Column 1 is the field key (label); column 2 is the
+field's rendered value.
+
+#### 15.3.1 Row order and contents
+
+| # | Field        | Value source                                  | Rendering |
+|---|--------------|-----------------------------------------------|-----------|
+| 1 | `name`       | the positional argument (verbatim)            | bold style; the view's identifier. |
+| 2 | `kind`       | `view.filters.get("kind")` if present         | the kind name (e.g. `task`); `[dim](any)[/dim]` when the view has no `kind` filter (cross-kind). |
+| 3 | `columns`    | `view.columns` (untruncated)                  | verbatim field-spec string. **No truncation** — this is the detail mode's principal value-add over §4.1's 60-char list-mode truncation. |
+| 4 | `filters`    | `view.filters`                                | rendered as **JSON with indent=2** so nested keys remain legible inside the cell; `[dim](none)[/dim]` when filters is empty (`{}`). The `kind` key is **kept** in this rendering even though it is also lifted into row 2 — the row-2 lift is a convenience; row 4 remains the authoritative full dict. |
+| 5 | `sort`       | `view.sort`                                   | verbatim; `[dim](none)[/dim]` when `None`. |
+| 6 | `default-for`| reverse of `default_views` for this view      | comma-separated list of kinds bound to this view via `default_views`, alphabetically sorted (e.g. `note, task`); `[dim](none)[/dim]` when not bound. Same rendering rule as list-mode §4 column 5. |
+
+The two-column table style is consistent with the visual language
+of the list-mode table (also Rich, also `show_header=True`,
+`header_style="bold"`). Header labels for the two columns:
+`field` and `value`.
+
+#### 15.3.2 Decision — table vs. multi-line block vs. panel
+
+**Decided: two-column Rich Table.**
+
+Rejected:
+
+| Option | Reason rejected |
+|--------|-----------------|
+| Multi-line key-value text block (e.g. `name: ready\\ncolumns: …`) | Cleaner code but inconsistent with the list-mode table aesthetic; users get one visual style across `kinds`, `views` (list), and `views` (detail). |
+| Rich `Panel` (boxed, multi-line) | Heavier than warranted for ≤6 fields; panels are better for prose, not key/value. |
+| Two side-by-side panels (one per column group) | Over-engineered. |
+
+#### 15.3.3 Decision — render `filters` as indented JSON
+
+**Decided: `json.dumps(filters, indent=2, sort_keys=True,
+default=str)`** for the filters cell, with `[dim](none)[/dim]`
+when empty.
+
+Rejected alternatives:
+
+- **YAML dump.** Would require importing `yaml` (currently not
+  used by `views.py`). JSON is already imported and is
+  unambiguous for the dict structure.
+- **One row per filter key.** Splitting filters across multiple
+  table rows would conflict with the fixed 6-row layout above
+  (the row count would become data-dependent, and the
+  list/detail dispatch would need a different table shape per
+  view). Single-cell rendering keeps the table shape stable.
+- **Single-line JSON (no indent).** Long nested dicts become
+  hard to scan. `indent=2` keeps each key on its own line in
+  the cell.
+
+`sort_keys=True` keeps the filters cell deterministic across
+runs, matching the discoverability goal of §1.
+
+#### 15.3.4 Worked example — default mode
+
+Given the `ready` view from this repo's `artifacts/artifacts.yaml`:
+
+```yaml
+views:
+  ready:
+    columns: id,name,assignee,created:date
+    filters:
+      kind: task
+      status: ready
+    sort: created
+default_views:
+  task: ready
+```
+
+```text
+$ artifacts views ready
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ field       ┃ value                                       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ name        │ ready                                       │
+│ kind        │ task                                        │
+│ columns     │ id,name,assignee,created:date               │
+│ filters     │ {                                           │
+│             │   "kind": "task",                           │
+│             │   "status": "ready"                         │
+│             │ }                                           │
+│ sort        │ created                                     │
+│ default-for │ task                                        │
+└─────────────┴─────────────────────────────────────────────┘
+```
+
+(Box-drawing characters illustrative; actual width adapts.)
+
+For a cross-kind view with no sort and no binding:
+
+```text
+$ artifacts views recent
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ field       ┃ value                                       ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ name        │ recent                                      │
+│ kind        │ (any)                                       │
+│ columns     │ id,kind,name,status,created:date            │
+│ filters     │ (none)                                      │
+│ sort        │ -created                                    │
+│ default-for │ (none)                                      │
+└─────────────┴─────────────────────────────────────────────┘
+```
+
+### 15.4 `-q` (Quiet) With Positional
+
+**Decided: `-q` prints `view.columns` on a single line.**
+
+```text
+$ artifacts views ready -q
+id,name,assignee,created:date
+```
+
+#### 15.4.1 Rationale — divergence from list-mode `-q`
+
+List-mode `-q` (§5) prints view **names** because the name is the
+per-row identifier. In detail mode the user has *already supplied*
+the name as the positional argument; echoing it back is
+redundant. The next-most-script-useful single-line value is the
+`columns` field-spec string, which composes directly with
+`artifacts list --fields`:
+
+```bash
+art list --fields "$(art views ready -q)"
+```
+
+This makes detail-mode `-q` **deliberately divergent** from
+list-mode `-q`: in both modes `-q` returns "the most useful
+single string for shell substitution", but the *content* differs
+because the inputs differ. Document this divergence explicitly in
+the README per §15.10.
+
+Rejected alternatives:
+
+| Option | Reason rejected |
+|--------|-----------------|
+| Echo `name` (the positional) | Redundant — the user just typed it. |
+| Print nothing | A flag that does nothing is a footgun. |
+| Print `name<TAB>columns` | Tab-separated breaks the "one identifier per line" convention. |
+| Reject `-q` with positional (argparse error) | Custom validation logic for marginal benefit; loses a useful scripting mode. |
+
+### 15.5 `-j` (JSON) With Positional
+
+**Decided: emit a single JSON object equal to the per-view
+element of list-mode's `views[]` array (§6.1).**
+
+```json
+{
+  "name": "ready",
+  "columns": "id,name,assignee,created:date",
+  "filters": {"kind": "task", "status": "ready"},
+  "sort": "created",
+  "default_for": ["task"]
+}
+```
+
+The five keys, types, and emptiness semantics are **identical to
+§6.1** (verbatim `columns`; `filters: {}` when empty; `sort:
+null` when absent; `default_for: []` when not bound, alphabetised
+when populated). This ensures:
+
+```bash
+diff \
+  <(art views ready -j) \
+  <(art views -j | jq '.views[] | select(.name == "ready")')
+# (modulo whitespace formatting)
+```
+
+#### 15.5.1 Decision — single object, not list-of-one
+
+**Decided: a single JSON object.** Rejected: a single-element
+JSON array `[{...}]` for symmetry with list-mode's `views[]`.
+
+Rationale: a positional argument signals "I want this one thing";
+a JSON object matches that intent. Consumers who genuinely need
+array-shaped output can wrap with `jq -s` (slurp) or use list
+mode + filter. The cost of array-of-one is more `jq` indirection
+on every consumer for hypothetical symmetry.
+
+#### 15.5.2 Decision — exclude `default_views` top-level object
+
+The list-mode `-j` payload (§6) wraps results in
+`{"views": [...], "default_views": {...}}`. **Detail-mode `-j`
+emits only the per-view object.** It does *not* include a
+`default_views` map.
+
+Rationale: the kind→view direction is a vault-wide concern. A
+detail query is per-view; including the full `default_views` map
+would inflate the payload and tempt consumers to use detail mode
+as a discovery surface (which is list mode's job). The
+view-specific binding direction is preserved as `default_for`
+on the per-view object, exactly as in §6.1.
+
+### 15.6 Unknown View Name
+
+When `<view_name>` resolves to no entry in `views_map` (whether
+because `views:` is empty/missing, malformed-and-swallowed, or
+the user typed a name that simply isn't defined):
+
+| Mode    | Stdout | Stderr | Exit |
+|---------|--------|--------|------|
+| default | (none) | `error: unknown view '<name>'`<br>(plus optional close-match line — see §15.6.2) | `2` |
+| `-q`    | (none) | same as default | `2` |
+| `-j`    | (none) | same as default | `2` |
+
+#### 15.6.1 Decision — exit code `2`
+
+**Decided: exit `2`** (matches "argument or usage error" in this
+CLI's convention).
+
+Rationale: aligns with `artifacts list --view foo` when `foo` is
+not defined (already exit 2 per
+[[s0012-cli-list-named-views]]'s error table, which also returns
+2 for "view not found"). Reusing 2 keeps the "view name not in
+vault" semantics consistent across the CLI. Exit `1` was
+considered (since `_run` maps `ValueError` to 1) but is reserved
+for parser/validation errors, not lookup misses.
+
+#### 15.6.2 Decision — close-match suggestions via `difflib`
+
+**Decided: append a "Did you mean: …" line when at least one
+candidate has a similarity ratio ≥ 0.6.**
+
+Use `difflib.get_close_matches(name, list(views_map.keys()),
+n=3, cutoff=0.6)`. When the result is non-empty, append a
+second stderr line:
+
+```text
+error: unknown view 'redy'
+Did you mean: ready, recent?
+```
+
+When the result is empty (or `views_map` is empty), emit only
+the first line:
+
+```text
+error: unknown view 'redy'
+```
+
+Rationale: cheap (`difflib` is std-lib, no dependency), bounded
+(top 3, ratio ≥ 0.6), high signal in practice (typos and
+near-misses are the dominant unknown-name case). Symmetric with
+`argparse`'s built-in close-match behaviour for unknown
+subcommands.
+
+#### 15.6.3 Decision — empty/missing `views:` + positional
+
+**Decided: collapse the empty-vault state into the unknown-view
+error path.** When the user supplies a positional and no views
+are defined, emit `error: unknown view '<name>'` (exit 2). Do
+**not** emit list-mode's "no views defined in artifacts.yaml"
+hint when a positional is present.
+
+Rationale: with a positional, the user has stated they expect a
+specific view; the error they need is "that view doesn't exist
+in this vault", not "this vault has no views". Suppressing the
+list-mode hint avoids two stderr lines that say the same thing.
+The `Did you mean` line is naturally also empty (no candidates
+to match against).
+
+The list-mode behaviour (§8: stderr hint, exit 0 when `views:`
+is empty/missing **and** no positional) is unchanged.
+
+### 15.7 Mutually Exclusive `-q` / `-j` (with positional)
+
+**Decided: reuse the existing argparse mutually-exclusive group
+unchanged.** The positional and the flag-group are independent in
+argparse; passing both `-q` and `-j` (with or without a
+positional) hits the existing argparse rejection (exit 2,
+argparse-generated stderr). No custom validation required.
+
+### 15.8 Malformed View Entry With Positional
+
+When `_load_views_settings` re-raises `ValueError` (e.g. a view
+entry is missing the required `columns` field), the existing
+`_run` cascade in `cli/__init__.py:_run` maps it to exit 1 with
+stderr `error: view entry missing required 'columns' field`.
+
+This applies to detail mode the same as list mode (§10).
+
+| Condition (detail mode) | Exit | Stderr |
+|--------------------------|------|--------|
+| Outside an `artifacts-os` project | `2` | `error: not in an artifacts-os project` |
+| `artifacts.yaml` malformed YAML / load fails (`_load_views_settings` returns `None`) | `2` | `error: unknown view '<name>'` (no candidates → no "Did you mean") |
+| `views:` entry missing required `columns` | `1` | `error: view entry missing required 'columns' field` |
+| `<view_name>` resolves, command succeeds | `0` | (none) |
+| `<view_name>` not in `views_map` | `2` | `error: unknown view '<name>'` (+ close-match line if any) |
+| `-q` and `-j` both passed | `2` | argparse: `argument -j: not allowed with argument -q` |
+
+### 15.9 List/Detail Dispatch — `views.py:run`
+
+**Decided: simple `if args.name:` branch in `run`, with two
+private helpers `_run_list(...)` and `_run_detail(...)` for
+readability.** Keep both in the same `commands/views.py` file —
+the module is small and the two paths share argument parsing,
+the loader call, and the empty-vault detection.
+
+Pseudocode (normative for the implementation sub-task):
+
+```python
+def register(subparsers) -> None:
+    p = subparsers.add_parser("views", help="list defined views", ...)
+    p.add_argument("name", nargs="?", default=None,
+                   help="show details for this single view (detail mode)")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("-q", "--quiet",   action="store_true", ...)
+    mode.add_argument("-j", "--json",    action="store_true",
+                      dest="json_out", ...)
+    p.set_defaults(func=run)
+
+
+def run(args, registry: Registry) -> int:
+    from artifacts_os.cli import _load_views_settings
+    settings = _load_views_settings(registry.root)
+
+    views_cfg = settings.views if settings is not None else None
+    views_map = views_cfg.views if views_cfg is not None else {}
+    defaults  = views_cfg.default_views if views_cfg is not None else {}
+
+    # Reverse-index default_views once; both paths consume it.
+    reverse: dict[str, list[str]] = {}
+    for kind, view_name in defaults.items():
+        reverse.setdefault(view_name, []).append(kind)
+    for kinds_list in reverse.values():
+        kinds_list.sort()
+
+    if args.name is None:
+        return _run_list(args, views_map, defaults, reverse)
+    return _run_detail(args, views_map, reverse)
+```
+
+Decisions encoded above:
+
+- **`name` is the positional kwarg name on `args`.** Not
+  `view_name` — single-word `args.name` matches argparse
+  convention and is shorter at call sites.
+- **Reverse-indexing happens once**, before dispatch. Both
+  paths need `default_for`; deduplication is cheap and avoids
+  divergence.
+- **Loader call happens once**, before dispatch. `ValueError`
+  from `_load_views_settings` propagates to the `_run` cascade
+  exactly as in list mode.
+
+#### 15.9.1 Decision — single file, two helpers
+
+Rejected: split detail mode into a sibling module
+`commands/views_detail.py`. The two paths share:
+
+- the loader call (`_load_views_settings`),
+- argument parsing (one parser, one mutex group),
+- the reverse-index of `default_views`,
+- the empty-vault detection logic,
+- the `default_for` rendering rule (list-of-kinds, sorted,
+  `(none)` when empty).
+
+Splitting would force shared helpers into a third module or
+duplicate them. One file at ~150 lines is well within the project's
+existing module-size norm (`commands/list.py` is larger).
+
+### 15.10 Doc Touchpoints
+
+#### `src/artifacts_os/cli/README.md`
+
+Add a **`#### Detail mode`** subsection inside the existing
+`### views — List defined views` section, after the existing
+`Examples` block. Mirror the list-mode subsection's structure:
+synopsis, behaviour summary, three examples (default, `-q`,
+`-j`), and a one-line note on the unknown-name error path.
+
+Concretely (illustrative copy):
+
+```markdown
+#### Detail mode
+
+```
+artifacts views <view_name> [-q | -j]
+```
+
+Pass a positional view name to inspect a single view's full
+definition — including the **untruncated** `columns` string
+and the **complete** `filters` dict (which the table form omits).
+
+| Mode    | Output |
+|---------|--------|
+| default | Two-column rich table: `field` / `value` rows for `name`, `kind`, `columns`, `filters`, `sort`, `default-for`. |
+| `-q`    | Just the `columns` field-spec string on one line — designed for shell substitution into `artifacts list --fields`. |
+| `-j`    | A single JSON object equal to one element of the list-mode `views[]` array (§6.1 of `s0016`). |
+
+**Examples:**
+
+```bash
+# Inspect a single view (full filters dict, untruncated columns)
+artifacts views ready
+
+# Reuse a view's columns directly in a list query
+artifacts list --fields "$(artifacts views ready -q)"
+
+# Single-view JSON for piping
+artifacts views ready -j | jq '.filters'
+```
+
+If `<view_name>` is not defined, the command exits 2 with
+`error: unknown view '<name>'` and offers close-match
+suggestions when available.
+```
+
+Also add a one-line cross-link from the list-mode `Examples`
+block: "Pass a view name as a positional argument to inspect a
+single view in detail — see *Detail mode* below."
+
+#### `s0003-artifacts-os-cli-module.md`
+
+Append a one-line note in the Command Set row for `views`:
+
+```diff
+-| `views` | `views [-q\|-j]` | `_load_views_settings`; see [[s0016-cli-list-defined-views]] |
++| `views` | `views [<view_name>] [-q\|-j]` | `_load_views_settings`; see [[s0016-cli-list-defined-views]] (list mode + detail mode) |
+```
+
+#### `docs/settings.md`
+
+No change required. The Views Section paragraph already
+cross-links to `artifacts views`; the detail mode is a sub-mode
+of the same command and does not introduce new settings keys.
+
+#### `s0007-artifacts-os-views-module.md`, `s0012-cli-list-named-views.md`
+
+No change. Data model and `--view` resolver contract are both
+untouched.
+
+### 15.11 Implementation Outline
+
+The implementation sub-task is **out of scope for this spec
+task** ([[t0069-spec-cli-views-detail-by]]). The umbrella feature
+[[t0064-cli-list-defined-views-command]] will spawn a sibling
+implementation task once this addendum is approved. That task
+must:
+
+1. Edit `src/artifacts_os/cli/commands/views.py` per §15.9.
+2. Add the test cases enumerated in §15.12.
+3. Update `src/artifacts_os/cli/README.md` per §15.10.
+4. Update `s0003-artifacts-os-cli-module.md` Command Set row
+   per §15.10.
+
+No changes are required to:
+
+- `src/artifacts_os/cli/__init__.py` (the loader
+  `_load_views_settings` is already shipped and re-raises
+  `ValueError` correctly per t0067).
+- `src/artifacts_os/views/models.py` (data model unchanged).
+- The argparse mutex group in `register(...)` (reused).
+
+### 15.12 Test Cases — Implementation Sub-Task Must Cover
+
+Add these to `tests/cli/test_views_cmd.py` in addition to the 13
+list-mode cases already covered (§12.3). Use the existing
+`vault` fixture and `_write_artifacts_yaml` helper.
+
+| # | Case | Asserts |
+|---|------|---------|
+| 14 | **Detail default — fully populated view.** A view with `kind` filter, multi-key `filters`, `columns`, `sort`, and a `default_views` binding. | Output contains rows for `name`, `kind` (with the lifted kind value), `columns` (untruncated), `filters` (multi-line JSON with each filter key visible), `sort`, `default-for` (with the bound kind name). Exit `0`. |
+| 15 | **Detail default — view with no kind filter.** | `kind` row renders `(any)`. |
+| 16 | **Detail default — view with empty filters dict.** | `filters` row renders `(none)`. |
+| 17 | **Detail default — view with no sort.** | `sort` row renders `(none)`. |
+| 18 | **Detail default — view with no binding.** | `default-for` row renders `(none)`. |
+| 19 | **Detail default — view bound to multiple kinds.** `default_views: {note: v, task: v}`. | `default-for` row renders `note, task` (alphabetised, comma-separated). |
+| 20 | **Detail default — long `columns` is NOT truncated.** A `columns` string of >60 chars (which would truncate in list mode per §4.1). | Full string appears verbatim in the detail table. |
+| 21 | **Detail default — nested `filters`.** Filters dict contains a nested object value. | `filters` cell renders multi-line indented JSON; nested keys remain visible (one per line). |
+| 22 | **Detail `-q` quiet.** | Stdout is exactly `<columns>\n` (the `columns` field-spec string, single line). No view name, no other fields. Exit `0`. |
+| 23 | **Detail `-j` JSON, populated view.** | Stdout parses to a single JSON object with keys `name, columns, filters, sort, default_for`. `default_for` is alphabetised. Object is **not** wrapped in `{"views": [...]}`. Exit `0`. |
+| 24 | **Detail `-j` JSON, `filters` empty.** | Output JSON has `"filters": {}`. |
+| 25 | **Detail `-j` JSON, `sort` absent.** | Output JSON has `"sort": null`. |
+| 26 | **Detail `-j` JSON, view not bound.** | Output JSON has `"default_for": []`. |
+| 27 | **Unknown view, no close matches.** Vault has `views: {alpha: ...}` and user runs `views zzzzzzz`. | Stderr is exactly `error: unknown view 'zzzzzzz'\n`. No `Did you mean`. Exit `2`. |
+| 28 | **Unknown view, with close match.** Vault has `views: {ready: ..., recent: ...}` and user runs `views redy`. | Stderr first line is `error: unknown view 'redy'`. Stderr second line begins `Did you mean:` and contains `ready` (and possibly `recent`). Exit `2`. |
+| 29 | **Unknown view in `-j` mode.** | No JSON on stdout (the parsed payload would not be a single view object). Stderr matches the unknown-view error. Exit `2`. |
+| 30 | **Unknown view in `-q` mode.** | No stdout. Stderr matches. Exit `2`. |
+| 31 | **Empty `views:` + positional.** Vault YAML has no `views:` section; user runs `views ready`. | Stderr `error: unknown view 'ready'`, no "no views defined" hint, no "Did you mean" line (no candidates). Exit `2`. |
+| 32 | **Empty `views:` map + positional.** Vault YAML has `views: {}`. | Same as case 31. |
+| 33 | **`-q` + `-j` + positional.** Three flags together. | Argparse rejects with exit `2` and its standard "not allowed with argument" stderr. (Already covered for list mode in case 10; case 33 confirms the rejection still fires when a positional is present.) |
+| 34 | **Malformed entry + positional.** A view in `views:` is missing required `columns` field; user runs `views <any-name>`. | Stderr `error: view entry missing required 'columns' field`. Exit `1`. (The `ValueError` re-raise propagates before dispatch, so the unknown-view path is not reached.) |
+| 35 | **Detail mode does not affect list mode.** Sanity check: `views` (no positional) in the same vault still produces the list-mode table per §4. | At least one expected list-mode row appears; argparse does not require a positional. |
+
+Ordering rationale: cases 14–21 cover default rendering (one
+row, one decision per case); 22–26 cover machine-readable
+modes; 27–32 cover the unknown-view error matrix; 33–35 cover
+flag interactions and a backwards-compatibility sanity check.
+
+### 15.13 Verification (Spec-Level)
+
+This addendum is verified when the architect's
+[[t0069-spec-cli-views-detail-by]] task passes its checklist.
+The downstream implementation sub-task inherits the test-case
+list from §15.12 directly.
