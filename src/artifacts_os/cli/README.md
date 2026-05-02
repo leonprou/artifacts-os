@@ -527,19 +527,19 @@ artifacts kinds -j
 
 ---
 
-### `views` — List defined views
+### `views` — List, execute, or inspect named views
 
 ```
-artifacts views [-q | -j]
+artifacts views [<view_name> | show <view_name>] [-q | -j]
 ```
 
-Lists all named views defined in `artifacts/artifacts.yaml`, including the
-per-kind `default_views` bindings.
+Lists all named views defined in `artifacts/artifacts.yaml`, executes a view
+by name, or inspects a single view's full definition.
 
 | Flag | Description |
 |------|-------------|
-| `-q`, `--quiet` | One view name per line — good for scripts |
-| `-j`, `--json` | JSON object with full view metadata and `default_views` map |
+| `-q`, `--quiet` | One view name per line (list), one artifact stem per line (execute), or columns string (show) |
+| `-j`, `--json` | JSON output |
 
 **Examples:**
 
@@ -554,6 +554,64 @@ artifacts views -q
 artifacts views -j
 artifacts views -j | jq '.views[] | select(.default_for | length > 0)'
 ```
+
+#### Execute mode
+
+```
+artifacts views <view_name> [-q | -j]
+```
+
+Pass a view name to execute it — lists all artifacts matching the view's
+`filters`, displayed using its `columns` and sorted by its `sort` setting.
+This is equivalent to `artifacts list --view <view_name>`.
+
+**Examples:**
+
+```bash
+# List artifacts using the "open-tasks" view
+artifacts views open-tasks
+
+# Quiet list for scripting
+artifacts views open-tasks -q
+
+# JSON for pipelines
+artifacts views open-tasks -j | jq length
+```
+
+If `<view_name>` is not defined, the command exits `2` with
+`error: unknown view '<name>'` and offers close-match suggestions when available.
+
+#### Show mode
+
+```
+artifacts views show <view_name> [-q | -j]
+```
+
+Inspect a single view's full definition — including the **untruncated**
+`columns` string and the **complete** `filters` dict (which the list table
+omits).
+
+| Mode | Output |
+|------|--------|
+| default | Two-column rich table: `field` / `value` rows for `name`, `kind`, `columns`, `filters`, `sort`, `default-for`. |
+| `-q` | Just the `columns` field-spec string on one line — designed for shell substitution into `artifacts list --fields`. |
+| `-j` | A single JSON object equal to one element of the list-mode `views[]` array. Not wrapped in `{"views": [...]}`. |
+
+**Examples:**
+
+```bash
+# Inspect a single view (full filters dict, untruncated columns)
+artifacts views show ready
+
+# Reuse a view's columns directly in a list query
+artifacts list --fields "$(artifacts views show ready -q)"
+
+# Single-view JSON for piping
+artifacts views show ready -j | jq '.filters'
+```
+
+If `<view_name>` is not defined, the command exits `2` with
+`error: unknown view '<name>'` and offers close-match suggestions when available.
 
 ---
 
