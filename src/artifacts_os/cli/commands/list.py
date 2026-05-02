@@ -1,5 +1,6 @@
 """cli list command — list artifacts with optional filters."""
 
+import argparse
 import json
 import sys
 from typing import Any
@@ -13,10 +14,198 @@ from artifacts_os.core.errors import ValidationError
 from artifacts_os.views.models import ViewConfig, ViewsSettings
 
 
-def register(subparsers) -> None:
+# ---------------------------------------------------------------------------
+# Schema-derived flag helpers
+# ---------------------------------------------------------------------------
+
+# Flag names that the static ``list`` parser already registers.
+# Schema properties whose generated flag would collide are silently skipped;
+# the field remains reachable via ``--filter k=v``.
+_RESERVED_FILTER_FLAG_NAMES: frozenset[str] = frozenset({
+    "help", "kind", "filter", "view", "fields", "meta",
+    "quiet", "json", "children", "parent",
+})
+
+
+def _parse_bool(value: str) -> bool:
+    """Parse a boolean CLI argument.
+
+    Accepts ``true|false|1|0|yes|no`` case-insensitively.  Raises
+    ``argparse.ArgumentTypeError`` for any other input.
+
+    ``argparse``'s built-in ``type=bool`` is famously broken (returns
+    ``True`` for any non-empty string), so a custom helper is required.
+    """
+    low = value.lower()
+    if low in ("true", "1", "yes"):
+        return True
+    if low in ("false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(
+        f"expected true/false/1/0/yes/no, got: {value!r}"
+    )
+
+
+def _flag_kwargs_for_prop(field: str, prop: dict) -> dict | None:
+    """Return the ``add_argument`` keyword arguments for *prop*, or ``None``.
+
+    Returns ``None`` when the property should be skipped (list-typed, or
+    has neither ``type`` nor ``enum`` — no useful filter semantics).
+    The mapping follows s0015 §4.1.
+    """
+    # Skip list-typed properties (deferred in v1 per §4.5).
+    if prop.get("type") == "array" or "items" in prop:
+        return None
+
+    enum = prop.get("enum")
+    prop_type = prop.get("type")
+
+    # Skip if neither type nor enum declared (no value semantics).
+    if enum is None and prop_type is None:
+        return None
+
+    help_text = prop.get("description") or f"filter by {field}"
+    kwargs: dict[str, Any] = {"dest": field, "default": None, "help": help_text}
+
+    if enum is not None:
+        kwargs["choices"] = enum
+        kwargs["metavar"] = "|".join(str(v) for v in enum)
+    elif prop_type == "integer":
+        kwargs["type"] = int
+        kwargs["metavar"] = "INT"
+    elif prop_type == "boolean":
+        kwargs["type"] = _parse_bool
+        kwargs["metavar"] = "BOOL"
+    else:
+        # "string" or any other declared type — free-form string.
+        kwargs["type"] = str
+        kwargs["metavar"] = "TEXT"
+
+    return kwargs
+
+
+def _add_schema_filter_flags(p: argparse.ArgumentParser, schema: dict) -> list[str]:
+    """Add per-kind filter flags from *schema* ``properties``.
+
+    Per s0015 §6.3, ``--status`` is handled here (not added statically)
+    and gets the ``-s`` short form with kind-specific ``choices=``.
+    All other schema-derived flags get only their long ``--<flag>`` form.
+
+    Returns the list of ``dest`` names that were added.
+    """
+    generated: list[str] = []
+    for field, prop in schema.get("properties", {}).items():
+        if field in _RESERVED_FILTER_FLAG_NAMES:
+            continue
+        kwargs = _flag_kwargs_for_prop(field, prop)
+        if kwargs is None:
+            continue
+        flag = f"--{field.replace('_', '-')}"
+        if field == "status":
+            # Special case: preserve -s short form (s0015 §6.3).
+            p.add_argument(flag, "-s", **kwargs)
+        else:
+            p.add_argument(flag, **kwargs)
+        generated.append(field)
+    return generated
+
+
+def _add_union_filter_flags(
+    p: argparse.ArgumentParser,
+    all_schemas: dict[str, dict],
+) -> list[str]:
+    """Add cross-kind union filter flags (no ``choices=``) from *all_schemas*.
+
+    When ``--kind`` is absent, every property name across all registered
+    vault schemas contributes one flag.  No ``choices=`` is set because the
+    same property name may have different enums per kind (s0015 §5.2).
+
+    Returns the list of ``dest`` names that were added.
+    """
+    # Collect all property names with their per-kind shapes.
+    # Preserve insertion order so the first kind's description is stable.
+    union: dict[str, list[tuple[str, dict]]] = {}  # field → [(kind, prop), ...]
+    for kind_name, schema in all_schemas.items():
+        for field, prop in schema.get("properties", {}).items():
+            union.setdefault(field, []).append((kind_name, prop))
+
+    generated: list[str] = []
+    for field, kind_props in union.items():
+        if field in _RESERVED_FILTER_FLAG_NAMES:
+            continue
+
+        # Skip list-typed in v1.
+        if any(p.get("type") == "array" or "items" in p for _, p in kind_props):
+            continue
+
+        # Skip if no useful type info in any kind.
+        if all(
+            p.get("enum") is None and p.get("type") is None
+            for _, p in kind_props
+        ):
+            continue
+
+        flag = f"--{field.replace('_', '-')}"
+        has_enum = any(kp.get("enum") is not None for _, kp in kind_props)
+
+        # Help text: first kind's description; suffix if they differ.
+        descs = [kp.get("description") or "" for _, kp in kind_props]
+        base_desc = descs[0] or f"filter by {field}"
+        if len(set(descs)) > 1 or has_enum:
+            help_text = base_desc + " (varies by kind — pass --kind for choices)"
+        else:
+            help_text = base_desc
+
+        kwargs: dict[str, Any] = {"dest": field, "default": None, "help": help_text}
+
+        if has_enum:
+            # Enums diverge across kinds — omit choices=, use generic metavar.
+            kwargs["metavar"] = "STATUS" if field == "status" else "VARIES"
+        else:
+            # Determine the most permissive compatible type.
+            all_types = {kp.get("type") for _, kp in kind_props if kp.get("type")}
+            if all_types == {"integer"}:
+                kwargs["type"] = int
+                kwargs["metavar"] = "INT"
+            elif all_types == {"boolean"}:
+                kwargs["type"] = _parse_bool
+                kwargs["metavar"] = "BOOL"
+            elif all_types == {"string"}:
+                kwargs["type"] = str
+                kwargs["metavar"] = "TEXT"
+            else:
+                kwargs["metavar"] = "VARIES"
+
+        if field == "status":
+            # Keep -s short form in cross-kind mode too (s0015 §4.3).
+            p.add_argument(flag, "-s", **kwargs)
+        else:
+            p.add_argument(flag, **kwargs)
+        generated.append(field)
+    return generated
+
+
+# ---------------------------------------------------------------------------
+# Command registration
+# ---------------------------------------------------------------------------
+
+
+def register(
+    subparsers,
+    kind: str | None = None,
+    schema: dict | None = None,
+    all_schemas: "dict[str, dict] | None" = None,
+) -> None:
+    """Register the ``list`` sub-command.
+
+    When *schema* is provided (per-kind mode), schema-derived filter flags
+    with ``choices=`` are added and ``--status`` is augmented with the
+    kind-specific enum.  When *all_schemas* is provided (cross-kind mode),
+    a union of all properties is added without ``choices=``.  Otherwise the
+    static ``--status -s`` flag is used.
+    """
     p = subparsers.add_parser("list", help="list artifacts")
     p.add_argument("--kind", "-k", help="filter by kind")
-    p.add_argument("--status", "-s", help="filter by status")
     p.add_argument(
         "--filter",
         dest="filter",
@@ -39,7 +228,30 @@ def register(subparsers) -> None:
     mode.add_argument("-q", "--quiet", action="store_true", help="one name per line")
     mode.add_argument("-j", "--json", action="store_true", dest="json_out",
                       help="JSON output")
-    p.set_defaults(func=run)
+
+    # Schema-derived filter flags — sets _generated_filter_fields on the namespace.
+    if schema is not None:
+        # Per-kind mode: typed flags with choices= where schema has enum.
+        generated = _add_schema_filter_flags(p, schema)
+        if "status" not in generated:
+            # Schema has no status property; add the static fallback.
+            p.add_argument("--status", "-s", help="filter by status")
+    elif all_schemas is not None:
+        # Cross-kind mode: union of all properties, no choices=.
+        generated = _add_union_filter_flags(p, all_schemas)
+        if "status" not in generated:
+            p.add_argument("--status", "-s", help="filter by status")
+    else:
+        # Static mode: no schema info available.
+        p.add_argument("--status", "-s", help="filter by status")
+        generated = []
+
+    p.set_defaults(func=run, _generated_filter_fields=generated)
+
+
+# ---------------------------------------------------------------------------
+# Filter resolution
+# ---------------------------------------------------------------------------
 
 
 def resolve_filters(
@@ -51,7 +263,9 @@ def resolve_filters(
     Resolution order (per-key, last wins):
     1. View config ``filters`` dict — seeded first.
     2. Explicit ``--kind`` / ``--status`` CLI flags — override per key.
-    3. Repeated ``--filter k=v`` tokens — override per key, last wins.
+    3. Schema-derived generated flags (``--type``, ``--priority``, etc.) —
+       override per key (s0015 §8.1).
+    4. Repeated ``--filter k=v`` tokens — override per key, last wins.
 
     ``kind`` is then popped from the dict and returned as the first element
     of the tuple (directory-selection axis, not a frontmatter predicate).
@@ -67,17 +281,30 @@ def resolve_filters(
     if args.status is not None:
         filters["status"] = args.status
 
-    # 3. Apply --filter k=v tokens; last value wins per key.
+    # 3. Apply schema-derived generated flags; each overrides per-key.
+    for field in getattr(args, "_generated_filter_fields", ()):
+        if field == "status":
+            continue  # already handled in step 2 via args.status
+        val = getattr(args, field, None)
+        if val is not None:
+            filters[field] = val
+
+    # 4. Apply --filter k=v tokens; last value wins per key.
     for token in (getattr(args, "filter", None) or []):
         if "=" not in token:
             raise ValidationError(f"--filter expects key=value, got: {token}")
         k, _, v = token.partition("=")
         filters[k] = v
 
-    # 4. Split kind out (directory axis — s0014 §5).
+    # 5. Split kind out (directory axis — s0014 §5).
     kind = filters.pop("kind", None)
 
     return kind, filters
+
+
+# ---------------------------------------------------------------------------
+# Command runner
+# ---------------------------------------------------------------------------
 
 
 def run(args, registry: Registry) -> int:
@@ -175,6 +402,11 @@ def run(args, registry: Registry) -> int:
     table = views.render_table(items, columns, kind_def=kind_def)
     Console().print(table)
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _meta_columns(items: list) -> list:

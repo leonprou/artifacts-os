@@ -22,3 +22,14 @@
 {"ts":"2026-05-02T08:53:51.503490+03:00","event":"task_created","task":"t0061-cli-schema-derived-filter-flags","status":"ready","assignee":"developer","parent":""}
 {"ts":"2026-05-02T08:54:25.086767+03:00","event":"task_created","task":"t0062-implement-cli-schema-derived-filter","status":"backlog","assignee":"developer","parent":"t0061-cli-schema-derived-filter-flags"}
 {"ts":"2026-05-02T09:03:39.476774+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-02T09:05:10.565039+03:00","event":"run_started","task":"t0062-implement-cli-schema-derived-filter","agent":"developer","run_id":"r0079","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-02T09:06:12.266107+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T09:16:03.785942+03:00","event":"run_complete","task":"t0062-implement-cli-schema-derived-filter","agent":"developer","run_id":"r0079","run_status":"failed","cost":"2.35","turns":51}
+{"ts":"2026-05-02T09:32:38.443168+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T09:40:41.971814+03:00","event":"run_started","task":"t0062-implement-cli-schema-derived-filter","agent":"project-manager","run_id":"r0080","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T09:43:59.197443+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T09:44:18.079843+03:00","event":"run_complete","task":"t0062-implement-cli-schema-derived-filter","agent":"","run_id":"r0080","run_status":"complete","cost":"1.33","turns":28}
+{"ts":"2026-05-02T10:07:11.119292+03:00","event":"task_created","task":"t0063-document-how-to-add-a","status":"ready","assignee":"technical-writer","parent":""}
+{"ts":"2026-05-02T10:08:41.559650+03:00","event":"run_started","task":"t0063-document-how-to-add-a","agent":"technical-writer","run_id":"r0081","mode":"execute","context_only":false,"detached":true}
+{"ts":"2026-05-02T10:09:08.926095+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T10:09:29.032322+03:00","event":"status_transition","task":"t0063-document-how-to-add-a","old_status":"ready","new_status":"in-progress","forced":false}

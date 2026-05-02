@@ -97,19 +97,21 @@ def register_kinds(kinds: list[KindDef]) -> None:
     _registered_kinds.extend(kinds)
 
 
-def _peek_create_kind_schema(
+def _peek_kind_for_command(
     argv: list[str],
-    cli_settings,
+    command: str,
     root,
+    *,
+    fallback_kind: str | None = None,
 ) -> tuple[str | None, dict | None]:
-    """Phase 1: pre-parse to extract --kind and load its schema.
+    """Phase 1: pre-parse argv for --kind and load the matching schema.
 
-    Returns ``(kind, schema)`` when argv starts with ``"create"``, or
-    ``(None, None)`` for any other command.  An unknown kind (no schema
-    file) returns ``(kind, None)`` so Phase 2 falls back to static flags
-    and the error surfaces cleanly in ``run()``.
+    Returns ``(kind, schema)``.  ``schema`` is ``None`` when:
+    - ``argv[0] != command`` (caller skips Phase 2 build)
+    - ``--kind`` is absent and no fallback applies (cross-kind mode)
+    - the resolved kind has no vault schema (host-app kind)
     """
-    if not argv or argv[0] != "create":
+    if not argv or argv[0] != command:
         return None, None
 
     import argparse
@@ -118,15 +120,11 @@ def _peek_create_kind_schema(
 
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--kind", "-k", default=None)
-    pre.add_argument("title", nargs="?", default=None)
     known, _ = pre.parse_known_args(argv[1:])
 
-    kind: str | None = known.kind
-    if kind is None and cli_settings is not None:
-        create_defaults = cli_settings.defaults.get("create") or {}
-        kind = create_defaults.get("kind")
+    kind: str | None = known.kind or fallback_kind
     if kind is None:
-        kind = "task"
+        return None, None
 
     schema: dict | None = None
     if root is not None:
@@ -141,9 +139,65 @@ def _peek_create_kind_schema(
     return kind, schema
 
 
+def _peek_create_kind_schema(
+    argv: list[str],
+    cli_settings,
+    root,
+) -> tuple[str | None, dict | None]:
+    """Phase 1 wrapper for the ``create`` command.
+
+    Reads the default kind from ``cli_settings.defaults.create.kind``
+    (falling back to ``"task"``) and delegates to
+    ``_peek_kind_for_command``.
+    """
+    fallback = "task"
+    if cli_settings is not None:
+        create_defaults = cli_settings.defaults.get("create") or {}
+        fallback = create_defaults.get("kind") or "task"
+    return _peek_kind_for_command(argv, "create", root, fallback_kind=fallback)
+
+
+def _peek_list_kind_schema(
+    argv: list[str],
+    root,
+) -> tuple[str | None, dict | None]:
+    """Phase 1 wrapper for the ``list`` command.
+
+    No fallback kind — absent ``--kind`` means cross-kind mode.
+    Returns ``(None, None)`` when ``--kind`` is not supplied so the caller
+    loads all vault schemas for the union parser.
+    """
+    return _peek_kind_for_command(argv, "list", root, fallback_kind=None)
+
+
+def _load_all_vault_schemas(root) -> dict[str, dict]:
+    """Load all kind schemas from ``<root>/artifacts/kinds/*.json``.
+
+    Returns a ``{kind_name: schema_dict}`` mapping.  Malformed JSON files
+    are silently skipped (same policy as ``_peek_kind_for_command``).
+    """
+    import json
+    from pathlib import Path
+
+    result: dict[str, dict] = {}
+    kinds_dir = Path(root) / "artifacts" / "kinds"
+    if not kinds_dir.is_dir():
+        return result
+    for path in sorted(kinds_dir.glob("*.json")):
+        try:
+            with open(path) as fh:
+                result[path.stem] = json.load(fh)
+        except Exception:
+            pass
+    return result
+
+
 def _build_parser(
     create_kind: str | None = None,
     create_schema: dict | None = None,
+    list_kind: str | None = None,
+    list_schema: dict | None = None,
+    list_all_schemas: "dict[str, dict] | None" = None,
 ):
     import argparse
 
@@ -155,7 +209,12 @@ def _build_parser(
     subparsers.required = True
 
     _init_cmd.register(subparsers)
-    _list_cmd.register(subparsers)
+    _list_cmd.register(
+        subparsers,
+        kind=list_kind,
+        schema=list_schema,
+        all_schemas=list_all_schemas,
+    )
     _show_cmd.register(subparsers)
     _create_cmd.register(subparsers, kind=create_kind, schema=create_schema)
     _status_cmd.register(subparsers)
@@ -180,7 +239,19 @@ def _run(argv: Sequence[str]) -> int:
     # Phase 1 — peek at create --kind to enable kind-aware help and flags.
     create_kind, create_schema = _peek_create_kind_schema(argv, cli_settings, root)
 
-    parser = _build_parser(create_kind=create_kind, create_schema=create_schema)
+    # Phase 1 — peek at list --kind; load all schemas for cross-kind mode.
+    list_kind, list_schema = _peek_list_kind_schema(argv, root)
+    list_all_schemas: dict[str, dict] | None = None
+    if argv and argv[0] == "list" and list_kind is None and root is not None:
+        list_all_schemas = _load_all_vault_schemas(root)
+
+    parser = _build_parser(
+        create_kind=create_kind,
+        create_schema=create_schema,
+        list_kind=list_kind,
+        list_schema=list_schema,
+        list_all_schemas=list_all_schemas,
+    )
     args = parser.parse_args(argv)
     args.cli_settings = cli_settings
 

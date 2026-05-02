@@ -3,7 +3,7 @@ kind: task
 id: t0061
 name: cli-schema-derived-filter-flags
 type: feature
-status: ready
+status: review
 assignee: developer
 owner: user
 created: 2026-05-02

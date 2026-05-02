@@ -117,6 +117,62 @@ artifacts list --view active --status done
 artifacts list --kind task -q
 ```
 
+#### Schema-derived filter flags
+
+When `--kind <K>` is supplied, `artifacts list` automatically generates a
+typed flag for every property declared in that kind's JSON schema
+(`artifacts/kinds/<K>.json`).  Properties with an `enum` array get
+`choices=` enforcement at parse time — a typo is an immediate error rather
+than a silent empty result.
+
+```bash
+# See all filterable axes for a kind
+artifacts list --kind task --help
+# → lists --status {backlog,ready,...}, --priority {low,...}, --assignee TEXT, etc.
+
+# Enum-validated filter — typo caught before core runs
+artifacts list --kind task --status bogus
+# → error: argument --status: invalid choice: 'bogus' (choose from ...)
+
+# Combine multiple generated flags
+artifacts list --kind task --type feature --assignee alice
+```
+
+**Without `--kind`** (cross-kind mode), the same flags are generated from
+the union of all vault schemas, but without `choices=` because different
+kinds may define different enums for the same property name.  Enum
+validation is deferred to core (silent-no-match for unknown values).
+
+```bash
+# Cross-kind: --status available but without per-kind choices validation
+artifacts list --status review
+```
+
+**Flag generation rules:**
+
+- One flag per schema `properties` entry; `--` + lowercase hyphenated name.
+- `enum` → `choices=` (per-kind only); `type: string` → free-form `TEXT`;
+  `type: integer` → argparse `int`; `type: boolean` → `true|false|1|0|yes|no`.
+- `type: array` properties are skipped (use `--filter` for list-typed fields).
+- Flags that would collide with static flags (`--kind`, `--filter`,
+  `--view`, `--fields`, `--meta`, `--quiet`, `--json`, `--children`,
+  `--parent`) are silently skipped; those fields remain reachable via
+  `--filter k=v`.
+- `--status` is the only flag that is **augmented** in per-kind mode
+  (keeping its `-s` short form) rather than being skipped.
+
+**Precedence — per-key, last wins:**
+
+| Layer | Example |
+|-------|---------|
+| View config `filters` (lowest) | `view.filters.assignee = developer` |
+| `--kind` / `--status` static flags | `--status ready` |
+| Schema-derived generated flags | `--type feature`, `--assignee alice` |
+| `--filter k=v` tokens (highest) | `--filter type=spec` overrides `--type feature` |
+
+The `--filter k=v` escape hatch always wins and is the safe fallback for
+any field not covered by generated flags.
+
 #### Views
 
 Named views let you pre-configure filters, columns, and sort order in
