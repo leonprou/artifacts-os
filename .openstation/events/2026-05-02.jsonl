@@ -38,3 +38,13 @@
 {"ts":"2026-05-02T10:11:00.469474+03:00","event":"status_transition","task":"t0061-cli-schema-derived-filter-flags","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-02T10:11:05.089091+03:00","event":"status_transition","task":"t0063-document-how-to-add-a","old_status":"in-progress","new_status":"review","forced":false}
 {"ts":"2026-05-02T10:11:13.897774+03:00","event":"run_complete","task":"t0063-document-how-to-add-a","agent":"","run_id":"r0081","run_status":"complete","cost":"0.53","turns":27}
+{"ts":"2026-05-02T10:11:52.700683+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0061-cli-schema-derived-filter-flags","duration_ms":52228}
+{"ts":"2026-05-02T10:41:20.867405+03:00","event":"task_created","task":"t0064-cli-list-defined-views-command","status":"backlog","assignee":"project-manager","parent":""}
+{"ts":"2026-05-02T10:42:03.058450+03:00","event":"task_created","task":"t0065-spec-cli-list-defined-views","status":"ready","assignee":"architect","parent":"t0064-cli-list-defined-views-command"}
+{"ts":"2026-05-02T10:42:11.126711+03:00","event":"status_transition","task":"t0064-cli-list-defined-views-command","old_status":"ready","new_status":"backlog","forced":false}
+{"ts":"2026-05-02T10:45:41.896205+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T10:49:23.198357+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T10:49:41.153079+03:00","event":"task_created","task":"t0066-improve-date-handling-in-artifact","status":"backlog","assignee":"architect","parent":""}
+{"ts":"2026-05-02T11:00:58.343099+03:00","event":"run_started","task":"t0065-spec-cli-list-defined-views","agent":"project-manager","run_id":"r0082","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T11:01:43.863483+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T11:01:49.011861+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"verified","new_status":"done","forced":false}
