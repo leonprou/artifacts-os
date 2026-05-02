@@ -99,3 +99,14 @@
 {"ts":"2026-05-02T21:50:38.834590+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-05-02T21:50:52.341052+03:00","event":"run_complete","task":"t0075-cli-list-filter-by-refs","agent":"","run_id":"r0091","run_status":"complete","cost":"1.18","turns":20}
 {"ts":"2026-05-02T21:52:57.901542+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T21:53:47.426638+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0075-cli-list-filter-by-refs","duration_ms":49522}
+{"ts":"2026-05-02T21:54:14.569076+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T22:01:29.715017+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T22:02:12.885230+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T22:08:13.775609+03:00","event":"run_started","task":"t0073-spec-artifact-kinds-discovery-mechanism","agent":"project-manager","run_id":"r0092","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T22:11:17.507944+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T22:11:39.248386+03:00","event":"run_complete","task":"t0073-spec-artifact-kinds-discovery-mechanism","agent":"","run_id":"r0092","run_status":"complete","cost":"1.02","turns":14}
+{"ts":"2026-05-02T23:47:46.194250+03:00","event":"run_started","task":"t0060-migrate-s0009-status-to-deprecated","agent":"developer","run_id":"r0093","mode":"execute","context_only":false,"detached":true}
+{"ts":"2026-05-02T23:48:16.167687+03:00","event":"status_transition","task":"t0060-migrate-s0009-status-to-deprecated","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T23:49:05.789645+03:00","event":"status_transition","task":"t0060-migrate-s0009-status-to-deprecated","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T23:49:13.076584+03:00","event":"run_complete","task":"t0060-migrate-s0009-status-to-deprecated","agent":"","run_id":"r0093","run_status":"complete","cost":"0.29","turns":18}

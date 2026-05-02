@@ -5,8 +5,9 @@ id: t0060
 kind: task
 name: migrate-s0009-status-to-deprecated
 owner: user
-status: ready
+status: review
 type: implementation
+started: 2026-05-02
 ---
 
 ## Goal
@@ -47,6 +48,21 @@ deferred to a follow-up.
 3. Do **not** extend the spec schema enum.
 4. Re-run `artifacts validate --all` and confirm the error for
    `s0009` is gone.
+
+## Findings
+
+Changed `status: superseded` → `status: deprecated` in
+`artifacts/specs/s0009-artifacts-os-config-module.md` (frontmatter only;
+body preserved verbatim). `artifacts validate --all` no longer reports an
+error for `s0009`. The `spec.json` enum remains at 4 values — no schema
+extension was needed.
+
+## Progress
+
+### 2026-05-02 — developer
+> time: 23:48
+
+Changed status: superseded → status: deprecated in s0009 frontmatter. artifacts validate --all confirms no error for s0009; spec.json enum unchanged (4 values).
 
 ## Verification
 

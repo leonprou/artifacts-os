@@ -2,7 +2,7 @@
 kind: spec
 id: s0009
 name: artifacts-os-config-module
-status: superseded
+status: deprecated
 task: "[[t0016-re-scope-s0007-views-spec]]"
 created: 2026-04-26
 ---
