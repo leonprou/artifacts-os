@@ -246,6 +246,21 @@ def register(
         p.add_argument("--status", "-s", help="filter by status")
         generated = []
 
+    # Positional ref-set filter — placed last so it does not shadow options.
+    p.add_argument(
+        "refs",
+        nargs="*",
+        metavar="REF",
+        default=[],
+        help=(
+            "optional ref-set: restrict output to these artifacts only "
+            "(intersection with all other filters). Accepts numeric IDs (t1), "
+            "full names, partial slugs, or [[wikilinks]]. "
+            "When --kind is supplied, partial-slug refs resolve within that kind only. "
+            "An unresolvable ref is an error; no partial output is produced."
+        ),
+    )
+
     p.set_defaults(func=run, _generated_filter_fields=generated)
 
 
@@ -366,6 +381,38 @@ def run(args, registry: Registry) -> int:
             if not items and effective_kind is None and not effective_filters:
                 # No filters in play: include the parent directly.
                 items = [parent_meta]
+
+    # Apply positional ref-set filter if supplied.
+    refs_arg: list[str] = getattr(args, "refs", None) or []
+    if refs_arg:
+        from artifacts_os.core.discover import _unwrap_wikilink
+        from artifacts_os.core.discover import resolve as _resolve_ref
+        from artifacts_os.core.errors import NotFoundError as _NotFoundError
+        from artifacts_os.core.errors import AmbiguousError as _AmbiguousError
+
+        resolved_paths: list = []
+        not_found: list[str] = []
+        ambiguous_msgs: list[str] = []
+
+        for ref in refs_arg:
+            bare = _unwrap_wikilink(ref)
+            try:
+                path = _resolve_ref(registry, bare, kind=effective_kind)
+                resolved_paths.append(path)
+            except _NotFoundError:
+                not_found.append(bare)
+            except _AmbiguousError as exc:
+                ambiguous_msgs.append(str(exc))
+
+        if not_found or ambiguous_msgs:
+            for bare in not_found:
+                print(f"error: unresolved ref '{bare}'", file=sys.stderr)
+            for msg in ambiguous_msgs:
+                print(f"error: {msg}", file=sys.stderr)
+            return 4 if ambiguous_msgs else 3
+
+        ref_paths: set = set(resolved_paths)
+        items = [m for m in items if m.path in ref_paths]
 
     if args.quiet:
         for item in items:

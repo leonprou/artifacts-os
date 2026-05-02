@@ -75,14 +75,15 @@ artifacts show fix-login --kind task
 ### `list` — Browse and filter artifacts
 
 ```
-artifacts list [--kind KIND] [--status STATUS] [--filter K=V]...
+artifacts list [REF ...] [--kind KIND] [--status STATUS] [--filter K=V]...
                [--view NAME] [--fields FIELDS] [-q | -j]
 ```
 
 Lists all artifacts as a table. Use filters to narrow the results.
 
-| Flag | Description |
-|------|-------------|
+| Argument / Flag | Description |
+|-----------------|-------------|
+| `REF ...` | Optional ref-set: restrict output to these artifacts only (intersection with all other filters) |
 | `--kind KIND`, `-k` | Show only artifacts of this kind (e.g. `task`, `agent`) |
 | `--status STATUS`, `-s` | Show only artifacts with this status |
 | `--filter K=V` | Frontmatter-equality filter (repeatable; last value per key wins) |
@@ -115,6 +116,55 @@ artifacts list --view active --status done
 
 # Quiet list for scripting
 artifacts list --kind task -q
+```
+
+#### Ref-set filter (positional arguments)
+
+Pass one or more artifact references as positional arguments to restrict output
+to exactly those artifacts.  All other filters still apply — the ref-set is an
+additional predicate that intersects with `--kind`, `--status`, `--filter`,
+`--children`, `--parent`, and `--view`.
+
+**Accepted ref forms** (same as `artifacts show`):
+
+| Form | Example | Resolves to |
+|------|---------|-------------|
+| Numeric ID | `t1`, `t0042` | Artifact with that ID |
+| Full stem | `t0042-fix-login-bug` | Exact stem match |
+| Partial slug | `fix-login` | Any artifact containing the slug (must be unambiguous) |
+| Wikilink | `[[t0042]]`, `[[t0042-fix-login-bug]]` | Inner ref resolved as above |
+
+**Behaviour:**
+
+- **Intersection semantics** — `artifacts list t1 t4 --status ready` returns
+  refs in `{t1, t4}` whose status is `ready`.
+- **`--kind` scopes partial-slug resolution** — when `--kind task` is given,
+  a partial slug resolves only within the task directory, matching
+  `artifacts show --kind task`.
+- **Fail-fast on unresolvable refs** — if any ref cannot be resolved, the
+  command exits non-zero, emits one `error: …` line per bad ref on stderr,
+  and produces no output (even for refs that *did* resolve).
+- **Output flags unchanged** — `-j`, `-q`, `--fields`, `--meta`, `--view`
+  behave identically; only the row set narrows.
+
+```bash
+# Inspect two known tasks in one call
+artifacts list t1 t4
+
+# Same two tasks, specific columns
+artifacts list t0001 t0042 --fields id,name,status,assignee
+
+# JSON for downstream tooling
+artifacts list t1 t4 -j
+
+# Intersection with --status
+artifacts list t1 t4 --status ready
+
+# Partial-slug scoped to tasks
+artifacts list migrate --kind task
+
+# Wikilink form (handy when pasting from frontmatter)
+artifacts list "[[t0001]]" "[[t0042]]"
 ```
 
 #### Schema-derived filter flags

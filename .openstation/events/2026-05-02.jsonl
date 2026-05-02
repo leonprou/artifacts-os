@@ -85,3 +85,17 @@
 {"ts":"2026-05-02T13:00:03.535219+03:00","event":"status_transition","task":"t0072-implement-cli-views-detail-mode","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-05-02T13:00:21.641003+03:00","event":"run_complete","task":"t0072-implement-cli-views-detail-mode","agent":"","run_id":"r0088","run_status":"complete","cost":"1.15","turns":17}
 {"ts":"2026-05-02T13:26:05.252161+03:00","event":"status_transition","task":"t0064-cli-list-defined-views-command","old_status":"in-progress","new_status":"done","forced":true}
+{"ts":"2026-05-02T13:27:15.076431+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0064-cli-list-defined-views-command","duration_ms":69820}
+{"ts":"2026-05-02T20:32:51.459322+03:00","event":"run_started","task":"t0073-spec-artifact-kinds-discovery-mechanism","agent":"architect","run_id":"r0089","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-02T20:33:14.586694+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T20:40:44.557728+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T20:40:57.709598+03:00","event":"run_complete","task":"t0073-spec-artifact-kinds-discovery-mechanism","agent":"architect","run_id":"r0089","run_status":"complete","cost":"2.64","turns":44}
+{"ts":"2026-05-02T21:40:41.672252+03:00","event":"run_started","task":"t0075-cli-list-filter-by-refs","agent":"developer","run_id":"r0090","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-02T21:41:01.731682+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T21:46:40.641298+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T21:46:51.045652+03:00","event":"run_complete","task":"t0075-cli-list-filter-by-refs","agent":"developer","run_id":"r0090","run_status":"complete","cost":"1.26","turns":39}
+{"ts":"2026-05-02T21:47:32.294694+03:00","event":"status_transition","task":"t0073-spec-artifact-kinds-discovery-mechanism","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T21:48:23.428039+03:00","event":"run_started","task":"t0075-cli-list-filter-by-refs","agent":"project-manager","run_id":"r0091","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T21:50:38.834590+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T21:50:52.341052+03:00","event":"run_complete","task":"t0075-cli-list-filter-by-refs","agent":"","run_id":"r0091","run_status":"complete","cost":"1.18","turns":20}
+{"ts":"2026-05-02T21:52:57.901542+03:00","event":"status_transition","task":"t0075-cli-list-filter-by-refs","old_status":"verified","new_status":"done","forced":false}
