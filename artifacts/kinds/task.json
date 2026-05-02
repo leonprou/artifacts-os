@@ -17,23 +17,24 @@
   "type": "object",
   "properties": {
     "status": {
-      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled", "rejected"]
+      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled", "rejected"],
+      "description": "Task lifecycle stage."
     },
     "priority": {
-      "type": "string",
-      "description": "Optional priority hint (free-form, e.g. low, normal, high, urgent)"
+      "enum": ["low", "normal", "high", "urgent"],
+      "description": "Priority hint. Closed enum: small, stable vocabulary."
     },
     "assignee": {
       "type": "string",
-      "description": "Agent or person assigned to work on this task"
+      "description": "Agent or person assigned to work on this task. Free-form because the agent roster is dynamic."
     },
     "owner": {
       "type": "string",
-      "description": "Agent or person who owns/verifies this task"
+      "description": "Agent or person who owns/verifies this task. Free-form because owners include both agents and humans (e.g. 'user')."
     },
     "type": {
-      "type": "string",
-      "description": "Task type (e.g. implementation, documentation, feature, research)"
+      "enum": ["feature", "implementation", "spec", "documentation", "research", "refactor"],
+      "description": "Task category. Closed enum: well-known finite set; new categories require a schema bump (intentional, supports schema-derived tooling)."
     }
   }
 }

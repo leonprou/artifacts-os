@@ -13,7 +13,12 @@
   "type": "object",
   "properties": {
     "status": {
-      "enum": ["draft", "review", "approved", "deprecated"]
+      "enum": ["draft", "review", "approved", "deprecated"],
+      "description": "Spec lifecycle: draft → review → approved → deprecated."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Agent or role that authored/owns the spec (e.g. architect, developer, manual). Free-form because the agent roster grows over time."
     }
   }
 }

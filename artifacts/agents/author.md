@@ -3,7 +3,9 @@ kind: agent
 name: author
 aliases:
   - au
-description: >- Prompt and instruction writer — crafts agent specs, skills, commands, task specs, and documentation that direct LLM behavior.
+description: >-
+  Prompt and instruction writer — crafts agent specs, skills,
+  commands, task specs, and documentation that direct LLM behavior.
 model: claude-opus-4-7
 skills:
   - openstation-execute

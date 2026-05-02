@@ -13,6 +13,7 @@ created: 2026-05-01
 started: 2026-05-02
 artifacts:
   - "[[s0015-cli-schema-derived-filter-flags]]"
+parent: "[[t0061-cli-schema-derived-filter-flags]]"
 completed: 2026-05-02
 ---
 

@@ -18,3 +18,7 @@
 {"ts":"2026-05-02T08:36:11.890697+03:00","event":"run_started","task":"t0055-spec-cli-schema-derived-filter","agent":"project-manager","run_id":"r0078","mode":"verify","context_only":false,"detached":false}
 {"ts":"2026-05-02T08:37:25.353558+03:00","event":"status_transition","task":"t0055-spec-cli-schema-derived-filter","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-05-02T08:52:30.069065+03:00","event":"status_transition","task":"t0055-spec-cli-schema-derived-filter","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T08:53:21.144807+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0055-spec-cli-schema-derived-filter","duration_ms":51071}
+{"ts":"2026-05-02T08:53:51.503490+03:00","event":"task_created","task":"t0061-cli-schema-derived-filter-flags","status":"ready","assignee":"developer","parent":""}
+{"ts":"2026-05-02T08:54:25.086767+03:00","event":"task_created","task":"t0062-implement-cli-schema-derived-filter","status":"backlog","assignee":"developer","parent":"t0061-cli-schema-derived-filter-flags"}
+{"ts":"2026-05-02T09:03:39.476774+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"backlog","new_status":"ready","forced":false}
