@@ -1,14 +1,14 @@
 ---
-kind: task
-id: t0072
-name: implement-cli-views-detail-mode
-type: implementation
-status: verified
 assignee: developer
-owner: user
-parent: "[[t0064-cli-list-defined-views-command]]"
 created: 2026-05-02
+id: t0072
+kind: task
+name: implement-cli-views-detail-mode
+owner: user
+parent: '[[t0064-cli-list-defined-views-command]]'
 started: 2026-05-02
+status: done
+type: implementation
 ---
 
 # Implement: `artifacts views <view_name>` — Detail Mode
