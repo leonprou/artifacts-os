@@ -21,7 +21,7 @@ command lists every artifact using the default columns.
 | `quiet` | One artifact name per line — script-friendly |
 | `json` | JSON array — pipeline-friendly |
 
-If the user has not specified a kind, run `/artifacts.kinds` first to
+If the user has not specified a kind, run `artifacts kinds` first to
 discover what is registered before guessing.
 
 ## Procedure
@@ -90,12 +90,12 @@ artifacts list --kind <KIND> -j | jq length
 | Situation | Handling |
 |---|---|
 | Empty vault | The CLI prints an empty table or "No artifacts found." Surface that result as-is — do not retry. |
-| Unknown kind | The CLI exits non-zero with a message naming the rejected kind. Run `/artifacts.kinds` to enumerate registered kinds and re-run with a valid one. |
-| Unknown status | The CLI rejects the value if it is not in the kind's schema. Run `/artifacts.kinds -j` and inspect the kind's `statuses` array (or omit `--status` to see every artifact). |
+| Unknown kind | The CLI exits non-zero with a message naming the rejected kind. Run `artifacts kinds` to enumerate registered kinds and re-run with a valid one. |
+| Unknown status | The CLI rejects the value if it is not in the kind's schema. Run `artifacts kinds -j` and inspect the kind's `statuses` array (or omit `--status` to see every artifact). |
 | Ambiguous `fields:` keys | `--fields` only accepts column keys present in the kind's schema. Run `/artifacts.show <ref>` on one artifact to see available frontmatter keys, then re-run with valid names. |
 | `-q` and `-j` both passed | Mutually exclusive — pick one. Default to `-j` if the user wants structured output. |
 
 ## Cross-references
 
 - `/artifacts.show <ref>` — inspect a single artifact returned by this listing.
-- `/artifacts.kinds` — discover what kinds are registered before passing `--kind`.
+- `artifacts kinds` — discover what kinds are registered before passing `--kind`.

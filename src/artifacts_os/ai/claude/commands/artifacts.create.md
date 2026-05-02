@@ -30,7 +30,7 @@ optional.
 | `fields:<KEY=VALUE>` | Generic frontmatter escape hatch; repeat for multiple. Comma-separated values become a list (`tags=a,b,c`). |
 | `dry-run` | Preview the resolved frontmatter + body without writing. |
 
-If the user has not specified a kind, run `/artifacts.kinds` first to see
+If the user has not specified a kind, run `artifacts kinds` first to see
 what is registered before guessing.
 
 ## Procedure
@@ -92,7 +92,7 @@ kind. After translating `kind:<value>` to `--kind <value>`, re-run
 `artifacts create --kind <KIND> --help` to discover any kind-specific flags
 the schema declares (for example, a kind may surface `--priority`,
 `--severity`, or other dedicated flags). When you do not yet know the
-kind, run `/artifacts.kinds` first.
+kind, run `artifacts kinds` first.
 
 ### Output
 
@@ -156,7 +156,7 @@ parsed as a list (`tags=a,b,c` becomes `tags: [a, b, c]`).
 
 | Situation | Handling |
 |---|---|
-| Unknown kind | The CLI exits non-zero with a message naming the rejected kind. Run `/artifacts.kinds` to enumerate registered kinds and re-run with a valid one. |
+| Unknown kind | The CLI exits non-zero with a message naming the rejected kind. Run `artifacts kinds` to enumerate registered kinds and re-run with a valid one. |
 | `--body` and `--body-file` both passed | The flags are mutually exclusive; the CLI rejects the combination. Pick one based on intent (`--body` for short inline text, `--body-file` for reusable content or stdin). |
 | `--body-file -` with no piped input | Stdin is empty — the artifact is written with an empty body. If the user expected interactive input, re-run with `--body "<…>"` or pipe content explicitly (`cat draft.md \| artifacts create … --body-file -`). |
 | Slug derivation fails | If `--name` produces an empty slug after slugification (e.g., the value contained no slug-safe characters), the CLI errors with `cannot derive slug from --name <value>`. Re-run with a value that contains letters or digits. |
@@ -167,6 +167,6 @@ parsed as a list (`tags=a,b,c` becomes `tags: [a, b, c]`).
 
 ## Cross-references
 
-- `/artifacts.kinds` — discover registered kinds before passing `--kind`.
+- `artifacts kinds` — discover registered kinds before passing `--kind`.
 - `/artifacts.list` — list artifacts (filter by kind/status) to confirm the new file appears.
 - `/artifacts.show <ref>` — inspect the created artifact using the file stem the CLI prints.

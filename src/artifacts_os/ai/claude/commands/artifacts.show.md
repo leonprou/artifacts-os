@@ -77,7 +77,7 @@ artifacts show fix-login --kind <KIND>
 ```
 
 `--kind` narrows the search when the partial slug would otherwise be
-ambiguous. Use `/artifacts.kinds` to discover available kind names if
+ambiguous. Use `artifacts kinds` to discover available kind names if
 the user did not specify one.
 
 User asks for machine-readable output:
@@ -102,4 +102,4 @@ into `jq` or another consumer.
 ## Cross-references
 
 - `/artifacts.list` — discover refs by kind, status, or other filters before showing one.
-- `/artifacts.kinds` — see what kinds the registry knows about, before passing `--kind` for disambiguation.
+- `artifacts kinds` — see what kinds the registry knows about, before passing `--kind` for disambiguation.

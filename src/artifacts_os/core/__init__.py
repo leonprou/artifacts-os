@@ -16,6 +16,7 @@ from artifacts_os.core.errors import (
     ValidationError,
 )
 from artifacts_os.core.validate import validate_one, validate_many, ValidationIssue, ValidationResult
+from artifacts_os.core.kinds_catalog import KindCatalog, KindCatalogEntry
 
 __all__ = [
     "find_vault_root",
@@ -43,4 +44,6 @@ __all__ = [
     "UnsupportedSchemaVersion",
     "Settings",
     "ProjectConfig",
+    "KindCatalog",
+    "KindCatalogEntry",
 ]

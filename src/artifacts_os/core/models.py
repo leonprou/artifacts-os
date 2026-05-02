@@ -19,6 +19,9 @@ class KindDef:
     meta: dict = field(default_factory=dict)
     # Per-kind required frontmatter fields; None means use the global default.
     required_fields: list[str] | None = None
+    # L1 catalogue fields populated from ARTIFACT.md frontmatter.
+    description: str | None = None
+    has_template: bool = False
 
 
 @dataclass

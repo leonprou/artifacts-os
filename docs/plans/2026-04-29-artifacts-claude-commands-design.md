@@ -87,7 +87,7 @@ Deterministic shortcuts. Each defers to the skill for full reference.
 |---|---|
 | `/artifacts.list` | Argument-shape mapping (`status:ready` → `--status ready`) + default-to-active filter |
 | `/artifacts.show` | Passthrough |
-| `/artifacts.kinds` | Passthrough |
+| `artifacts kinds` (CLI) | Passthrough — `/artifacts.kinds` slash command retired per s0017 D10 |
 | `/artifacts.status` | Passthrough; surface allowed-status list on error |
 | `/artifacts.verify` | Passthrough |
 | `/artifacts.validate` | Passthrough |
@@ -164,7 +164,7 @@ Each command must be smoke-testable against the local vault:
 - `/artifacts.list status:ready` → only ready
 - `/artifacts.list kind:task status:ready` → filtered
 - `/artifacts.show t0001` → renders task
-- `/artifacts.kinds` → table of kinds
+- `artifacts kinds` → table of kinds (slash command retired per s0017 D10)
 - `/artifacts.status t0001 in-progress` → status update
 - `/artifacts.verify t0001` → checklist count
 - `/artifacts.validate t0001` → schema check
