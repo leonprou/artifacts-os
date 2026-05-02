@@ -46,6 +46,8 @@ def main() -> None: ...
 | `status` | `status <ref> <new-status>` | `update(status=...)` |
 | `verify` | `verify [<ref>] [--kind KIND] [--all] [-j]` | `list_artifacts` + frontmatter checks |
 | `agents` | `agents [list\|-show <name>] [-q\|-j\|-e]` | `list_artifacts(kind="agent")` / `get` |
+| `kinds` | `kinds [-q\|-j]` | `Registry.all()` |
+| `views` | `views [-q\|-j]` | `_load_views_settings`; see [[s0016-cli-list-defined-views]] |
 
 ### `create` flags
 

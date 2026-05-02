@@ -29,6 +29,7 @@ from artifacts_os.cli.commands import verify as _verify_cmd
 from artifacts_os.cli.commands import validate as _validate_cmd
 from artifacts_os.cli.commands import init as _init_cmd
 from artifacts_os.cli.commands import kinds as _kinds_cmd
+from artifacts_os.cli.commands import views as _views_cmd
 from artifacts_os.cli.commands import ai as _ai_cmd
 from artifacts_os.cli.settings import CliSettings
 
@@ -39,8 +40,12 @@ _registered_kinds: list[KindDef] = []
 def _load_views_settings(root) -> "ViewsSettings | None":
     """Try to load ViewsSettings from the vault at *root*.
 
-    Returns ``None`` on any error so callers can proceed without views config.
-    Lazily imported so only the ``list`` command pays the import cost.
+    Returns ``None`` on YAML / IO errors so callers can proceed without views
+    config.  ``ValueError`` (e.g. a view entry missing the required ``columns``
+    field) is re-raised so the ``_run`` cascade maps it to exit 1.
+
+    Lazily imported so only the ``list`` and ``views`` commands pay the import
+    cost.
     """
     try:
         from pathlib import Path
@@ -48,6 +53,8 @@ def _load_views_settings(root) -> "ViewsSettings | None":
         settings_path = Path(root) / "artifacts" / "artifacts.yaml"
         base = load_settings(settings_path)
         return ViewsSettings.from_base(base)
+    except ValueError:
+        raise
     except Exception:
         return None
 
@@ -221,6 +228,7 @@ def _build_parser(
     _verify_cmd.register(subparsers)
     _validate_cmd.register(subparsers)
     _kinds_cmd.register(subparsers)
+    _views_cmd.register(subparsers)
     _ai_cmd.register(subparsers)
 
     return parser

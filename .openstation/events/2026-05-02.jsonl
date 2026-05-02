@@ -48,3 +48,15 @@
 {"ts":"2026-05-02T11:00:58.343099+03:00","event":"run_started","task":"t0065-spec-cli-list-defined-views","agent":"project-manager","run_id":"r0082","mode":"verify","context_only":false,"detached":true}
 {"ts":"2026-05-02T11:01:43.863483+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-05-02T11:01:49.011861+03:00","event":"status_transition","task":"t0065-spec-cli-list-defined-views","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T11:02:33.379727+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0065-spec-cli-list-defined-views","duration_ms":44364}
+{"ts":"2026-05-02T11:02:33.697028+03:00","event":"run_complete","task":"t0065-spec-cli-list-defined-views","agent":"","run_id":"r0082","run_status":"complete","cost":"0.85","turns":12}
+{"ts":"2026-05-02T11:02:44.472077+03:00","event":"task_created","task":"t0067-implement-cli-list-defined-views","status":"ready","assignee":"developer","parent":"t0064-cli-list-defined-views-command"}
+{"ts":"2026-05-02T11:05:31.427904+03:00","event":"status_transition","task":"t0064-cli-list-defined-views-command","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T11:07:29.275204+03:00","event":"run_started","task":"t0067-implement-cli-list-defined-views","agent":"developer","run_id":"r0083","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-02T11:08:16.932569+03:00","event":"status_transition","task":"t0067-implement-cli-list-defined-views","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T11:13:21.657607+03:00","event":"status_transition","task":"t0067-implement-cli-list-defined-views","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T11:13:31.769963+03:00","event":"run_complete","task":"t0067-implement-cli-list-defined-views","agent":"developer","run_id":"r0083","run_status":"complete","cost":"1.51","turns":55}
+{"ts":"2026-05-02T11:25:26.641770+03:00","event":"run_started","task":"t0067-implement-cli-list-defined-views","agent":"project-manager","run_id":"r0084","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-02T11:28:54.138410+03:00","event":"status_transition","task":"t0067-implement-cli-list-defined-views","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T11:29:09.617513+03:00","event":"run_complete","task":"t0067-implement-cli-list-defined-views","agent":"","run_id":"r0084","run_status":"complete","cost":"1.48","turns":30}
+{"ts":"2026-05-02T11:33:45.000082+03:00","event":"status_transition","task":"t0067-implement-cli-list-defined-views","old_status":"verified","new_status":"done","forced":false}

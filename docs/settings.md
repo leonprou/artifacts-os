@@ -138,6 +138,9 @@ artifacts list --view active --status done
 [../src/artifacts_os/cli/README.md](../src/artifacts_os/cli/README.md)
 for the full precedence model, error handling, and `-j`/`-q` contract.
 
+Run `artifacts views` to list every defined view from the command line; see
+[`cli/README.md`](../src/artifacts_os/cli/README.md) for the full reference.
+
 ---
 
 ## Schema Versioning

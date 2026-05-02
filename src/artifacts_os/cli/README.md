@@ -228,6 +228,8 @@ view-filtered, view-sorted data.
 | `--view foo` and no `views:` section | `2` |
 | `default_views.k = "v"` and `v` not found | `2` |
 
+To see what views are defined in the active vault, run `artifacts views`.
+
 ---
 
 ### `show` — Inspect a single artifact
@@ -521,6 +523,36 @@ artifacts kinds -q
 
 # JSON (includes dir, prefix, numbered, statuses)
 artifacts kinds -j
+```
+
+---
+
+### `views` — List defined views
+
+```
+artifacts views [-q | -j]
+```
+
+Lists all named views defined in `artifacts/artifacts.yaml`, including the
+per-kind `default_views` bindings.
+
+| Flag | Description |
+|------|-------------|
+| `-q`, `--quiet` | One view name per line — good for scripts |
+| `-j`, `--json` | JSON object with full view metadata and `default_views` map |
+
+**Examples:**
+
+```bash
+# Table of all views (name, kind filter, columns, sort, default-for)
+artifacts views
+
+# Just the names — useful for scripting
+artifacts views -q
+
+# JSON — includes full filters, sort, and default_views bindings
+artifacts views -j
+artifacts views -j | jq '.views[] | select(.default_for | length > 0)'
 ```
 
 ---

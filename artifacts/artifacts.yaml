@@ -147,6 +147,7 @@ cli:
     sh: show
     new: create
     st: status
-    v: verify
+    vf: verify
     va: validate
     k: kinds
+    v: views
