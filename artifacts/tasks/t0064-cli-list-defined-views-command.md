@@ -3,7 +3,7 @@ kind: task
 id: t0064
 name: cli-list-defined-views-command
 type: feature
-status: review
+status: done
 assignee: project-manager
 owner: user
 created: 2026-05-02
@@ -11,9 +11,11 @@ subtasks:
   - "[[t0065-spec-cli-list-defined-views]]"
   - "[[t0067-implement-cli-list-defined-views]]"
   - "[[t0069-spec-cli-views-detail-by]]"
+  - "[[t0072-implement-cli-views-detail-mode]]"
 artifacts:
   - "[[artifacts/specs/s0016-cli-list-defined-views]]"
 started: 2026-05-02
+completed: 2026-05-02
 ---
 
 # CLI: `artifacts views` Command
@@ -77,30 +79,12 @@ deferred in spec [[artifacts/specs/s0016-cli-list-defined-views]]
 
 ### Iteration 2 — detail mode (in progress)
 
-- [[t0069-spec-cli-views-detail-by]] — architect to produce a
-  spec (or s0016 addendum) for the positional detail mode;
-  status: `ready`.
-- *Implementation sub-task* — to be created after spec is
-  approved.
-
-## Directions for Iteration 2
-
-> Final tech requirements will be set by the iteration-2 spec
-> sub-task. The bullets below are intent, not contract.
-
-- Positional argument: `artifacts views <view_name>` (the user's
-  ask). The list mode (no positional) keeps its current
-  behaviour; positional triggers detail mode.
-- Show the full view definition — at minimum `name`, `columns`
-  (untruncated), `filters` (full dict), `sort`, `default-for`.
-- `-j` should emit a single JSON object consistent with one
-  element of list-mode's `views[]` array (spec §6).
-- Unknown name → clear error, non-zero exit code; consider
-  close-match suggestions if cheap.
-- No new flags; reuse the existing `-q` / `-j` mutually
-  exclusive group.
-- Reuse `_load_views_settings` and `ViewConfig` — no new
-  parsing.
+- [[t0069-spec-cli-views-detail-by]] — architect produced the
+  spec as a §15 addendum to
+  [[artifacts/specs/s0016-cli-list-defined-views]]; status:
+  `done`.
+- [[t0072-implement-cli-views-detail-mode]] — developer
+  implements §15 end-to-end; status: `ready`.
 
 ## Tech Requirements — Iteration 1 (list mode, finalized)
 
@@ -155,12 +139,66 @@ diagrams, and worked examples.
     `artifacts/specs/s0003-artifacts-os-cli-module.md` (Command
     Set entry). See spec §12.4.
 
-## Tech Requirements — Iteration 2 (detail mode)
+## Tech Requirements — Iteration 2 (detail mode, finalized)
 
-*To be finalized after [[t0069-spec-cli-views-detail-by]] is
-approved. The spec will pin down positional vs subcommand
-shape, output format, `-q` / `-j` behaviour with positional,
-unknown-name error, and dispatch logic.*
+Authoritative spec: [[artifacts/specs/s0016-cli-list-defined-views]]
+**§15** (addendum). Requirements below are normative; refer to
+the addendum for rationale, decision tables, and worked
+examples.
+
+1. **CLI surface** — extend the existing `artifacts views`
+   subparser with a single optional positional `view_name`
+   (`nargs="?"`). Positional supplied → detail mode; positional
+   absent → unchanged list mode (§§3–10). See spec §15.2.
+2. **Single-name only** — `nargs="?"`, not `nargs="+"`. No
+   multi-name support. See §15.2.2.
+3. **Default detail output** — two-column key/value Rich table
+   (`field` / `value`) with six rows in spec order: `name`,
+   `kind` (lifted from `filters.kind`, or `(any)`), `columns`
+   (**untruncated**), `filters` (multi-line indented JSON, or
+   `(none)`), `sort` (or `(none)`), `default-for` (comma-
+   separated bound kinds, or `(none)`). See §15.3.
+4. **`filters` rendering** — `json.dumps(filters, indent=2,
+   sort_keys=True, default=str)`; `kind` key is **kept** in the
+   filters cell even though it is also lifted to row 2. See
+   §15.3.3.
+5. **`-q` (quiet) with positional** — print **only**
+   `view.columns` on one line. Deliberate divergence from
+   list-mode `-q` (which prints view names). Composes with
+   `art list --fields "$(art views ready -q)"`. See §15.4.
+6. **`-j` (JSON) with positional** — single JSON object equal
+   to one element of list-mode's `views[]` array
+   (`{name, columns, filters, sort, default_for}`, schema
+   per §6.1). **Not** wrapped in `{"views": [...]}`. **No**
+   top-level `default_views` map. See §15.5.
+7. **Unknown view name** — exit `2`, stderr
+   `error: unknown view '<name>'`. Append `Did you mean: …`
+   line via `difflib.get_close_matches(name, names, n=3,
+   cutoff=0.6)` when candidates exist. Same exit/message in
+   `-q` and `-j` modes. See §15.6.
+8. **Mutex `-q` / `-j` with positional** — argparse mutex
+   group rejects unchanged. See §15.7.
+9. **Malformed view entry + positional** — `ValueError`
+   re-raise propagates before dispatch (exit 1, list-mode error
+   path). See §15.8.
+10. **Empty / missing `views:` + positional** — collapses into
+    the unknown-view error (exit 2, no "no views defined"
+    hint). List-mode empty-vault behaviour (§8) is unchanged
+    when no positional is supplied. See §15.9.
+11. **Dispatch** — `if args.name is None:` branch in
+    `views.py:run`, with private `_run_list` / `_run_detail`
+    helpers in the same file. Loader call and `default_views`
+    reverse-index happen **once** before dispatch; both paths
+    consume them. See §15.9.
+12. **No-op zones** — no changes required to
+    `cli/__init__.py`, `views/models.py`, or the registration
+    mutex group (§15.11). Reuse only.
+13. **Docs** — `cli/README.md` views section gains a
+    "Detail mode" subsection;
+    `artifacts/specs/s0003-artifacts-os-cli-module.md` Command
+    Set row updated to `views [<view_name>] [-q|-j]`. No
+    changes to `docs/settings.md`, `s0007`, or `s0012`. See
+    §15.10.
 
 ## Verification — Iteration 1 (list mode)
 
@@ -194,23 +232,49 @@ unknown-name error, and dispatch logic.*
       per spec §12.4.
 - [x] `artifacts views` appears in `artifacts --help`.
 
-## Verification — Iteration 2 (detail mode, provisional)
+## Verification — Iteration 2 (detail mode)
 
-*Final checklist will be set after [[t0069-spec-cli-views-detail-by]]
-is approved.*
-
-- [ ] Iteration-2 spec merged and approved (see
-      [[t0069-spec-cli-views-detail-by]]).
-- [ ] `artifacts views <view_name>` prints the full definition
-      of a single view (untruncated columns, full filters dict,
-      sort, default-for binding).
-- [ ] `-j` mode emits a single JSON object consistent with one
-      element of list-mode's `views[]` array.
-- [ ] Unknown view name fails with a clear stderr error and a
-      non-zero exit code.
-- [ ] List mode (`artifacts views` with no positional) is
-      unchanged — list-mode tests still pass.
-- [ ] Detail-mode tests added under `tests/cli/test_views_cmd.py`;
-      full `pytest` suite passes.
-- [ ] `src/artifacts_os/cli/README.md` views section gains a
-      "detail mode" subsection.
+- [x] Iteration-2 spec merged and approved (see
+      [[t0069-spec-cli-views-detail-by]]; addendum lives at
+      [[artifacts/specs/s0016-cli-list-defined-views]] §15).
+- [ ] `artifacts views <view_name>` prints the §15.3.1
+      two-column key/value table with all six rows in the
+      specified order.
+- [ ] `kind` row lifts the kind filter or renders `(any)`;
+      `filters` row stays authoritative (still includes `kind`).
+- [ ] `columns` row is **untruncated** for >60-char strings
+      (the principal value-add over list mode; case 20).
+- [ ] `filters` cell renders multi-line indented JSON
+      (`indent=2, sort_keys=True`); empty filters render
+      `(none)` (§15.3.3, cases 16, 21).
+- [ ] `sort` and `default-for` rows render correctly
+      (verbatim / `(none)`; comma-separated alphabetised bound
+      kinds; cases 17–19).
+- [ ] `artifacts views <name> -q` prints **only**
+      `view.columns` on one line (§15.4, case 22).
+- [ ] `artifacts views <name> -j` emits a single JSON object
+      with `{name, columns, filters, sort, default_for}`; not
+      array-wrapped; no top-level `default_views` (§15.5,
+      cases 23–26).
+- [ ] Unknown view → exit 2, stderr
+      `error: unknown view '<name>'`; `Did you mean: …`
+      appears when `difflib` returns matches (§15.6,
+      cases 27–30).
+- [ ] Empty / missing `views:` + positional → unknown-view
+      error (no "no views defined" hint; §15.9, cases 31, 32).
+- [ ] `-q` + `-j` mutex still rejects with positional present
+      (case 33). Malformed view + positional → exit 1 via
+      `ValueError` re-raise (case 34).
+- [ ] List mode unchanged — running `artifacts views` with no
+      positional still produces the §4 list-mode table; all 13
+      list-mode tests from §12.3 still pass (case 35).
+- [ ] `tests/cli/test_views_cmd.py` covers all 22 detail-mode
+      cases listed in §15.12 (cases 14–35); full `pytest` suite
+      passes.
+- [ ] `src/artifacts_os/cli/README.md` gains a "Detail mode"
+      subsection per §15.10.
+- [ ] `artifacts/specs/s0003-artifacts-os-cli-module.md`
+      Command Set row updated to `views [<view_name>] [-q|-j]`
+      per §15.10.
+- [ ] `artifacts views --help` reflects the new positional and
+      help text.
