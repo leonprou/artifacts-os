@@ -3,7 +3,7 @@ kind: task
 id: t0061
 name: cli-schema-derived-filter-flags
 type: feature
-status: review
+status: done
 assignee: developer
 owner: user
 created: 2026-05-02
@@ -12,6 +12,7 @@ subtasks:
   - "[[t0062-implement-cli-schema-derived-filter]]"
 artifacts:
   - "[[s0015-cli-schema-derived-filter-flags]]"
+completed: 2026-05-02
 ---
 
 # Cli-Schema-Derived-Filter-Flags

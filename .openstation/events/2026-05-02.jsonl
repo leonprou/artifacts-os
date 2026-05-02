@@ -33,3 +33,8 @@
 {"ts":"2026-05-02T10:08:41.559650+03:00","event":"run_started","task":"t0063-document-how-to-add-a","agent":"technical-writer","run_id":"r0081","mode":"execute","context_only":false,"detached":true}
 {"ts":"2026-05-02T10:09:08.926095+03:00","event":"status_transition","task":"t0062-implement-cli-schema-derived-filter","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-02T10:09:29.032322+03:00","event":"status_transition","task":"t0063-document-how-to-add-a","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-02T10:09:59.113707+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0062-implement-cli-schema-derived-filter","duration_ms":50184}
+{"ts":"2026-05-02T10:10:57.232762+03:00","event":"status_transition","task":"t0061-cli-schema-derived-filter-flags","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-02T10:11:00.469474+03:00","event":"status_transition","task":"t0061-cli-schema-derived-filter-flags","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-02T10:11:05.089091+03:00","event":"status_transition","task":"t0063-document-how-to-add-a","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-02T10:11:13.897774+03:00","event":"run_complete","task":"t0063-document-how-to-add-a","agent":"","run_id":"r0081","run_status":"complete","cost":"0.53","turns":27}
