@@ -93,7 +93,7 @@ Coding conventions:
 |------|---------|
 | [docs/architecture.md](docs/architecture.md) | Package overview, module map, dependency DAG, design principles |
 | [docs/settings.md](docs/settings.md) | Cross-cutting settings: public API, extension pattern, schema versioning |
-| [docs/adding-a-kind.md](docs/adding-a-kind.md) | How to add a new artifact kind — schema reference, worked example, filter-flag generation |
+| [docs/adding-a-kind.md](docs/adding-a-kind.md) | How to add a new artifact kind — `ARTIFACT.md` description contract, L1 catalogue surface, evaluation-first authoring, `kind.json` schema reference |
 
 ### Module References
 
