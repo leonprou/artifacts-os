@@ -1,0 +1,1 @@
+../../artifacts/agents/product-manager.md
