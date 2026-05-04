@@ -1,16 +1,16 @@
 ---
-kind: task
-id: t0042
-name: cli-create-kind-aware-help
-type: feature
-status: verified
-assignee: developer
-owner: user
-parent: "[[t0036-improve-cli-create-command]]"
-created: 2026-04-30
-started: 2026-04-30
 artifacts:
-  - "[[artifacts/specs/s0011-cli-create-kind-aware-help]]"
+- '[[artifacts/specs/s0011-cli-create-kind-aware-help]]'
+assignee: developer
+created: 2026-04-30
+id: t0042
+kind: task
+name: cli-create-kind-aware-help
+owner: user
+parent: '[[t0036-improve-cli-create-command]]'
+started: 2026-04-30
+status: done
+type: feature
 ---
 
 # Cli Create: Kind-Aware --Help

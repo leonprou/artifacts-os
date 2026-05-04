@@ -1,15 +1,15 @@
 ---
 assignee: developer
+created: 2026-04-29
 id: t0036
 kind: task
 name: improve-cli-create-command
 owner: user
-status: verified
-type: feature
-created: 2026-04-29
 started: 2026-04-30
+status: done
 subtasks:
-  - "[[t0042-cli-create-kind-aware-help]]"
+- '[[t0042-cli-create-kind-aware-help]]'
+type: feature
 ---
 
 ## Goal
