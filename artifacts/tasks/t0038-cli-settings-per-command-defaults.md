@@ -9,8 +9,6 @@ owner: user
 created: 2026-04-30
 started: 2026-04-30
 completed: 2026-04-30
-aliases: []
-tags: []
 ---
 
 # Cli Settings: Per-Command Defaults And Aliases

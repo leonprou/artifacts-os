@@ -7,9 +7,6 @@ status: done
 assignee: developer
 owner: user
 created: 2026-04-23
-summary: >
-  Replace all hardcoded openstation/ storage root references with
-  artifacts/ across source, tests, and docs.
 started: 2026-04-23
 completed: 2026-04-25
 ---

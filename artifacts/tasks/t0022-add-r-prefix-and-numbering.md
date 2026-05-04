@@ -7,10 +7,6 @@ status: done
 assignee: developer
 owner: project-manager
 created: 2026-04-26
-summary: >
-  Give the research kind an "r" prefix and numbered IDs so research
-  artifacts follow the same naming pattern as tasks (t) and specs
-  (s).
 started: 2026-04-26
 completed: 2026-04-26
 ---

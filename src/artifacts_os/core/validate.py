@@ -147,9 +147,25 @@ def validate_one(
     _rule3_handled_status = bool(kind_def.statuses)
     if kind_def.schema:
         try:
+            import datetime
             import jsonschema
+
+            # YAML auto-parses bare dates like `2026-05-03` into datetime.date /
+            # datetime.datetime objects, but JSON Schema only knows JSON types.
+            # Coerce date-likes to ISO strings before validation so `type: string`
+            # works on date-bearing fields (created, started, completed).
+            def _coerce(v: object) -> object:
+                if isinstance(v, (datetime.date, datetime.datetime)):
+                    return v.isoformat()
+                if isinstance(v, list):
+                    return [_coerce(x) for x in v]
+                if isinstance(v, dict):
+                    return {k: _coerce(x) for k, x in v.items()}
+                return v
+
+            fm_for_schema = {k: _coerce(v) for k, v in fm.items()}
             validator = jsonschema.Draft7Validator(kind_def.schema)
-            for exc in validator.iter_errors(fm):
+            for exc in validator.iter_errors(fm_for_schema):
                 field_path = ".".join(str(p) for p in exc.absolute_path) if exc.absolute_path else ""
                 # Skip status schema errors when rule 3 is responsible for status validation
                 if field_path == "status" and _rule3_handled_status:

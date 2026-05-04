@@ -8,10 +8,6 @@ assignee: developer
 owner: project-manager
 created: 2026-04-26
 priority: urgent
-summary: >
-  Restore the artifacts/artifacts.yaml vault marker that was
-  accidentally deleted in commit b1d2fec, breaking the artifacts
-  CLI in this repo.
 started: 2026-04-26
 completed: 2026-04-26
 ---

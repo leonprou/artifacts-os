@@ -7,10 +7,6 @@ name: replace-openstation-vault-marker-with-artifacts-yaml
 owner: user
 started: 2026-04-25
 status: done
-summary: 'Drop .openstation/ as the vault marker and openstation.yaml as config. Use
-  artifacts.yaml at the project root instead.
-
-  '
 type: feature
 ---
 

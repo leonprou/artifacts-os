@@ -9,10 +9,6 @@ owner: project-manager
 depends_on:
   - "[[t0020-rename-artifacts-types-to-artifacts]]"
 created: 2026-04-26
-summary: >
-  Add an `artifacts kinds` CLI subcommand that lists every kind
-  registered with the active Registry, mirroring the formatting
-  options of `artifacts list`.
 started: 2026-04-26
 completed: 2026-04-26
 ---

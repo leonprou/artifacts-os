@@ -32,11 +32,30 @@ def _kind_dir(registry: "Registry", kd: KindDef) -> Path:
     return _require_root(registry) / "artifacts" / kd.dir
 
 
+def _coerce_for_schema(v: object) -> object:
+    """Serialize date/datetime to ISO strings before JSON Schema validation.
+
+    PyYAML auto-parses bare dates like ``2026-05-03`` into ``datetime.date``
+    objects, but JSON Schema only validates JSON types — ``type: string``
+    rejects a ``datetime.date``. Coerce so date-bearing fields validate
+    against ``type: string`` schemas without forcing every artifact to
+    quote its dates.
+    """
+    import datetime
+    if isinstance(v, (datetime.date, datetime.datetime)):
+        return v.isoformat()
+    if isinstance(v, list):
+        return [_coerce_for_schema(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _coerce_for_schema(x) for k, x in v.items()}
+    return v
+
+
 def _validate_schema(kd: KindDef, meta: dict) -> None:
     if not kd.schema:
         return
     try:
-        jsonschema.validate(meta, kd.schema)
+        jsonschema.validate(_coerce_for_schema(meta), kd.schema)
     except jsonschema.ValidationError as e:
         raise ValidationError(str(e)) from e
 

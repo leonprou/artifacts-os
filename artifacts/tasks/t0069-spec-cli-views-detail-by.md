@@ -8,8 +8,6 @@ assignee: architect
 owner: user
 parent: "[[t0064-cli-list-defined-views-command]]"
 created: 2026-05-02
-aliases: []
-tags: []
 started: 2026-05-02
 artifacts:
   - "[[artifacts/specs/s0016-cli-list-defined-views]]"

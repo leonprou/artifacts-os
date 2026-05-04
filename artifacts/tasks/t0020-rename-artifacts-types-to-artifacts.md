@@ -7,11 +7,6 @@ name: rename-artifacts-types-to-artifacts
 owner: project-manager
 started: 2026-04-26
 status: done
-summary: 'Rename the kind-schemas directory from artifacts/types/ to artifacts/kinds/
-  and align all source, tests, and docs on the word "kind" so the concept and the
-  directory name match.
-
-  '
 type: implementation
 ---
 
