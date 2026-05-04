@@ -27,6 +27,8 @@ htmlcov/
 # editors
 .DS_Store
 .obsidian/
+.idea/
+.vscode/
 
 # openstation runtime
 .openstation/state.db
