@@ -13,6 +13,7 @@ import sys
 from typing import Sequence
 
 from artifacts_os.core import (
+    __version__,
     find_vault_root,
     load_settings,
     Registry,
@@ -211,6 +212,13 @@ def _build_parser(
     parser = argparse.ArgumentParser(
         prog="artifacts",
         description="artifacts-os command-line interface",
+    )
+    parser.add_argument(
+        "--version",
+        "-v",
+        action="version",
+        version=f"artifacts {__version__}",
+        help="show program version and exit",
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True

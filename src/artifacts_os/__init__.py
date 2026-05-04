@@ -7,6 +7,7 @@ Spec: s2060-artifacts-os-architecture, s2061-artifacts-os-module-system
 """
 
 from artifacts_os.core import (  # noqa: F401
+    __version__,
     find_vault_root,
     Registry,
     create,
@@ -25,6 +26,7 @@ from artifacts_os.core import (  # noqa: F401
 )
 
 __all__ = [
+    "__version__",
     "find_vault_root",
     "Registry",
     "create",

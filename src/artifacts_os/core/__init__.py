@@ -3,6 +3,13 @@
 Spec: s2060-artifacts-os-architecture, s2061-artifacts-os-module-system
 """
 
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+try:
+    __version__ = _pkg_version("artifacts-os")
+except PackageNotFoundError:  # pragma: no cover — only hit in non-installed checkouts
+    __version__ = "0.0.0+unknown"
+
 from artifacts_os.core.vault import find_vault_root
 from artifacts_os.core.registry import Registry
 from artifacts_os.core.store import create, get, update
@@ -19,6 +26,7 @@ from artifacts_os.core.validate import validate_one, validate_many, ValidationIs
 from artifacts_os.core.kinds_catalog import KindCatalog, KindCatalogEntry
 
 __all__ = [
+    "__version__",
     "find_vault_root",
     "Registry",
     "create",
