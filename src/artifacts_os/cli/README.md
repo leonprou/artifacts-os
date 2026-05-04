@@ -548,19 +548,41 @@ artifacts validate t0042 --fix
 
 ---
 
-### `kinds` — List registered artifact kinds
+### `kinds` — List registered artifact kinds or show detail for one
 
 ```
-artifacts kinds [-q | -j]
+artifacts kinds [<name>] [--meta] [-q | -j | -e]
 ```
 
-Lists all artifact kinds registered in the active project, including
-any vault-defined kinds loaded from `artifacts/kinds/*.json`.
+Without `<name>`: lists all artifact kinds registered in the active project,
+including any vault-defined kinds loaded from `artifacts/kinds/*.json`.
 
-| Flag | Description |
-|------|-------------|
-| `-q`, `--quiet` | One kind name per line — good for scripts |
-| `-j`, `--json` | JSON array with full kind metadata |
+With `<name>`: prints the full body of `artifacts/kinds/<name>/ARTIFACT.md`
+to stdout (pipe-friendly, no decoration). Use `--meta` to prepend a metadata
+block, `-j` for JSON output with both meta and body, or `-e` to open
+`ARTIFACT.md` in `$EDITOR`.
+
+| Argument / Flag | Description |
+|-----------------|-------------|
+| `<name>` | Kind name; when given, shows detail instead of the listing |
+| `--meta` | Prepend a YAML-like metadata block above the body (requires `<name>`) |
+| `-q`, `--quiet` | Listing only: one kind name per line — good for scripts |
+| `-j`, `--json` | JSON output; in listing mode: array of kind metadata; in detail mode: `{"meta": {...}, "body": "..."}` |
+| `-e`, `--editor` | Open `artifacts/kinds/<name>/ARTIFACT.md` in `$EDITOR` (requires `<name>`; falls back to `vi` if `$EDITOR` is unset; silently downgrades to default text output in non-TTY contexts) |
+
+`-q`, `-j`, and `-e` are mutually exclusive.
+
+**Exit codes (detail mode):**
+
+| Condition | Exit code |
+|-----------|-----------|
+| Success | 0 |
+| Unknown kind | 3 |
+| Kind exists but `ARTIFACT.md` missing (text or `-e` mode) | 3 |
+| `--meta` or `-e` without `<name>` | 2 |
+
+When `-j` is used with a missing `ARTIFACT.md`, the exit code is 0 and
+`body` is `null` so JSON consumers can branch cleanly.
 
 **Examples:**
 
@@ -571,8 +593,23 @@ artifacts kinds
 # Just the names
 artifacts kinds -q
 
-# JSON (includes dir, prefix, numbered, statuses)
+# JSON listing (includes dir, prefix, numbered, statuses)
 artifacts kinds -j
+
+# Print the ARTIFACT.md body for the task kind
+artifacts kinds task
+
+# Prepend kind metadata above the ARTIFACT.md body
+artifacts kinds spec --meta
+
+# JSON detail (includes meta object and raw body string)
+artifacts kinds task -j
+
+# Pipe body through jq
+artifacts kinds task -j | jq -r .body
+
+# Open the task kind's ARTIFACT.md in $EDITOR
+artifacts kinds task -e
 ```
 
 ---

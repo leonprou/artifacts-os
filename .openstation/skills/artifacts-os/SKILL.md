@@ -79,6 +79,21 @@ artifacts show fix-login -k task  # by partial slug, narrowed by kind
 Do **not** open the file with the Read tool to inspect an artifact —
 use `artifacts show -j` so frontmatter and body come back parsed.
 
+### Discover kinds — `artifacts kinds`
+
+Before creating an artifact, run `artifacts kinds` to see every
+registered kind with its `description` — the L1 selection signal,
+encoding both *what* the kind captures and *when* to choose it.
+Pick the kind whose description matches your intent.
+
+Then run `artifacts kinds <name>` to read that kind's full
+`ARTIFACT.md`: the `## What is a <kind>?` section defines the
+kind, and `## How to draft a <kind>` lists required sections,
+writing disciplines, and worked-example references. Always read
+this before drafting the new artifact's body. Flags: `-j` (JSON
+with both `meta` and `body`), `--meta` (prepend metadata above
+the body), `-e` (open `ARTIFACT.md` in `$EDITOR`).
+
 ### Create — `artifacts create`
 
 ```bash
