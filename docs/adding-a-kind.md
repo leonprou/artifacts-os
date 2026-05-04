@@ -6,6 +6,9 @@ vault load — no code changes required. Every `artifacts create`,
 `artifacts list`, schema validation, and filter-flag generation works
 immediately for the new kind.
 
+For creating an *instance* of an existing kind, see
+[`creating-an-artifact.md`](creating-an-artifact.md).
+
 ---
 
 ## File Layout
@@ -36,9 +39,30 @@ registered kind name in both cases.
 
 `ARTIFACT.md` is the human and agent-facing entry point for a kind.
 Its **frontmatter** carries the L1 selection signal consumed by
-`artifacts kinds`; its **body** (`## How to use` + `## Skeleton`
-sections) is a body template the agent layer loads when drafting a
-new artifact.
+`artifacts kinds`; its **body** is a body-authoring guide the agent
+layer loads when drafting a new artifact.
+
+### Required body section: `## What is a <kind>?`
+
+Every `ARTIFACT.md` body **must** open with a `## What is a <kind>?`
+section that gives a clear, concise, kind-level definition: what the
+artifact captures, when to reach for it, and (if applicable) the
+conventional sub-types or variants. This is the only mandatory body
+section — everything that follows (authoring steps, worked example
+references) is optional and depends on whether the kind needs
+structural scaffolding.
+
+The definition is what an agent or human reads first when opening
+the file; it is also what gets quoted when the kind is referenced
+elsewhere. Keep it general enough to apply to **every** instance of
+the kind, not just a specific sub-type.
+
+The note (`artifacts/kinds/note/ARTIFACT.md`), research
+(`artifacts/kinds/research/ARTIFACT.md`), and spec
+(`artifacts/kinds/spec/ARTIFACT.md`) kinds are the v1 exemplars.
+For the full body-shape contract see
+[`## ARTIFACT.md body authoring guidelines`](#artifactmd-body-authoring-guidelines)
+below.
 
 ### `description:` field contract
 
@@ -73,16 +97,17 @@ s0017 D6).
 ```yaml
 ---
 name: note
-description: Body template for note artifacts — planning notes, brainstorm captures, meeting notes, decisions, and scratch work.
+description: Captures thinking at a point in time — planning, decisions, brainstorms, meetings, or scratch work. Use when context (decisions, trade-offs, references) must outlive the conversation that produced it.
 applies_to: note
 placeholder_syntax: "{{NAME}}"
 schema_version: 1
 ---
 ```
 
-This description covers *what* ("body template for note artifacts")
-and *when* ("planning notes, brainstorm captures, …"). Both halves
-must be present.
+This description covers *what* ("captures thinking at a point in
+time — planning, decisions, brainstorms, …") and *when* ("use when
+context … must outlive the conversation that produced it"). Both
+halves must be present.
 
 ### Anti-patterns (from r0002 § 8)
 
@@ -111,6 +136,98 @@ template content, both deferred — see s0017 § 11).
 | `variant_field` | string | no | — | Reserved for L2 |
 | `variants` | list[string] | no | — | Reserved for L2 |
 | `playbooks` | list[string] | no | — | Reserved for L2 |
+
+---
+
+## `ARTIFACT.md` body authoring guidelines
+
+The `note`, `research`, and `spec` kinds are the v1 exemplars. The
+patterns below crystallise from iterating on all three. Apply them
+when authoring or reviewing any new `ARTIFACT.md` body.
+
+### 1. Body shape — three sections
+
+Every `ARTIFACT.md` body follows the same three-section spine:
+
+```
+# <Kind>
+
+## What is a <kind>?
+  → 1–2 paragraph definition + selection table   (the only REQUIRED body section)
+
+## How to draft a <kind>
+  → preamble + 2–3 numbered steps
+  → writing-discipline step(s) first
+  → anchored-required-sections step last
+```
+
+Drop a step if it does not apply; do not pad to fill three.
+
+### 2. Definition — lead with a differentiating verb
+
+`## What is a <kind>?` is the only mandatory body section. The lead
+sentence uses a verb that immediately distinguishes the kind from
+adjacent ones:
+
+| Kind | Lead verb |
+|---|---|
+| note | "Captures thinking at a point in time…" |
+| research | "Captures cited findings from an investigation…" |
+| spec | "Locks a technical contract before implementation…" |
+| bug | "Tracks a confirmed defect…" |
+
+Name the kind's **load-bearing property** in one phrase (note:
+*fidelity* of transcription; research: *traceability* of every
+claim; spec: *decision-locking* with explicit rationale). Then
+include a selection table that helps the author choose this kind
+over adjacent options — either sub-variants within the kind
+(note's `type` table) or signals against a sibling kind (research's
+"research vs. note" table; spec's "when to file a spec vs. a task
+or note" table).
+
+### 3. Frontmatter description — mirror the body in 1–2 sentences
+
+The frontmatter `description` is the L1 selection signal — agents
+read it without opening the body. Mirror the body's discriminator
+using the reliable pattern:
+
+> *\<verb\> \<what\>. Use when \<selection trigger\>.*
+
+Both halves must be present. Worked examples are in the
+`### description: field contract` section above.
+
+### 4. Anchor required sections; do not inline skeletons
+
+When the kind demands specific sections (research's TL;DR,
+Recommendations, Sources), name them in a final "anchor" step with
+a one-line role for each. **Do not inline a `{{TOKEN}}`-style
+skeleton** — it biases the author toward filling slots rather than
+writing for a future reader. A 60–80 line `ARTIFACT.md` beats a
+300-line one.
+
+A skeleton may still earn its place for kinds with truly rigid
+structure (e.g., a release-notes kind whose every section is
+fixed). Default to the guide-style; reach for a skeleton only when
+the structure genuinely cannot be expressed as anchored sections.
+
+### 5. Cite worked examples in the vault
+
+Point at real artifacts (`[[r0001-...]]`, `[[r0002-...]]`,
+`[[n0005-...]]`) for any shape the body references. Real examples
+expose the kind under realistic constraints; invented examples
+drift. The `note` and `research` `ARTIFACT.md` files cite `r0001`,
+`r0002`, and `n0005` for exactly this reason.
+
+### Body anti-patterns
+
+| Anti-pattern | Why it breaks |
+|---|---|
+| `{{TOKEN}}`-heavy skeleton | Author fills slots instead of writing for the reader; structure ossifies. |
+| Description = "Body template for X artifacts" | Passive; no discriminator verb; no "when". |
+| Definition buried under Step 1 | An agent has to read authoring steps to find what the kind *is*. |
+| More than 3 numbered steps | Usually a signal the body is doing too much. Collapse writing disciplines or required sections. |
+| Required sections mentioned only inside a skeleton | Without a separate anchor step, the requirement is invisible to anyone scanning. |
+| Invented examples instead of vault-cited ones | Drifts from reality; vault-cited examples stay honest as the project evolves. |
 
 ---
 
@@ -146,7 +263,7 @@ $ artifacts kinds
 ┏━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ name     ┃ dir      ┃ prefix ┃ numbered ┃ statuses      ┃ description                       ┃
 ┡━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ note     │ notes    │ n      │ yes      │ (none)        │ Body template for note artifa…    │
+│ note     │ notes    │ n      │ yes      │ (none)        │ Captures thinking at a point…     │
 │ task     │ tasks    │ t      │ yes      │ backlog, …    │ (no description)                  │
 └──────────┴──────────┴────────┴──────────┴───────────────┴───────────────────────────────────┘
 ```
@@ -164,7 +281,7 @@ characters in the table; the full string is available via `-j`.
   "prefix": "n",
   "numbered": true,
   "statuses": [],
-  "description": "Body template for note artifacts — planning notes, brainstorm captures, meeting notes, decisions, and scratch work.",
+  "description": "Captures thinking at a point in time — planning, decisions, brainstorms, meetings, or scratch work. Use when context (decisions, trade-offs, references) must outlive the conversation that produced it.",
   "has_template": true
 }
 ```
