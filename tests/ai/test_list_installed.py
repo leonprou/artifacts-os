@@ -20,8 +20,11 @@ def test_list_installed_links(vault: Path) -> None:
     assert len(assets) >= 3
     for a in assets:
         assert a.mode == "link"
-        assert a.path.name.startswith("artifacts.")
         assert a.source.exists()
+    # Commands are name-prefixed; skill is SKILL.md in a namespaced dir
+    command_assets = [a for a in assets if a.path.name != "SKILL.md"]
+    for a in command_assets:
+        assert a.path.name.startswith("artifacts.")
 
 
 def test_list_installed_copies(vault: Path) -> None:

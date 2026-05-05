@@ -1,6 +1,6 @@
 # artifacts-os AI module
 
-Install and manage AI slash-command prompts for Claude Code and OpenCode.
+Install and manage AI slash-command prompts and skills for Claude Code and OpenCode.
 
 ## Package layout
 
@@ -8,7 +8,9 @@ Install and manage AI slash-command prompts for Claude Code and OpenCode.
 artifacts_os.ai
 ├── install.py               — install/uninstall/list_installed
 ├── claude/
-│   └── commands/            — *.md prompt files for Claude Code
+│   ├── commands/            — *.md prompt files for Claude Code
+│   └── skills/
+│       └── artifacts-os/    — SKILL.md for Claude Code
 └── opencode/
     └── commands/            — *.md prompt files for OpenCode (future)
 ```
@@ -21,7 +23,7 @@ from artifacts_os.ai import install, uninstall, list_installed
 
 vault = Path("/path/to/vault")
 
-# Install as symlinks (default)
+# Install commands and skills as symlinks (default)
 report = install(vault)
 
 # Install as copies
@@ -33,7 +35,7 @@ report = install(vault, mode="copy", force=True)
 # Preview without writing
 report = install(vault, dry_run=True)
 
-# List what is installed
+# List what is installed (commands and skills)
 assets = list_installed(vault)
 
 # Remove
@@ -51,13 +53,23 @@ artifacts ai list [--target DIR] [--tool ...]
 ## Source resolution
 
 Command files are resolved via `importlib.resources.files("artifacts_os.ai.claude.commands")`.
+Skill files are resolved via `importlib.resources.files("artifacts_os.ai.claude.skills")`.
 
 - **Editable install** (`pip install -e .`): symlinks resolve into the source tree.
-- **Wheel install**: symlinks resolve into `site-packages/artifacts_os/ai/claude/commands/`.
+- **Wheel install**: symlinks resolve into `site-packages/artifacts_os/ai/claude/`.
 
 Hatchling's `packages = ["src/artifacts_os"]` setting includes all files in the
 package directory tree (not just `*.py`), so `*.md` files are shipped in the wheel
 by default — no additional `include` rules are needed.
+
+## Asset kinds
+
+Two kinds of assets are managed:
+
+| Kind | Namespace | Install path |
+|---|---|---|
+| Command | filename prefix `artifacts.` | `<tool_dir>/commands/artifacts.*.md` |
+| Skill | directory prefix `artifacts-` | `<tool_dir>/skills/artifacts-os/SKILL.md` |
 
 ## Conflict policy
 
@@ -68,9 +80,16 @@ by default — no additional `include` rules are needed.
 | Different content, namespace match | link | Replace |
 | Regular file in namespace | link | Refuse unless `--force` |
 | Different content, namespace match | copy | Refuse unless `--force` |
-| Outside `artifacts.` namespace | any | Never touch |
+| Outside namespace | any | Never touch |
 
-Namespace = filename prefix `artifacts.` for commands.
+Skills namespace check: parent directory name must start with `artifacts-`.
+Commands namespace check: filename must start with `artifacts.`.
+
+## Uninstall pruning
+
+`uninstall()` removes namespaced skill files and prunes the now-empty
+`<tool_dir>/skills/artifacts-os/` directory. If the directory contains
+foreign files, it is kept.
 
 ## Module DAG
 

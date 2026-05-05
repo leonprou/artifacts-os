@@ -21,6 +21,17 @@ def test_init_installs_ai_commands(tmp_path: Path, monkeypatch) -> None:
         assert f.is_symlink(), f"{f} should be a symlink"
 
 
+def test_init_installs_skill_md(tmp_path: Path, monkeypatch) -> None:
+    """artifacts init produces .claude/skills/artifacts-os/SKILL.md as a symlink."""
+    monkeypatch.chdir(tmp_path)
+    main(["init"])
+
+    skill_path = tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md"
+    assert skill_path.is_symlink(), f"{skill_path} should be a symlink"
+    assert skill_path.resolve().exists(), f"Broken symlink: {skill_path}"
+    assert "artifacts_os" in str(skill_path.resolve())
+
+
 def test_init_no_ai_skips_install(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     main(["init", "--no-ai"])
@@ -30,6 +41,9 @@ def test_init_no_ai_skips_install(tmp_path: Path, monkeypatch) -> None:
         md_files = list(commands_dir.glob("artifacts.*.md"))
         assert len(md_files) == 0
     # No .claude/commands created at all is also fine
+
+    skills_dir = tmp_path / ".claude" / "skills"
+    assert not skills_dir.exists(), "--no-ai should not create .claude/skills/"
 
 
 def test_init_ai_commands_resolve(tmp_path: Path, monkeypatch) -> None:
