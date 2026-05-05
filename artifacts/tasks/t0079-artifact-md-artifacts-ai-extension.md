@@ -6,9 +6,9 @@ kind: task
 name: artifact-md-artifacts-ai-extension
 owner: user
 priority: normal
-status: in-progress
-type: feature
 started: 2026-05-04
+status: done
+type: feature
 ---
 
 # ARTIFACT.md — Artifacts AI Extension

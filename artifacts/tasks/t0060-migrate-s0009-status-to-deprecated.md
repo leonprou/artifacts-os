@@ -5,9 +5,9 @@ id: t0060
 kind: task
 name: migrate-s0009-status-to-deprecated
 owner: user
-status: review
-type: implementation
 started: 2026-05-02
+status: done
+type: implementation
 ---
 
 ## Goal

@@ -4,7 +4,7 @@ id: r0001
 kind: research
 name: openstation-integration-audit
 status: done
-created: 2026-05-01
+created: 2026-04-29
 ---
 
 # artifacts-os ↔ openstation Integration Audit

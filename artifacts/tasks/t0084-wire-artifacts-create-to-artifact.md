@@ -7,12 +7,12 @@ name: wire-artifacts-create-to-artifact
 owner: user
 parent: '[[t0079-artifact-md-artifacts-ai-extension]]'
 priority: normal
-status: in-progress
-type: feature
 started: 2026-05-03
+status: done
 subtasks:
-  - "[[t0086-implement-artifacts-create-body-loader]]"
-  - "[[t0087-update-docs-adding-a-kind]]"
+- '[[t0086-implement-artifacts-create-body-loader]]'
+- '[[t0087-update-docs-adding-a-kind]]'
+type: feature
 ---
 
 # Wire `/artifacts.create` to ARTIFACT.md Skeletons

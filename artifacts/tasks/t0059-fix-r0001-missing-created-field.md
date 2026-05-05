@@ -5,7 +5,7 @@ id: t0059
 kind: task
 name: fix-r0001-missing-created-field
 owner: user
-status: ready
+status: done
 type: implementation
 ---
 

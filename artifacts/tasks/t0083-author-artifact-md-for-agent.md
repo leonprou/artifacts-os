@@ -6,7 +6,7 @@ kind: task
 name: author-artifact-md-for-agent
 owner: user
 parent: '[[t0079-artifact-md-artifacts-ai-extension]]'
-status: ready
+status: rejected
 type: documentation
 ---
 
