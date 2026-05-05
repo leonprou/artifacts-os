@@ -99,23 +99,67 @@ These follow as a sub-task once the workflow + skill + dogfood land.
 
 ## Verification
 
-- [ ] `.github/workflows/release.yml` exists and is YAML-valid.
-- [ ] Workflow correctly distinguishes release commits from non-release
+- [x] `.github/workflows/release.yml` exists and is YAML-valid.
+- [x] Workflow correctly distinguishes release commits from non-release
       commits on push; `workflow_dispatch` works with an explicit tag.
-- [ ] `src/artifacts_os/ai/claude/skills/artifacts-release/SKILL.md`
+- [x] `src/artifacts_os/ai/claude/skills/artifacts-release/SKILL.md`
       exists with valid frontmatter (`name`, `description`).
 - [ ] PyPI-side Trusted Publisher is configured for repo
       `leonprou/artifacts-os`, workflow `release.yml`, environment
       `pypi` (one-time, manual; record completion in this task body).
 - [ ] TestPyPI Trusted Publisher configured analogously for pre-release
       versions.
-- [ ] Repo `.claude/skills/artifacts-release/SKILL.md` is a working
+- [x] Repo `.claude/skills/artifacts-release/SKILL.md` is a working
       symlink into the package source.
 - [ ] End-to-end dry run: bump pyproject to a pre-release version
       (e.g. `0.1.0a1`), commit `chore: release v0.1.0a1`, push or use
       `workflow_dispatch`; confirm jobs 1-4 succeed; pre-release lands
       on TestPyPI.
 - [ ] Test suite still green; no module DAG violations.
+
+## Verification Report
+
+*Verified: 2026-05-05*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | `.github/workflows/release.yml` exists and is YAML-valid | PASS | File present (6249 bytes); `yaml.safe_load` parses cleanly; jobs `check`, `test`, `build`, `github-release`, `pypi-publish`. |
+| 2 | Workflow distinguishes release commits; `workflow_dispatch` accepts a tag | PASS | `check` job (lines 14–52) inspects `github.event_name`, matches `^chore: release v[0-9]` against last commit subject, reads `version` from `pyproject.toml`; downstream jobs gate on `needs.check.outputs.is_release == 'true'`; `workflow_dispatch.inputs.tag` defined (lines 7–11). |
+| 3 | SKILL.md exists with valid frontmatter (`name`, `description`) | PASS | `src/artifacts_os/ai/claude/skills/artifacts-release/SKILL.md` (6591 bytes); frontmatter has `name: artifacts-release` and a `description` field. |
+| 4 | PyPI Trusted Publisher configured for `leonprou/artifacts-os` env `pypi` | FAIL | Task body section "PyPI Trusted Publisher Setup" still reads `Record completion here: _(pending)_`; manual operator step not done. |
+| 5 | TestPyPI Trusted Publisher configured analogously | FAIL | Same `_(pending)_` marker; not done. |
+| 6 | Repo `.claude/skills/artifacts-release/SKILL.md` is a working symlink | PASS | `.claude/skills` → `.openstation/skills`; `.openstation/skills/artifacts-release/SKILL.md` → `../../../src/artifacts_os/ai/claude/skills/artifacts-release/SKILL.md`; `test -f` resolves and target exists. |
+| 7 | End-to-end dry run on TestPyPI (`0.1.0a1`) | FAIL | No pre-release tag exists in repo, no record of a workflow run, branch is one commit ahead of `origin/main` (the t0100 commit itself, unpushed). Findings does not claim this was executed. |
+| 8 | Test suite green; no module DAG violations | FAIL | `pytest -ra` reports 9 failures in `tests/ai/` (`test_install_skills.py`, `test_install_dry_run_skills.py`, `test_install_skills_copy.py`, `test_list_installed_skills.py`, `test_uninstall_skills.py`). Findings claims these are pre-existing — **this is wrong**: every failure is `assert 2 == 1`, caused by the new `artifacts-release` skill making the install/list/uninstall machinery enumerate two skills instead of one. The hardcoded `== 1` assertions were passing before t0100 (only `artifacts-os` existed) and broke when this task added the second skill. The test fixtures need to be updated to handle multiple skills. |
+
+### Summary
+
+4 passed, 4 failed. Verification fails — the workflow + skill + dogfood
+symlink land cleanly, but the test suite regressed, the end-to-end dry
+run was not performed, and the manual Trusted Publisher setup is still
+outstanding.
+
+### What Needs Fixing
+
+- **Fix the regressed `tests/ai/` suite (item 8).** Adding the
+  `artifacts-release` skill made install/list/uninstall enumerate
+  two skills, but the assertions hardcode `== 1`. Either generalize
+  the assertions (filter by skill name, or count skills dynamically)
+  or fixture-isolate the test vault so it only sees one skill. The
+  Findings section claim that these failures are "pre-existing" is
+  incorrect and should be corrected once tests are fixed.
+- **Run the end-to-end dry run (item 7).** Bump `pyproject.toml` to
+  a pre-release version (e.g. `0.1.0a1`), commit
+  `chore: release v0.1.0a1`, push or invoke `workflow_dispatch`,
+  and confirm jobs 1–4 succeed and the pre-release lands on
+  TestPyPI. This is a prerequisite for items 4–5.
+- **Items 4–5 (PyPI / TestPyPI Trusted Publisher setup)** are
+  manual operator steps with the operator marked as `owner: user`.
+  These are blocked on item 7 and depend on the operator
+  performing the steps documented in the "PyPI Trusted Publisher
+  Setup" section, then replacing `_(pending)_` with the date
+  completed. Acceptable to defer to a follow-up if the operator
+  prefers to gate them behind the dry run.
 
 ## PyPI Trusted Publisher Setup (one-time, manual)
 

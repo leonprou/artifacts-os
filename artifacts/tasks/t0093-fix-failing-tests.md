@@ -1,13 +1,13 @@
 ---
-kind: task
-id: t0093
-name: fix-failing-tests
-type: implementation
-status: review
 assignee: developer
-owner: user
 created: 2026-05-05
+id: t0093
+kind: task
+name: fix-failing-tests
+owner: user
 started: 2026-05-05
+status: verified
+type: implementation
 ---
 
 # Fix Failing Tests
@@ -45,10 +45,28 @@ Restored skeleton sections to task/note/spec/research ARTIFACT.md files and re-a
 
 ## Verification
 
-- [ ] `pytest -q` exits 0 with 532 passed, 1 skipped, 0 failed (current: 13 failed).
-- [ ] `tests/ai/test_body_loader.py` — all 10 previously-failing cases pass without skipping.
-- [ ] `tests/cli/test_settings.py::test_show_editor_default_opens_editor` and `test_show_explicit_editor_flag_opens_editor` pass.
-- [ ] `tests/test_module_system.py::test_pyproject_extras_match_spec` passes.
-- [ ] No regressions introduced — the 519 currently-passing tests continue to pass.
-- [ ] CI workflow (`.github/workflows/ci.yml`) runs green on Python 3.11, 3.12, and 3.13.
-- [ ] Any intentional behaviour change (e.g. show no longer opens editor by default) is documented in the relevant module README or CHANGELOG.
+- [x] `pytest -q` exits 0 with 532 passed, 1 skipped, 0 failed (current: 13 failed).
+- [x] `tests/ai/test_body_loader.py` — all 10 previously-failing cases pass without skipping.
+- [x] `tests/cli/test_settings.py::test_show_editor_default_opens_editor` and `test_show_explicit_editor_flag_opens_editor` pass.
+- [x] `tests/test_module_system.py::test_pyproject_extras_match_spec` passes.
+- [x] No regressions introduced — the 519 currently-passing tests continue to pass.
+- [x] CI workflow (`.github/workflows/ci.yml`) runs green on Python 3.11, 3.12, and 3.13.
+- [x] Any intentional behaviour change (e.g. show no longer opens editor by default) is documented in the relevant module README or CHANGELOG.
+
+## Verification Report
+
+*Verified: 2026-05-05*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | `pytest -q` exits 0 with 532 passed, 1 skipped, 0 failed | PASS | `pytest -q` → `551 passed, 1 skipped in 2.43s` (count exceeds 532 because subsequent commits added tests; 0 failed) |
+| 2 | `tests/ai/test_body_loader.py` — all 10 previously-failing cases pass | PASS | `pytest tests/ai/test_body_loader.py -v` → 28 passed, including all 4 `test_e2e_kind_skeleton_substitutes_title`, 4 `test_e2e_kind_unresolved_placeholders_preserved`, plus `test_kind_catalog_entry_artifact_md_path_set_for_kinds_with_template` and `test_kind_catalog_entry_artifact_md_path_none_when_no_template` |
+| 3 | Editor tests in `tests/cli/test_settings.py` pass | PASS | `pytest tests/cli/test_settings.py::test_show_editor_default_opens_editor tests/cli/test_settings.py::test_show_explicit_editor_flag_opens_editor -v` → 2 passed |
+| 4 | `tests/test_module_system.py::test_pyproject_extras_match_spec` passes | PASS | `pytest tests/test_module_system.py::test_pyproject_extras_match_spec -v` → 1 passed |
+| 5 | No regressions introduced | PASS | Full suite green: 551 passed, 1 skipped, 0 failed (>= 519 baseline + 13 fixed) |
+| 6 | CI workflow runs green on Python 3.11, 3.12, 3.13 | PASS | Workflow run [25379961502](https://github.com/leonprou/artifacts-os/actions/runs/25379961502) on `main` after push of e0dc350 → all three matrix jobs green (3.11 in 24s, 3.12 in 23s, 3.13 in 25s) |
+| 7 | Intentional behaviour changes documented | PASS (vacuous) | No intentional behaviour change in this fix — commit ffb09b9 *restored* prior editor-opening behaviour (subprocess.run reinstated; TTY guard removed) rather than introducing a new one. Nothing to document |
+
+### Summary
+
+7 passed, 0 failed. All verification criteria met. Final CI confirmation came from run [25379961502](https://github.com/leonprou/artifacts-os/actions/runs/25379961502) after `e0dc350` was pushed to `main`: all three Python matrix jobs (3.11, 3.12, 3.13) green.
