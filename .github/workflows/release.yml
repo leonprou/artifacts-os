@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0 or v0.1.0a1)"
+        required: true
+
+jobs:
+  # ── Gate ──────────────────────────────────────────────────────────────────
+  check:
+    name: Check release trigger
+    runs-on: ubuntu-latest
+    outputs:
+      is_release: ${{ steps.check.outputs.is_release }}
+      version: ${{ steps.check.outputs.version }}
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+            IS_RELEASE=true
+          else
+            MSG=$(git log -1 --format="%s")
+            if echo "$MSG" | grep -qE '^chore: release v[0-9]'; then
+              RAW=$(grep '^version' pyproject.toml | sed 's/.*= *"\(.*\)"/\1/')
+              VERSION="v${RAW}"
+              IS_RELEASE=true
+            else
+              IS_RELEASE=false
+              VERSION=""
+            fi
+          fi
+
+          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"       >> "$GITHUB_OUTPUT"
+
+          # Pre-release: any PEP 440 pre/dev suffix (0.1.0a1, 0.1.0b2, 0.1.0rc1, 0.1.0.dev0)
+          if [ "${IS_RELEASE}" = "true" ] && \
+             echo "${VERSION}" | grep -qE '(a[0-9]|b[0-9]|rc[0-9]|\.dev[0-9])'; then
+            echo "is_prerelease=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Job 1: Test ───────────────────────────────────────────────────────────
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    needs: check
+    if: needs.check.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: pytest -ra
+
+  # ── Job 2: Build ──────────────────────────────────────────────────────────
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distribution metadata
+        run: twine check dist/*
+
+      - name: Smoke test — install and import
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --quiet dist/*.whl
+          /tmp/smoke-venv/bin/python -c "import artifacts_os; print('import OK')"
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── Job 3: GitHub Release ─────────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Tag version
+        run: |
+          TAG="${{ needs.check.outputs.version }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${TAG}" || echo "Tag ${TAG} already exists"
+          git push origin "${TAG}" || echo "Tag ${TAG} already pushed"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check.outputs.version }}
+          generate_release_notes: true
+          files: dist/*
+
+  # ── Job 4: PyPI Publish ───────────────────────────────────────────────────
+  pypi-publish:
+    name: Publish to ${{ needs.check.outputs.is_prerelease == 'true' && 'TestPyPI' || 'PyPI' }}
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.check.outputs.is_prerelease == 'true' && 'testpypi' || 'pypi' }}
+      url: >-
+        ${{
+          needs.check.outputs.is_prerelease == 'true'
+          && format('https://test.pypi.org/p/{0}', 'artifacts-os')
+          || format('https://pypi.org/p/{0}', 'artifacts-os')
+        }}
+    permissions:
+      id-token: write   # OIDC Trusted Publishers — no API token needed
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI (production)
+        if: needs.check.outputs.is_prerelease == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Publish to TestPyPI (pre-release)
+        if: needs.check.outputs.is_prerelease == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
