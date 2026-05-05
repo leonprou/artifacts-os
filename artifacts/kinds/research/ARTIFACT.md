@@ -77,3 +77,17 @@ Set `status: draft` on creation; move to `done` only once findings
 are complete, cited, and recommendations are firm. There is no
 intermediate review step — the downstream spec that consumes the
 findings is the surface that earns review.
+
+## Skeleton
+
+```markdown
+# {{TITLE}}
+
+Agent: {{AGENT_NAME}}
+
+## TL;DR
+
+## Recommendations
+
+## Sources
+```

@@ -104,3 +104,23 @@ superseded. Implementation tasks must wait for `approved`. If
 implementation reveals a flaw, amend the spec under a new
 `## Scope History` entry — never let code drift from the approved
 contract.
+
+## Skeleton
+
+```markdown
+# {{TITLE}}
+
+{{ONE_PARAGRAPH_SUMMARY}}
+
+## Background and Cross-References
+
+## Goals
+
+## Non-Goals
+
+## Locked Decisions Summary
+
+## Test Plan
+
+## Cross-References
+```

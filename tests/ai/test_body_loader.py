@@ -24,6 +24,16 @@ from artifacts_os.ai.body_loader import (
 # ---------------------------------------------------------------------------
 
 
+# Absolute path to the project root (two levels up from tests/ai/)
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+_KINDS_DIR = _PROJECT_ROOT / "artifacts" / "kinds"
+
+
+def _shipped_artifact_md(kind: str) -> Path:
+    """Return the path to a shipped ARTIFACT.md file."""
+    return _KINDS_DIR / kind / "ARTIFACT.md"
+
+
 def _make_kinds_dir(tmp_path: Path) -> Path:
     """Create a synthetic kinds directory under tmp_path."""
     kinds_dir = tmp_path / "artifacts" / "kinds"
@@ -80,6 +90,57 @@ def _make_variant_artifact_md(
     parts.append(f"## Variants/alpha\n\n```markdown\n{alpha_content}```\n\n")
     parts.append(f"## Variants/beta\n\n```markdown\n{beta_content}```\n\n")
     return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# § 11.1  End-to-end skeleton substitution (per shipped kind)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("kind", ["task", "spec", "research", "note"])
+def test_e2e_kind_skeleton_substitutes_title(kind: str) -> None:
+    """Skeleton {{TITLE}} is replaced; result is plain markdown (no code fence)."""
+    path = _shipped_artifact_md(kind)
+    assert path.is_file(), f"Shipped ARTIFACT.md not found: {path}"
+
+    result = body_for_kind(kind, path, title="My Test Title")
+
+    assert result.info is None, f"Unexpected info: {result.info}"
+    assert "My Test Title" in result.body, "{{TITLE}} not substituted"
+    assert "{{TITLE}}" not in result.body, "{{TITLE}} left un-substituted"
+    # Body must not contain code-fence delimiters wrapping the whole content
+    assert not result.body.strip().startswith("```"), "Code fence not stripped"
+
+
+@pytest.mark.parametrize("kind,placeholder", [
+    ("note", "{{ONE_PARAGRAPH_SUMMARY}}"),
+    ("task", "{{TESTABLE_CRITERION}}"),
+    ("spec", "{{ONE_PARAGRAPH_SUMMARY}}"),
+    ("research", "{{AGENT_NAME}}"),
+])
+def test_e2e_kind_unresolved_placeholders_preserved(kind: str, placeholder: str) -> None:
+    """Non-{{TITLE}} placeholders are left literal in the emitted body."""
+    path = _shipped_artifact_md(kind)
+    result = body_for_kind(kind, path, title="Test Title")
+
+    assert placeholder in result.body, (
+        f"Expected placeholder {placeholder!r} to be preserved in {kind} skeleton"
+    )
+
+
+@pytest.mark.parametrize("kind", ["task", "spec", "research", "note"])
+def test_e2e_kind_frontmatter_unchanged_by_substitution(kind: str) -> None:
+    """The CLI-written frontmatter path is separate; body substitution does not touch it.
+
+    This test verifies that body_for_kind returns only a body string (not
+    frontmatter) so the caller (CLI) owns frontmatter writing independently.
+    """
+    path = _shipped_artifact_md(kind)
+    result = body_for_kind(kind, path, title="Another Title")
+
+    # The result must NOT contain YAML frontmatter delimiters
+    assert not result.body.strip().startswith("---"), (
+        "body_for_kind must not return YAML frontmatter"
+    )
 
 
 # ---------------------------------------------------------------------------
