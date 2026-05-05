@@ -39,6 +39,63 @@ pytest                            # run all tests
 pytest tests/core/test_store.py  # run a single test file
 ```
 
+## Release
+
+The `release-changelog` skill reads this section to draft a new
+release entry. Edit the tables and checklist when modules or
+release flow change.
+
+### Domain Categories
+
+Listed most-impactful first. The skill emits an H3 subsection per
+category that has entries in the release range. Empty categories
+are omitted.
+
+- **Architecture** — cross-cutting structural changes
+- **Core** — `src/artifacts_os/core/`
+- **Views** — `src/artifacts_os/views/`
+- **CLI** — `src/artifacts_os/cli/`
+- **TUI** — `src/artifacts_os/tui/`
+- **AI** — `src/artifacts_os/ai/`
+- **Log** — `src/artifacts_os/log/`
+- **Install** — packaging and installer changes
+- **Fix** — any commit with a `fix:` conventional prefix
+
+### File Path Mapping
+
+Longest-prefix match wins. A commit's category is determined by
+its most-changed file's prefix; the `fix:` commit prefix overrides
+the path mapping and routes to `Fix`.
+
+| Path prefix | Category |
+|-------------|----------|
+| `src/artifacts_os/core/` | Core |
+| `src/artifacts_os/views/` | Views |
+| `src/artifacts_os/cli/` | CLI |
+| `src/artifacts_os/tui/` | TUI |
+| `src/artifacts_os/ai/` | AI |
+| `src/artifacts_os/log/` | Log |
+| `pyproject.toml` | Install |
+| `setup.py` | Install |
+| `install.sh` | Install |
+
+### Checklist
+
+The skill renders Step 8 from this list. `<VERSION>` is
+substituted at draft time.
+
+1. Update `version` in `pyproject.toml` to `<VERSION>`.
+2. Write the CHANGELOG entry (the skill does this in Step 7).
+3. Commit with subject `chore: release v<VERSION>`.
+4. Push to `main` — CI handles the tag, GitHub Release, and
+   PyPI publish.
+
+### Exclusions
+
+- subject: `^Merge `
+- path: `.editorconfig`
+- path: `.github/dependabot.yml`
+
 ## Settings
 
 Settings are parsed from `artifacts/artifacts.yaml` using a base-class +

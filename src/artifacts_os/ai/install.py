@@ -70,6 +70,9 @@ class InstalledAsset:
 
 _COMMAND_PREFIX = "artifacts."
 _SKILL_NS_PREFIX = "artifacts-"
+# Exact skill directory names that do not carry the artifacts- prefix
+# but are still owned and managed by this package.
+_SKILL_NS_EXACT: frozenset[str] = frozenset({"release-changelog"})
 
 
 def _is_namespaced(filename: str) -> bool:
@@ -79,7 +82,7 @@ def _is_namespaced(filename: str) -> bool:
 
 def _is_skill_namespace(dirname: str) -> bool:
     """True if a skills sub-directory belongs to our namespace."""
-    return dirname.startswith(_SKILL_NS_PREFIX)
+    return dirname.startswith(_SKILL_NS_PREFIX) or dirname in _SKILL_NS_EXACT
 
 
 def _sha256(path: Path) -> str:
@@ -324,6 +327,29 @@ def install(
             report.actions.append(action)
             if not dry_run:
                 _execute_action(action)
+
+        # Orphan pruning — remove broken owned-skill symlinks whose package source
+        # was deleted (e.g. artifacts-release → release-changelog migration).
+        skills_root = tool_dir / "skills"
+        if skills_root.exists():
+            for ns_dir in sorted(skills_root.iterdir()):
+                if not _is_skill_namespace(ns_dir.name):
+                    continue
+                skill_file = ns_dir / "SKILL.md"
+                if skill_file.is_symlink() and not skill_file.exists():
+                    orphan_action = AssetAction(
+                        source=skill_file,
+                        target=skill_file,
+                        action="remove",
+                        reason="orphaned skill symlink (source removed from package)",
+                    )
+                    report.actions.append(orphan_action)
+                    if not dry_run:
+                        _execute_action(orphan_action)
+                        try:
+                            ns_dir.rmdir()
+                        except OSError:
+                            pass  # non-empty dir — leave it
 
     return report
 

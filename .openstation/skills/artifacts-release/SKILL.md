@@ -1,1 +1,0 @@
-../../../src/artifacts_os/ai/claude/skills/artifacts-release/SKILL.md

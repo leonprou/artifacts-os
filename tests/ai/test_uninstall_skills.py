@@ -56,7 +56,7 @@ def test_uninstall_skill_dry_run(vault: Path) -> None:
         a for a in report.actions
         if a.action == "remove" and a.target.name == "SKILL.md"
     ]
-    assert len(skill_removes) == 1
+    assert len(skill_removes) == 2
     # File still present
     assert skill_path.exists(), "dry_run should not remove the file"
 
