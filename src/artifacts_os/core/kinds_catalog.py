@@ -21,15 +21,18 @@ from artifacts_os.core.registry import Registry
 class KindCatalogEntry:
     """L1 representation of one registered artifact kind.
 
-    ``name``         — kind name (e.g. "task").
-    ``description``  — one-line description from ARTIFACT.md frontmatter;
-                       None when ARTIFACT.md is absent or description is empty.
-    ``has_template`` — True iff artifacts/kinds/<name>/ARTIFACT.md exists.
+    ``name``              — kind name (e.g. "task").
+    ``description``       — one-line description from ARTIFACT.md frontmatter;
+                            None when ARTIFACT.md is absent or description is empty.
+    ``has_template``      — True iff artifacts/kinds/<name>/ARTIFACT.md exists.
+    ``artifact_md_path``  — resolved path to ARTIFACT.md when has_template=True,
+                            else None.
     """
 
     name: str
     description: str | None
     has_template: bool
+    artifact_md_path: Path | None = None
 
 
 class KindCatalog:
@@ -59,6 +62,10 @@ class KindCatalog:
                 name=kd.name,
                 description=kd.description,
                 has_template=kd.has_template,
+                artifact_md_path=(
+                    self._root / "artifacts" / "kinds" / kd.name / "ARTIFACT.md"
+                    if kd.has_template else None
+                ),
             )
             for kd in sorted(self._registry.all(), key=lambda k: k.name)
         ]

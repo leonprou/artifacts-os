@@ -105,3 +105,17 @@ Set `status: backlog` at creation; promote to `ready` only after
 Requirements are concrete and an `assignee` is chosen. The
 harness owns later transitions (`in-progress`, `review`,
 `verified`, `done`) — do not pre-set them.
+
+## Skeleton
+
+```markdown
+# {{TITLE}}
+
+## Requirements
+
+- {{TESTABLE_CRITERION}}
+
+## Verification
+
+- [ ] Reviewed and approved by {{OWNER}}
+```

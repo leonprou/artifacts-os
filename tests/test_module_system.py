@@ -53,5 +53,6 @@ def test_pyproject_extras_match_spec() -> None:
         assert key in extras, f"missing extras key: {key}"
     assert extras["log"] == []
     assert extras["ai"] == []
-    assert any("rich" in dep for dep in extras["views"])
+    assert extras["views"] == []  # rich is a base dependency, not a views extra
+    assert any("rich" in dep for dep in data["project"]["dependencies"])
     assert any("textual" in dep for dep in extras["tui"])
