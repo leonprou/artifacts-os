@@ -102,3 +102,7 @@ Coding conventions:
 | [core](src/artifacts_os/core/README.md) | Storage, discovery, registry, settings, validation — foundational layer |
 | [views](src/artifacts_os/views/README.md) | Formatting layer — column specs, field formatting, Rich table rendering, `ViewsSettings` |
 | [cli](src/artifacts_os/cli/README.md) | `artifacts` CLI — all commands with flags and examples |
+
+## License
+
+[MIT](LICENSE) © 2026 Leon Prouger
