@@ -57,9 +57,8 @@ the file; it is also what gets quoted when the kind is referenced
 elsewhere. Keep it general enough to apply to **every** instance of
 the kind, not just a specific sub-type.
 
-The note (`artifacts/kinds/note/ARTIFACT.md`), research
-(`artifacts/kinds/research/ARTIFACT.md`), and spec
-(`artifacts/kinds/spec/ARTIFACT.md`) kinds are the v1 exemplars.
+The `note`, `spec`, `research`, and `task` kinds are the v1 exemplars;
+their `ARTIFACT.md` files live under `artifacts/kinds/<name>/`.
 For the full body-shape contract see
 [`## ARTIFACT.md body authoring guidelines`](#artifactmd-body-authoring-guidelines)
 below.
@@ -141,8 +140,8 @@ template content, both deferred — see s0017 § 11).
 
 ## `ARTIFACT.md` body authoring guidelines
 
-The `note`, `research`, and `spec` kinds are the v1 exemplars. The
-patterns below crystallise from iterating on all three. Apply them
+The `note`, `research`, `spec`, and `task` kinds are the v1 exemplars.
+The patterns below crystallise from iterating on all four. Apply them
 when authoring or reviewing any new `ARTIFACT.md` body.
 
 ### 1. Body shape — three sections
@@ -484,15 +483,15 @@ The five shipped schemas cover the most common patterns:
 
 | Schema | Pattern demonstrated |
 |---|---|
-| [`artifacts/kinds/task.json`](../artifacts/kinds/task.json) | Numbered, multi-status lifecycle, `x-columns`, `x-status-colors`, mixed enum + string properties |
-| [`artifacts/kinds/spec.json`](../artifacts/kinds/spec.json) | Numbered, status colors, `agent` free-form string property |
-| [`artifacts/kinds/research.json`](../artifacts/kinds/research.json) | Numbered, minimal two-status enum |
-| [`artifacts/kinds/note.json`](../artifacts/kinds/note.json) | Numbered, free-form `type` property, date column; has `artifacts/kinds/note/ARTIFACT.md` (the v1 exemplar) |
-| [`artifacts/kinds/agent.json`](../artifacts/kinds/agent.json) | **Non-numbered** (`x-numbered: false`), `x-required-fields` |
+| [`artifacts/kinds/task/`](../artifacts/kinds/task/) | Numbered, multi-status lifecycle, `x-columns`, `x-status-colors`, mixed enum + string properties; has `ARTIFACT.md` |
+| [`artifacts/kinds/spec/`](../artifacts/kinds/spec/) | Numbered, status colors, `agent` free-form string property; has `ARTIFACT.md` |
+| [`artifacts/kinds/research/`](../artifacts/kinds/research/) | Numbered, minimal two-status enum; has `ARTIFACT.md` |
+| [`artifacts/kinds/note/`](../artifacts/kinds/note/) | Numbered, free-form `type` property, date column; has `ARTIFACT.md` |
+| [`artifacts/kinds/agent.json`](../artifacts/kinds/agent.json) | **Non-numbered** (`x-numbered: false`), `x-required-fields`; no `ARTIFACT.md` |
 
-`note` is the only shipped kind with an `ARTIFACT.md` today. The
-others will gain templates as their body conventions stabilise
-(tracked under the parent epic t0079).
+All four shipped kinds (`task`, `spec`, `research`, `note`) have an
+`ARTIFACT.md` in folder form. `agent` does not — it is a thin
+registry kind with no body scaffolding needed.
 
 ---
 
@@ -509,10 +508,11 @@ transitions (who may move an artifact from one status to another) are
 the concern of the host application (e.g., OpenStation), not
 `artifacts-os`. Do not encode transition rules inside a kind schema.
 
-**Per-kind `ARTIFACT.md`.** Only `note` ships a body template today.
-Add an `ARTIFACT.md` to a kind's folder when agents need body
-scaffolding for that kind. Follow the evaluation-first model above
-before writing extensive template content.
+**Per-kind `ARTIFACT.md`.** Add an `ARTIFACT.md` to a kind's folder
+when agents need authoring guidance for that kind. Follow the
+evaluation-first model above before writing extensive content, and
+follow the guide-style convention (§ 4 above) — anchor required
+sections in prose rather than inlining `{{TOKEN}}`-style skeletons.
 
 ---
 

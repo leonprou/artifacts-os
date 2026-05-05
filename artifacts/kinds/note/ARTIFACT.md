@@ -62,15 +62,3 @@ Two sections are required regardless of `type`:
 Everything between Origin and References is up to you. Use whatever
 structure the content demands; do not invent structure for its own
 sake, and do not omit structure when it helps a future reader.
-
-## Skeleton
-
-```markdown
-# {{TITLE}}
-
-{{ONE_PARAGRAPH_SUMMARY}}
-
-## Origin
-
-## References
-```
