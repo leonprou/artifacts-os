@@ -241,8 +241,8 @@ files:
 
 1. **Project directory resolution** — The project's absolute path
    is converted to Claude Code's directory naming convention
-   (e.g., `/Users/leo/workspace/open-station` becomes
-   `-Users-leo-workspace-open-station`). Both the main project
+   (e.g., `/path/to/open-station` becomes
+   `-path-to-open-station`). Both the main project
    and worktree variants are matched under
    `~/.claude/projects/`.
 

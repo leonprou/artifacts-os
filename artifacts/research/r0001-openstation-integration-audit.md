@@ -346,16 +346,21 @@ Two openstation-side migration tasks:
 
 ## Sources
 
-- `/Users/leonid/workspace/os/artifacts-os/README.md`
-- `/Users/leonid/workspace/os/artifacts-os/docs/architecture.md`
-- `/Users/leonid/workspace/os/artifacts-os/docs/settings.md`
-- `/Users/leonid/workspace/os/artifacts-os/src/artifacts_os/core/README.md`
-- `/Users/leonid/workspace/os/artifacts-os/src/artifacts_os/views/README.md`
-- `/Users/leonid/workspace/os/artifacts-os/src/artifacts_os/cli/README.md`
-- `/Users/leonid/workspace/os/artifacts-os/artifacts/kinds/{task,agent,research,spec}.json`
-- `/Users/leonid/workspace/open-station/README.md`
-- `/Users/leonid/workspace/open-station/.openstation/docs/{lifecycle,task.spec,storage-query-layer,artifacts,cli,settings,hooks,events,sessions,worktrees}.md`
-- `/Users/leonid/workspace/open-station/.openstation/skills/openstation-execute/SKILL.md`
-- `/Users/leonid/workspace/open-station/src/openstation/registry.py`
-- `/Users/leonid/workspace/open-station/src/openstation/core.py`
+In this repo (`artifacts-os`):
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/settings.md`
+- `src/artifacts_os/core/README.md`
+- `src/artifacts_os/views/README.md`
+- `src/artifacts_os/cli/README.md`
+- `artifacts/kinds/{task,agent,research,spec}.json`
+
+In the sibling `open-station` repo:
+
+- `README.md`
+- `.openstation/docs/{lifecycle,task.spec,storage-query-layer,artifacts,cli,settings,hooks,events,sessions,worktrees}.md`
+- `.openstation/skills/openstation-execute/SKILL.md`
+- `src/openstation/registry.py`
+- `src/openstation/core.py`
 - LOC counts via `wc -l` over `src/openstation/*.py`
