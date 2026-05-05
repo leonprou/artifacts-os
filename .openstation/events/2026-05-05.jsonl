@@ -1,1 +1,6 @@
 {"ts":"2026-05-05T10:58:30.354028+03:00","event":"task_created","task":"t0093-fix-failing-tests","status":"ready","assignee":"developer","parent":""}
+{"ts":"2026-05-05T14:45:52.621682+03:00","event":"run_started","task":"t0093-fix-failing-tests","agent":"developer","run_id":"r0112","mode":"execute","context_only":false,"detached":true}
+{"ts":"2026-05-05T14:46:12.902771+03:00","event":"status_transition","task":"t0093-fix-failing-tests","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-05T14:50:14.169283+03:00","event":"status_transition","task":"t0093-fix-failing-tests","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-05T14:50:24.222632+03:00","event":"run_complete","task":"t0093-fix-failing-tests","agent":"","run_id":"r0112","run_status":"complete","cost":"0.95","turns":43}
+{"ts":"2026-05-05T16:33:47.062634+03:00","event":"run_started","task":"t0093-fix-failing-tests","agent":"project-manager","run_id":"r0113","mode":"verify","context_only":false,"detached":true}

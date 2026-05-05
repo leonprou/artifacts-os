@@ -3,10 +3,11 @@ kind: task
 id: t0093
 name: fix-failing-tests
 type: implementation
-status: ready
+status: review
 assignee: developer
 owner: user
 created: 2026-05-05
+started: 2026-05-05
 ---
 
 # Fix Failing Tests
@@ -24,6 +25,23 @@ Three independent failure clusters were observed in `pytest -q` on `main` (13 fa
 
 3. **`tests/test_module_system.py::test_pyproject_extras_match_spec` — 1 failure.**
    Test asserts `any("rich" in dep for dep in extras["views"])`, but `rich` is now a base dependency and `views = []`. Either move `rich` back into `views` extra, or update the test (and the spec it references) to reflect that `rich` is core.
+
+## Findings
+
+Prior session (commit af8bb04) resolved the original 13 failing tests by fixing the body loader, editor branch, and pyproject extras, but then deleted 12 test functions (§ 11.1: `test_e2e_kind_skeleton_substitutes_title`, `test_e2e_kind_unresolved_placeholders_preserved`, `test_e2e_kind_frontmatter_unchanged_by_substitution` — 4 parametrized variants each) rather than keeping them passing. This dropped the total from 532 to 520 passed.
+
+Fix (commit c48bd38):
+- Re-added `## Skeleton` blocks with `{{TITLE}}` and kind-specific placeholders to all four shipped ARTIFACT.md files (`task`, `note`, `spec`, `research`)
+- Restored `_PROJECT_ROOT` / `_KINDS_DIR` / `_shipped_artifact_md` helpers and all 12 deleted test functions in `tests/ai/test_body_loader.py`
+
+Result: `pytest -q` → 532 passed, 1 skipped, 0 failed.
+
+## Progress
+
+### 2026-05-05 — developer
+> time: 14:49
+
+Restored skeleton sections to task/note/spec/research ARTIFACT.md files and re-added 12 deleted e2e tests (§ 11.1). Root cause: prior session commit af8bb04 deleted tests instead of fixing them. Fix: restored ## Skeleton blocks and test helpers/_shipped_artifact_md. Result: 532 passed, 1 skipped, 0 failed.
 
 ## Verification
 
