@@ -317,7 +317,7 @@ class TestRenderTreePrefix:
 
     def test_root_has_no_prefix(self):
         items = [make_task("t0001", id="t0001")]
-        table = render_tree(items, self._cols(), kind_def=self._kind())
+        table = render_tree(items, self._cols(), kind_def=self._kind(), parent_field="parent")
         assert isinstance(table, Table)
         cells = _first_col_cells(table)
         assert cells[0] == "t0001"
@@ -325,7 +325,7 @@ class TestRenderTreePrefix:
     def test_child_has_glyph_prefix(self):
         parent = make_task("t0036", id="t0036")
         child = make_task("t0042", id="t0042", parent="t0036")
-        table = render_tree([parent, child], self._cols(), kind_def=self._kind())
+        table = render_tree([parent, child], self._cols(), kind_def=self._kind(), parent_field="parent")
         cells = _first_col_cells(table)
         child_cell = cells[1]
         assert "└─" in child_cell or "├─" in child_cell
@@ -334,7 +334,7 @@ class TestRenderTreePrefix:
     def test_last_child_uses_corner_glyph(self):
         parent = make_task("t0036", id="t0036")
         child = make_task("t0042", id="t0042", parent="t0036")
-        table = render_tree([parent, child], self._cols(), kind_def=self._kind())
+        table = render_tree([parent, child], self._cols(), kind_def=self._kind(), parent_field="parent")
         cells = _first_col_cells(table)
         assert "└─" in cells[1]
 
@@ -342,7 +342,7 @@ class TestRenderTreePrefix:
         parent = make_task("t0041", id="t0041")
         c1 = make_task("t0043", id="t0043", parent="t0041")
         c2 = make_task("t0044", id="t0044", parent="t0041")
-        table = render_tree([parent, c1, c2], self._cols(), kind_def=self._kind())
+        table = render_tree([parent, c1, c2], self._cols(), kind_def=self._kind(), parent_field="parent")
         cells = _first_col_cells(table)
         assert "├─" in cells[1]  # t0043 is not last
         assert "└─" in cells[2]  # t0044 is last
@@ -350,7 +350,7 @@ class TestRenderTreePrefix:
     def test_prefix_attaches_to_first_column_only(self):
         parent = make_task("t0036", id="t0036")
         child = make_task("t0042", id="t0042", parent="t0036")
-        table = render_tree([parent, child], self._cols(), kind_def=self._kind())
+        table = render_tree([parent, child], self._cols(), kind_def=self._kind(), parent_field="parent")
         # second column should not have tree glyphs
         name_cells = [str(c) for c in table.columns[1]._cells]
         for cell in name_cells:
@@ -367,7 +367,7 @@ class TestRenderTreePrefix:
             make_task("t0045", id="t0045", parent="t0041"),
             make_task("t0046", id="t0046", parent="t0041"),
         ]
-        table = render_tree(items, self._cols(), kind_def=self._kind())
+        table = render_tree(items, self._cols(), kind_def=self._kind(), parent_field="parent")
         assert isinstance(table, Table)
         assert table.row_count == 7
         cells = _first_col_cells(table)
@@ -399,6 +399,7 @@ class TestRenderTreeOrphanAnnotations:
             [child],
             self._cols(),
             kind_def=self._kind(),
+            parent_field="parent",
             is_known_stem=lambda s: s == "t0036",  # t0036 is in vault
         )
         cells = _first_col_cells(table)
@@ -411,6 +412,7 @@ class TestRenderTreeOrphanAnnotations:
             [child],
             self._cols(),
             kind_def=self._kind(),
+            parent_field="parent",
             is_known_stem=lambda s: False,  # t9999 not in vault
         )
         cells = _first_col_cells(table)
@@ -419,7 +421,7 @@ class TestRenderTreeOrphanAnnotations:
     def test_degraded_without_is_known_stem(self):
         """Without is_known_stem, both B and C render as ?[parent: ref]."""
         child = make_task("t0042", id="t0042", parent="t0036")
-        table = render_tree([child], self._cols(), kind_def=self._kind())
+        table = render_tree([child], self._cols(), kind_def=self._kind(), parent_field="parent")
         cells = _first_col_cells(table)
         assert "?[parent: t0036]" in cells[0]
 
@@ -437,6 +439,7 @@ class TestRenderTreeOrphanAnnotations:
             items,
             self._cols(),
             kind_def=self._kind(),
+            parent_field="parent",
             is_known_stem=lambda s: s == "t0036",
         )
         cells = _first_col_cells(table)
@@ -469,7 +472,7 @@ class TestRenderTreeCycleAnnotation:
         )
         t61 = make_task("t0061", id="t0061", parent="t0060")
         cols = parse_field_specs("id,name")
-        table = render_tree([t60, t61], cols, kind_def=self._kind())
+        table = render_tree([t60, t61], cols, kind_def=self._kind(), parent_field="parent")
         cells = _first_col_cells(table)
         all_text = " ".join(cells)
         assert "↻ cycle" in all_text
@@ -488,7 +491,7 @@ class TestRenderTreeCycleAnnotation:
         )
         t61 = make_task("t0061", id="t0061", parent="t0060")
         cols = parse_field_specs("id,name")
-        render_tree([t60, t61], cols, kind_def=self._kind())
+        render_tree([t60, t61], cols, kind_def=self._kind(), parent_field="parent")
         captured = capsys.readouterr()
         lines = [l for l in captured.err.splitlines() if "warning" in l.lower()]
         assert len(lines) == 1
@@ -531,10 +534,9 @@ class TestRenderTreeParentFieldResolution:
         assert "└─" in cells[1] or "├─" in cells[1]
 
     def test_raises_when_no_parent_field(self):
-        from artifacts_os.core.errors import ValidationError
-
+        """render_tree(parent_field=...) is now required; omitting it is a TypeError."""
         items = [make_task("t0001", id="t0001")]
-        with pytest.raises(ValidationError):
+        with pytest.raises(TypeError):
             render_tree(items, parse_field_specs("id"))
 
 

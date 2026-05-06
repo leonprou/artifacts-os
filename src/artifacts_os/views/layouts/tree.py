@@ -12,7 +12,6 @@ from rich.table import Table
 from rich.text import Text
 
 from artifacts_os.core.discover import unwrap_wikilink
-from artifacts_os.core.errors import ValidationError
 from artifacts_os.core.models import ArtifactMeta, KindDef
 
 from artifacts_os.views._views import FieldSpec, format_field
@@ -156,33 +155,23 @@ def render_tree(
     columns: list[FieldSpec],
     *,
     kind_def: KindDef | None = None,
-    parent_field: str | None = None,
+    parent_field: str,
     sort_key: Callable[[ArtifactMeta], Any] | None = None,
     is_known_stem: Callable[[str], bool] | None = None,
 ) -> Table:
     """Render *items* as a tree-prefixed Rich Table.
 
-    *parent_field* defaults to kind_def.meta["layouts"]["tree"]["parent_field"]
-    when None. Raises ValidationError when both are None — tree layout requires
-    a parent field.
+    *parent_field* is required — the caller is responsible for resolving
+    which frontmatter key points up the hierarchy.
+
+    *kind_def* carries ``status_colors`` for cell styling; it is not used
+    to resolve *parent_field*.
 
     *is_known_stem* is used to distinguish Case B (parent filtered out,
     ↑[parent: ref]) from Case C (parent missing from vault, ?[parent: ref]).
     When None, both cases render as ?[parent: ref].
     """
-    # Resolve parent_field.
-    resolved_parent_field = parent_field
-    if resolved_parent_field is None and kind_def is not None:
-        layouts_meta = kind_def.meta.get("layouts", {})
-        tree_meta = layouts_meta.get("tree", {})
-        resolved_parent_field = tree_meta.get("parent_field")
-    if resolved_parent_field is None:
-        raise ValidationError(
-            "render_tree requires a parent_field; pass parent_field= or"
-            " set kind_def.meta['layouts']['tree']['parent_field']"
-        )
-
-    nodes = compute_tree(items, parent_field=resolved_parent_field, sort_key=sort_key)
+    nodes = compute_tree(items, parent_field=parent_field, sort_key=sort_key)
 
     table = Table()
     for col in columns:
@@ -207,7 +196,7 @@ def render_tree(
                 if note == TreeNote.CYCLE_BREAK:
                     cell_str += "  ↻ cycle"
                 elif note in (TreeNote.ORPHAN_OUT_OF_SLICE, TreeNote.ORPHAN_MISSING):
-                    raw_parent = item.frontmatter.get(resolved_parent_field, "")
+                    raw_parent = item.frontmatter.get(parent_field, "")
                     bare_ref = unwrap_wikilink(str(raw_parent)) if raw_parent else ""
                     if is_known_stem is not None and not is_known_stem(bare_ref):
                         # Case C — parent not in vault at all.
