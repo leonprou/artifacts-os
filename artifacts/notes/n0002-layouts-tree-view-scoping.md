@@ -93,6 +93,53 @@ Non-functional:
 - The settings layer (`ViewConfig` / `ViewsConfig` saved-queries) is
   not broken by the change.
 
+## Open questions for the spec
+
+> Intent, not contract. These belong to the architect to resolve in
+> the spec — listed here so they don't get lost and so the spec scope
+> is unambiguous before the task is cut.
+
+Tree traversal is the dominant unknown. A "generic tree layout" only
+earns its name if the renderer is not hardcoded to `parent`. The
+spec needs to answer, at minimum:
+
+- **Where is the hierarchy declared?** Today only `task` has a
+  `parent` wikilink. Other kinds may use a different field name, or
+  none. The kind definition is the natural place to declare "this
+  kind forms a tree, here is the field that points up" — but the
+  spec decides the exact shape and whether multiple traversal
+  sources (e.g. parent + depends_on) are allowed in v1. Per the
+  earlier scoping decision: **parent-style only for v1**, but the
+  declaration must not preclude a second source later.
+- **What does a root look like?** Artifacts with no parent? Parent
+  pointing outside the current `--kind` slice? Parent pointing to a
+  missing/unresolved artifact? Each case has a different user
+  expectation (top-level vs. orphan vs. broken link) and the spec
+  must spell out the rendering contract.
+- **What sibling order does the user see?** Insertion order, sort
+  by id, sort by the active `--sort` flag, or whatever the kind
+  declares as default? Whichever it is, the answer must be
+  deterministic and not surprise users who today rely on flat
+  list ordering.
+- **Cycles and orphans.** A vault is user-edited markdown — cycles
+  and dangling parents will happen. The spec must decide whether
+  the renderer detects and breaks them visibly (so the user can
+  fix the data) or silently flattens them. Failing loudly is
+  preferred but is the architect's call.
+- **Where does traversal live?** Pure renderer concern in `views/`
+  (renderer takes a flat list and infers structure), or a data-side
+  concern in `core/` (a tree-shaped query result that views just
+  draws)? The module DAG (`core → views → cli`) constrains this and
+  the answer ripples into `--fields`, `-q`, and `-j` semantics.
+- **Filtered slices.** When `art ls --kind task --status ready`
+  hides a parent but keeps a child, what does the user see? Promote
+  the child to a root? Render a placeholder? Skip the layout and
+  fall back to flat? Pick one and document it.
+
+The spec doesn't have to answer these in depth — but it must answer
+them clearly enough that the kind-schema task (#2) and the renderer
+task (#3) can proceed in parallel without re-litigating contract.
+
 ## Out of scope
 
 - TUI integration.
