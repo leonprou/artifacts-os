@@ -21,9 +21,11 @@ from artifacts_os.views.models import ViewConfig, ViewsSettings
 # Flag names that the static ``list`` parser already registers.
 # Schema properties whose generated flag would collide are silently skipped;
 # the field remains reachable via ``--filter k=v``.
+# §13.4: "layout" is reserved so a future kind property named "layout" does
+# not silently collide with the --layout flag.
 _RESERVED_FILTER_FLAG_NAMES: frozenset[str] = frozenset({
     "help", "kind", "filter", "view", "fields", "meta",
-    "quiet", "json", "children", "parent",
+    "quiet", "json", "children", "parent", "layout",
 })
 
 
@@ -224,6 +226,16 @@ def register(
     proj.add_argument("--meta", action="store_true",
                       help="full frontmatter per row (overrides --fields/view.columns)")
 
+    p.add_argument(
+        "--layout",
+        default=None,
+        metavar="NAME",
+        help=(
+            "presentation layout for the result; auto-detects from kind when omitted"
+            " (e.g. tasks render as a tree by default)"
+        ),
+    )
+
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("-q", "--quiet", action="store_true", help="one name per line")
     mode.add_argument("-j", "--json", action="store_true", dest="json_out",
@@ -318,6 +330,92 @@ def resolve_filters(
 
 
 # ---------------------------------------------------------------------------
+# Layout resolution (spec §8.2)
+# ---------------------------------------------------------------------------
+
+
+def resolve_layout(
+    args: Any,
+    view_cfg: "ViewConfig | None",
+    settings: "ViewsSettings | None",
+    kind_def: "KindDef | None",
+) -> str:
+    """Resolve the effective layout name per spec §8.2 precedence chain.
+
+    Chain (first match wins):
+    1. Explicit ``--layout NAME`` flag.
+    2. Active view's ``layout`` field.
+    3. ``default_layouts[kind]`` in artifacts.yaml.
+    4. ``kind_def.meta["layouts"]["default"]`` (from ``x-layouts.default``).
+    5. Implicit ``"table"`` — universal fallback.
+    """
+    if getattr(args, "layout", None):
+        return args.layout
+    if view_cfg is not None and getattr(view_cfg, "layout", None):
+        return view_cfg.layout
+    if settings is not None and settings.views is not None:
+        m = settings.views.default_layouts
+        if kind_def is not None and kind_def.name in m:
+            return m[kind_def.name]
+    if kind_def is not None:
+        return kind_def.meta.get("layouts", {}).get("default", "table")
+    return "table"
+
+
+def _build_sort_key(sort_str: str | None):
+    """Convert a sort string (e.g. ``"id"`` or ``"-created"``) to a key callable.
+
+    The returned callable accepts an ``ArtifactMeta`` and returns a value
+    suitable for ``sorted(..., key=...)``.  Missing-value behaviour matches
+    ``_apply_sort``: missing values sort last for ascending, first for
+    descending (consistent with the pre-existing ``_apply_sort``).
+
+    Returns ``None`` when *sort_str* is falsy (no sort requested).
+    """
+    if not sort_str:
+        return None
+
+    reverse = sort_str.startswith("-")
+    field = sort_str.lstrip("-")
+
+    if not reverse:
+        def _asc(m) -> tuple:
+            val = str(m.frontmatter.get(field, ""))
+            return (val == "", val)
+        return _asc
+
+    # Descending: wrap value so that comparisons are inverted, with missing
+    # values sorting first (matching ``_apply_sort(reverse=True)`` behaviour).
+    class _Rev:
+        __slots__ = ("val",)
+
+        def __init__(self, v: str) -> None:
+            self.val = v
+
+        def __lt__(self, other: "_Rev") -> bool:  # type: ignore[override]
+            return self.val > other.val
+
+        def __gt__(self, other: "_Rev") -> bool:  # type: ignore[override]
+            return self.val < other.val
+
+        def __le__(self, other: "_Rev") -> bool:  # type: ignore[override]
+            return self.val >= other.val
+
+        def __ge__(self, other: "_Rev") -> bool:  # type: ignore[override]
+            return self.val <= other.val
+
+        def __eq__(self, other: object) -> bool:
+            return isinstance(other, _Rev) and self.val == other.val
+
+    def _desc(m) -> tuple:
+        val = str(m.frontmatter.get(field, ""))
+        # missing=True sorts first in descending (matches _apply_sort reverse=True)
+        return (val == "", _Rev(val))
+
+    return _desc
+
+
+# ---------------------------------------------------------------------------
 # Command runner
 # ---------------------------------------------------------------------------
 
@@ -351,7 +449,10 @@ def run(args, registry: Registry) -> int:
         kind=effective_kind,
         filters=effective_filters or None,
     )
-    items = _apply_sort(items, getattr(args, "_sort", None))
+
+    # NOTE: flat _apply_sort is intentionally deferred — applied per output
+    # mode below.  -q/-j always sort flat.  tree layout passes sort_key into
+    # compute_tree; table layout applies _apply_sort before render_table.
 
     # Apply --children predicate as a post-discovery filter.
     if children_parent_path is not None:
@@ -414,16 +515,18 @@ def run(args, registry: Registry) -> int:
         ref_paths: set = set(resolved_paths)
         items = [m for m in items if m.path in ref_paths]
 
+    # -q and -j: layout selection skipped; sort still applies on flat data (§8.4).
     if args.quiet:
-        for item in items:
+        for item in _apply_sort(items, getattr(args, "_sort", None)):
             print(item.path.stem)
         return 0
 
     if args.json_out:
-        print(json.dumps([item.frontmatter for item in items], default=str))
+        sorted_items = _apply_sort(items, getattr(args, "_sort", None))
+        print(json.dumps([item.frontmatter for item in sorted_items], default=str))
         return 0
 
-    # Default: rich table
+    # Default: rich table/tree
     if not items:
         return 0
 
@@ -440,13 +543,36 @@ def run(args, registry: Registry) -> int:
         except ValueError:
             pass
 
+    # Resolve effective layout (§8.2).
+    layout = resolve_layout(args, view_cfg, views_settings, kind_def)
+    if layout not in views.LAYOUTS:
+        raise ValidationError(
+            f"unknown layout {layout!r}; known: {sorted(views.LAYOUTS)}"
+        )
+
     # --meta: project all frontmatter keys (union across items).
     if getattr(args, "meta", False):
         columns = _meta_columns(items)
     else:
         columns = _resolve_columns(args, view_cfg, registry, kind_def)
 
-    table = views.render_table(items, columns, kind_def=kind_def)
+    sort_str = getattr(args, "_sort", None)
+
+    if layout == "tree":
+        # Sort flows into compute_tree (§6.2); flat _apply_sort not applied.
+        sort_key_fn = _build_sort_key(sort_str)
+        table = views.render_tree(
+            items,
+            columns,
+            kind_def=kind_def,
+            sort_key=sort_key_fn,
+            is_known_stem=registry.exists_stem,
+        )
+    else:
+        # Table layout: apply flat sort then render.
+        items = _apply_sort(items, sort_str)
+        table = views.render_table(items, columns, kind_def=kind_def)
+
     Console().print(table)
     return 0
 
