@@ -5,10 +5,11 @@ id: t0104
 kind: task
 name: generic-release-skill-uses-tasks
 owner: user
-status: review
+status: done
 type: feature
 subtasks:
   - "[[t0106-implement-task-aware-release-changelog]]"
+completed: 2026-05-06
 ---
 
 ## User story
