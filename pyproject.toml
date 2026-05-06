@@ -55,6 +55,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/artifacts_os"]
+artifacts = [
+    "src/artifacts_os/templates/settings/*.yaml",
+    "src/artifacts_os/templates/kinds/*/kind.json",
+    "src/artifacts_os/templates/kinds/*/ARTIFACT.md",
+    "src/artifacts_os/templates/agents/*.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

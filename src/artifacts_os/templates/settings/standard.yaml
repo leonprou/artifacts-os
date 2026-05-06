@@ -1,0 +1,36 @@
+layout_version: 1
+
+project:
+  name: "{{project_name}}"
+  created: "{{created}}"
+
+views:
+  # lifecycle slices
+  active:   { columns: "id,name,assignee,status",         filters: { kind: task, status: in-progress }, sort: -started }
+  ready:    { columns: "id,name,assignee,created:date",   filters: { kind: task, status: ready },       sort: created }
+  review:   { columns: "id,name,assignee,owner",          filters: { kind: task, status: review },      sort: -created }
+  backlog:  { columns: "id,name,assignee,type",           filters: { kind: task, status: backlog },     sort: created }
+  done:     { columns: "id,name,assignee,completed:date", filters: { kind: task, status: done },        sort: -completed }
+  rejected: { columns: "id,name,assignee,owner",          filters: { kind: task, status: rejected },    sort: -created }
+
+  # per-type task slices
+  features:        { columns: "id,name,status,assignee", filters: { kind: task, type: feature },        sort: -created }
+  implementations: { columns: "id,name,status,assignee", filters: { kind: task, type: implementation }, sort: -created }
+  task-specs:      { columns: "id,name,status,assignee", filters: { kind: task, type: spec },           sort: -created }
+  task-docs:       { columns: "id,name,status,assignee", filters: { kind: task, type: documentation },  sort: -created }
+
+  # per-kind landing views
+  spec:     { columns: "id,name,status,created:date", filters: { kind: spec },     sort: -created }
+  research: { columns: "id,name,status,created:date", filters: { kind: research }, sort: -created }
+  note:     { columns: "id,name,type,created:date",   filters: { kind: note },     sort: -created }
+  agents:   { columns: "name,description",            filters: { kind: agent },    sort: name }
+
+  # cross-kind utility
+  recent:   { columns: "id,kind,name,status,created:date", sort: -created }
+
+default_views:
+  task: ready
+  spec: spec
+  research: research
+  agent: agents
+  note: note

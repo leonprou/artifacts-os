@@ -486,28 +486,57 @@ artifacts verify t0042 -j
 ### `init` — Bootstrap a new project
 
 ```
-artifacts init [DIRECTORY] [--name NAME]
+artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
+               [--force] [-y] [--dry-run] [--openstation-compat]
 ```
 
 Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
-Writes `artifacts/artifacts.yaml`, per-kind storage directories, per-kind JSON
-schemas under `artifacts/kinds/`, and an `openstation → artifacts` symlink for
-external tooling compatibility.
+Walks a three-step selection flow (settings tier → kinds → agents), then writes
+`artifacts/artifacts.yaml`, per-kind storage directories, per-kind JSON schemas
+under `artifacts/kinds/`, and optionally installs agent specs.
+
+All steps can be driven by flags for non-interactive use. On a TTY, un-flagged
+steps prompt interactively. Pass `-y` to accept defaults for every un-flagged
+step. Refuses to run in non-TTY mode unless `-y` or all three flags are supplied.
 
 | Flag | Description |
 |------|-------------|
-| `directory` | Target directory (default: `.`) |
-| `--name NAME` | Project name (default: directory name) |
+| `DIRECTORY` | Target directory (default: `.`) |
+| `--template TIER` | Settings tier: `minimal` or `standard` (default). Skips Step 1. |
+| `--kinds CSV` | Kinds to install — comma-separated names, `all`, or `none`. Skips Step 2. |
+| `--agents CSV` | Agents to install — comma-separated names, `all`, or `none`. Skips Step 3. |
+| `--force` | Overwrite existing files (per-file). Also bypasses the already-initialised guard. |
+| `-y` / `--yes` | Accept defaults at every un-flagged step (enables non-interactive mode). |
+| `--dry-run` | Print planned writes without writing anything. |
+| `--openstation-compat` | Also create the legacy `openstation → artifacts` symlink. |
 
-**Example:**
+**Bundled catalogue:**
+
+- **Kinds** (5): `task` ✓, `note` ✓, `spec` ✓ (defaults), `research`, `agent`
+- **Agents** (5): `architect`, `author`, `developer`, `researcher`, `technical-writer`
+
+Selecting any agent auto-includes the `agent` kind (D10).
+
+**Examples:**
 
 ```bash
-# Bootstrap a project in the current directory
+# Interactive — prompts for tier, kinds, agents
 artifacts init
 
-# Bootstrap a named project in a new directory
-artifacts init my-project --name "My Project"
+# Non-interactive with defaults
+artifacts init -y
+
+# Fully specified — no prompts
+artifacts init --template standard --kinds task,note,spec --agents architect,developer
+
+# Re-initialise existing vault with all templates
+artifacts init --force -y
+
+# Dry-run to preview what would be written
+artifacts init --template standard --kinds all --agents none --dry-run
 ```
+
+See [docs/init-flow.md](../../docs/init-flow.md) for the full three-step flow.
 
 ---
 

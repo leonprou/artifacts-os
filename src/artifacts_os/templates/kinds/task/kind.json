@@ -1,0 +1,97 @@
+{
+  "x-dir": "tasks",
+  "x-prefix": "t",
+  "x-numbered": true,
+  "x-columns": ["id", "name", "status", "assignee"],
+  "x-status-colors": {
+    "backlog": "dim",
+    "ready": "cyan",
+    "in-progress": "yellow",
+    "review": "blue",
+    "verified": "magenta",
+    "done": "green",
+    "cancelled": "dim strike",
+    "rejected": "red strike"
+  },
+  "title": "Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "name", "created", "type", "status", "assignee", "owner"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^t\\d{4}$",
+      "description": "Numbered task ID (e.g. t0042). Set by the CLI at create time; do not edit."
+    },
+    "kind": {
+      "type": "string",
+      "const": "task",
+      "description": "Kind discriminator. Always 'task' for this schema."
+    },
+    "name": {
+      "type": "string",
+      "description": "Slug portion of the file stem (no id prefix). Lowercase, hyphenated."
+    },
+    "created": {
+      "type": "string",
+      "description": "Date the task was created (YYYY-MM-DD). Set by the CLI; do not edit."
+    },
+    "started": {
+      "type": "string",
+      "description": "Date or datetime when the task moved to in-progress. Written by the harness on transition."
+    },
+    "completed": {
+      "type": "string",
+      "description": "Date or datetime when the task reached done. Written by the harness on transition."
+    },
+    "status": {
+      "enum": ["backlog", "ready", "in-progress", "review", "verified", "done", "cancelled", "rejected"],
+      "description": "Task lifecycle stage."
+    },
+    "type": {
+      "enum": ["feature", "implementation", "spec", "documentation", "research", "refactor"],
+      "description": "Task category. Closed enum: well-known finite set; new categories require a schema bump (intentional, supports schema-derived tooling)."
+    },
+    "priority": {
+      "enum": ["low", "normal", "high", "urgent"],
+      "description": "Priority hint. Closed enum: small, stable vocabulary. Optional; omit when 'normal'."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Agent or person assigned to work on this task. Free-form because the agent roster is dynamic. Empty string for unassigned backlog tasks."
+    },
+    "owner": {
+      "type": "string",
+      "description": "Agent or person who owns/verifies this task. Free-form because owners include both agents and humans (e.g. 'user')."
+    },
+    "parent": {
+      "type": "string",
+      "pattern": "^\\[\\[.+\\]\\]$",
+      "description": "Wikilink to the umbrella task when this is a sub-task."
+    },
+    "subtasks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\[\\[.+\\]\\]$"
+      },
+      "description": "Wikilinks to child tasks. Mirrors the ## Subtasks table in the body for type:feature umbrellas."
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\[\\[.+\\]\\]$"
+      },
+      "description": "Wikilinks to tasks that must reach done before this one is promoted to ready."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\[\\[.+\\]\\]$"
+      },
+      "description": "Wikilinks to documentation outputs produced during execution (specs, research, agent specs, notes). Never source code paths."
+    }
+  }
+}

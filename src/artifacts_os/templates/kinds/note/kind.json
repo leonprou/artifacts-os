@@ -1,0 +1,14 @@
+{
+  "x-dir": "notes",
+  "x-prefix": "n",
+  "x-numbered": true,
+  "x-columns": ["id", "name", "type", "created:date"],
+  "title": "Note",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "Free-form sub-type (e.g. planning, meeting, decision, scratch)"
+    }
+  }
+}

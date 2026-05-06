@@ -48,6 +48,29 @@ print(task.body)
 
 ## CLI
 
+### Init
+
+Bootstrap a new artifacts-os project with the three-step guided flow:
+
+```bash
+# Interactive (prompts for tier, kinds, agents on a TTY)
+artifacts init
+
+# Non-interactive — accept all defaults
+artifacts init -y
+
+# Fully specified
+artifacts init --template standard --kinds task,note,spec --agents architect,developer
+
+# Preview without writing
+artifacts init --template minimal --kinds all --agents all --dry-run
+```
+
+See [docs/init-flow.md](docs/init-flow.md) for the complete three-step flow,
+settings tier reference, and flag documentation.
+
+### Common commands
+
 ```bash
 artifacts list --kind task --status ready
 artifacts show t0001
@@ -94,6 +117,7 @@ Coding conventions:
 | [docs/architecture.md](docs/architecture.md) | Package overview, module map, dependency DAG, design principles |
 | [docs/settings.md](docs/settings.md) | Cross-cutting settings: public API, extension pattern, schema versioning |
 | [docs/adding-a-kind.md](docs/adding-a-kind.md) | How to add a new artifact kind — `ARTIFACT.md` description contract, L1 catalogue surface, evaluation-first authoring, `kind.json` schema reference |
+| [docs/init-flow.md](docs/init-flow.md) | `artifacts init` three-step flow — settings tiers, kind/agent catalogues, variable interpolation, non-TTY behaviour |
 
 ### Module References
 

@@ -1,0 +1,21 @@
+layout_version: 1
+
+project:
+  name: "{{project_name}}"
+  created: "{{created}}"
+
+views:
+  active:
+    columns: id,name,assignee,status
+    filters: { kind: task, status: in-progress }
+    sort: -started
+
+  ready:
+    columns: id,name,assignee,created:date
+    filters: { kind: task, status: ready }
+    sort: created
+
+  done:
+    columns: id,name,assignee,completed:date
+    filters: { kind: task, status: done }
+    sort: -completed

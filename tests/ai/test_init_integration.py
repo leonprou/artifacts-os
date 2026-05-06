@@ -1,4 +1,12 @@
-"""Tests for artifacts init + AI install integration."""
+"""Tests for artifacts init — AI integration was removed in s0021.
+
+Per s0021 §3 (Non-Goals): `.claude/` symlink tree installation is out of
+scope for `artifacts init`. AI commands are no longer installed by init;
+`--no-ai` was also removed (it has no meaning when AI install is absent).
+
+These tests verify the updated init behaviour rather than the removed
+AI-install behaviour.
+"""
 
 from __future__ import annotations
 
@@ -9,50 +17,44 @@ import pytest
 from artifacts_os.cli import main
 
 
-def test_init_installs_ai_commands(tmp_path: Path, monkeypatch) -> None:
+def test_init_creates_vault_without_ai_dir(tmp_path: Path, monkeypatch) -> None:
+    """Init succeeds and does NOT create .claude/ — AI install removed per s0021."""
     monkeypatch.chdir(tmp_path)
-    main(["init"])
+    main(["init", "-y"])
 
-    commands_dir = tmp_path / ".claude" / "commands"
-    md_files = list(commands_dir.glob("artifacts.*.md"))
-    assert len(md_files) >= 3, f"Expected AI commands in {commands_dir}, found: {md_files}"
-    # Default mode is link
-    for f in md_files:
-        assert f.is_symlink(), f"{f} should be a symlink"
+    assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
+    # .claude/ is NOT created — AI install is out of scope
+    assert not (tmp_path / ".claude").exists()
 
 
-def test_init_installs_skill_md(tmp_path: Path, monkeypatch) -> None:
-    """artifacts init produces .claude/skills/artifacts-os/SKILL.md as a symlink."""
+def test_init_no_ai_flag_removed(tmp_path: Path, monkeypatch) -> None:
+    """`--no-ai` is no longer a valid flag; argparse exits 2."""
     monkeypatch.chdir(tmp_path)
-    main(["init"])
-
-    skill_path = tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md"
-    assert skill_path.is_symlink(), f"{skill_path} should be a symlink"
-    assert skill_path.resolve().exists(), f"Broken symlink: {skill_path}"
-    assert "artifacts_os" in str(skill_path.resolve())
+    with pytest.raises(SystemExit) as exc:
+        main(["init", "--no-ai"])
+    assert exc.value.code == 2
 
 
-def test_init_no_ai_skips_install(tmp_path: Path, monkeypatch) -> None:
+def test_init_with_yes_flag_is_non_interactive(tmp_path: Path, monkeypatch) -> None:
+    """init -y works in non-TTY contexts without AI install."""
     monkeypatch.chdir(tmp_path)
-    main(["init", "--no-ai"])
+    main(["init", "-y"])
 
-    commands_dir = tmp_path / ".claude" / "commands"
-    if commands_dir.exists():
-        md_files = list(commands_dir.glob("artifacts.*.md"))
-        assert len(md_files) == 0
-    # No .claude/commands created at all is also fine
-
-    skills_dir = tmp_path / ".claude" / "skills"
-    assert not skills_dir.exists(), "--no-ai should not create .claude/skills/"
+    assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
+    assert (tmp_path / "artifacts" / "kinds").is_dir()
 
 
-def test_init_ai_commands_resolve(tmp_path: Path, monkeypatch) -> None:
-    """Installed symlinks resolve to actual package files."""
+def test_init_with_openstation_compat_no_ai(tmp_path: Path, monkeypatch) -> None:
+    """--openstation-compat creates symlink; AI commands still not installed."""
     monkeypatch.chdir(tmp_path)
-    main(["init"])
+    main([
+        "init",
+        "--template", "minimal",
+        "--kinds", "none",
+        "--agents", "none",
+        "--openstation-compat",
+    ])
 
-    commands_dir = tmp_path / ".claude" / "commands"
-    for f in commands_dir.glob("artifacts.*.md"):
-        assert f.resolve().exists(), f"Broken symlink: {f}"
-        content = f.read_text()
-        assert len(content) > 10, f"Command file seems empty: {f}"
+    symlink = tmp_path / "openstation"
+    assert symlink.is_symlink()
+    assert not (tmp_path / ".claude").exists()
