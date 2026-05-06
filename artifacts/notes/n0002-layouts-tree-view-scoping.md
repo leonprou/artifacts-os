@@ -93,6 +93,49 @@ Non-functional:
 - The settings layer (`ViewConfig` / `ViewsConfig` saved-queries) is
   not broken by the change.
 
+## Update — 2026-05-06: design pivot post-shipping
+
+After t0115/t0116/t0117 shipped, the user reviewed the live
+behaviour (`art ls --kind task`) and pushed back on a load-bearing
+choice in s0022:
+
+> "Layout shouldn't live in the kind file. It should be defined
+> in `artifacts.yaml` views — as a default view for task."
+
+User-level intent (no implementation prescribed):
+
+- **Kind files stay layout-agnostic.** The `x-layouts` block on
+  `task.json` should not exist; kinds describe data shape, not
+  presentation.
+- **`artifacts.yaml` is the single home for layout config.** The
+  user expects to manage layout in their settings file alongside
+  saved views, not by editing kind JSON.
+- **"Default view for task"** is the framing the user used.
+  Whether that means (a) `views.default_layouts` becomes the
+  authoritative kind-default mechanism, or (b) a saved view per
+  kind earns a "default" marker, is the architect's call. The
+  intent is that one of the two (or a unified design) replaces
+  the kind-side declaration.
+- **Resolution chain shrinks.** With the kind layer removed, the
+  current chain `flag > view > settings > kind > implicit` loses
+  the `kind` slot. The architect should re-derive the precedence
+  with that constraint.
+
+What this implies for already-shipped work (architect to confirm,
+not PM):
+
+- t0115 (`x-layouts` on `task.json`) is reverted — partly or
+  fully — depending on whether registry validation still has a
+  role.
+- t0117 (CLI resolution chain) drops the kind layer.
+- t0118 (docs) is rejected — re-cut after the spec revision.
+- t0119 (vault verification) target shape is unchanged from the
+  user's POV; only the configuration mechanism that produced it
+  shifts.
+
+This pivot is filed as a spec-revision task assigned to the
+architect; tasks follow once the revised contract lands.
+
 ## Open questions for the spec
 
 > Intent, not contract. These belong to the architect to resolve in

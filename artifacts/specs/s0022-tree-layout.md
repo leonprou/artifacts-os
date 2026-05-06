@@ -4,6 +4,7 @@ id: s0022
 name: tree-layout
 status: approved
 created: 2026-05-06
+revised: 2026-05-06
 task: "[[t0113-spec-tree-layout-for-art]]"
 agent: architect
 ---
@@ -13,18 +14,66 @@ agent: architect
 Sub-spec of [[s0007-artifacts-os-views-module]]. Defines the
 **layout abstraction** for `artifacts_os.views`, the **tree
 layout** as its first concrete second member alongside the
-existing table, and the kind-side / CLI-side / settings-side
+existing table, and the settings-side / CLI-side / kind-side
 contracts that surround them.
 
 Origin: scoping note [[n0002-layouts-tree-view-scoping]]. Task
-brief: [[t0113-spec-tree-layout-for-art]].
+brief: [[t0113-spec-tree-layout-for-art]]. Revision driver:
+[[t0120-spec-revision-move-tree-layout]] — see §0.
 
 **Scope: design only.** Implementation is filed as the four
 follow-up tasks listed in n0002 (#2 kind schema, #3 renderer,
-#4 CLI wiring, #5 docs). Tasks #2 and #3 are designed to start
-in parallel after this spec lands; the contracts in §3 (kind
-schema), §5 (renderer signature), and §8 (CLI flag) are the
-parallel-start interlocks.
+#4 CLI wiring, #5 docs). After this revision the renderer,
+sort, filter, and `--fields` contracts are unchanged; the
+configuration surface moves entirely into `artifacts.yaml`.
+The migration of the as-shipped work is filed in §13.
+
+## 0. Revision Notice — 2026-05-06
+
+**This is a revision in place, not a supersede.** Cross-refs
+from t0114-family tasks remain valid. Sections rewritten in
+this revision: §3, §4.3, §5.5, §8.2, §8.3, §8.5, §10, §11,
+§13, §15 row 1, §16. Sections unchanged: §1, §2, §4 (other
+than 4.3), §5 (other than 5.5), §6, §7, §9, §12, §14.
+
+### 0.1 What pivoted
+
+Pre-revision, layout configuration lived in two places: an
+`x-layouts` block on the kind JSON (declaring `default` and
+`tree.parent_field`), with `artifacts.yaml` providing only an
+override layer. The user's framing post-shipping
+([[n0002-layouts-tree-view-scoping]] § "Update — 2026-05-06"):
+
+> "Layout shouldn't live in the kind file. It should be defined
+> in `artifacts.yaml` views — as a default view for task."
+
+**Post-revision, layout configuration lives only in
+`artifacts.yaml`.** Kind JSON describes data shape; presentation
+is the user's concern. The `x-layouts` block is deleted entirely
+(no narrower form is preserved); `parent_field` moves alongside
+the layout name in the settings file.
+
+### 0.2 What did not pivot
+
+- The **renderer** (§4–§7, §9) is mechanism-agnostic. It accepts
+  `parent_field` as a parameter; the parameter source changed
+  but the renderer did not.
+- The **user-facing outcome** (§2, §6.5): `art ls --kind task`
+  on this vault still shows `t0042` under `t0036` and
+  `t0043`–`t0046` under `t0041`. The configuration that
+  produces that shape moves; the shape is contract.
+- `-q` / `-j` / `--fields` carve-outs (§8.4, §9) — unchanged.
+- `x-columns` (§11) — still on the kind, still untouched. The
+  argument for keeping `x-columns` kind-side strengthens:
+  columns are a projection of the data the kind defines,
+  reusable across every layout.
+
+### 0.3 Breaking-change posture
+
+This is a breaking change against the as-shipped v1 (one day
+old, not in the wild). See §11.4 for the explicit
+backward-compatibility statement and the migration any
+downstream user would need.
 
 ## 1. Background and Cross-References
 
@@ -43,9 +92,11 @@ parallel-start interlocks.
   `list[ArtifactMeta]`.
 - **Kind discovery** — [[s0017-artifact-kinds-discovery-mechanism]].
   Kind metadata travels via the same `KindDef.meta` channel
-  already used for `columns` and `status_colors`; the kind-side
-  declaration in §3 is an additive `x-layouts` block on the same
-  JSON schema.
+  already used for `columns` and `status_colors`. **Post-revision
+  (§0):** layout config does **not** travel via this channel;
+  it lives in `artifacts.yaml`. `KindDef` does gain a small
+  read-only addition (`schema_properties`, §3.6) for the
+  parent-field validation guard.
 - **CLI list contract** — [[s0012-cli-list-named-views]] §§ 4–5
   (resolution chain), [[s0015-cli-schema-derived-filter-flags]]
   (existing `list` flags). The new `--layout` flag plugs into the
@@ -100,134 +151,206 @@ parallel-start interlocks.
   supports parent-style only; the schema in §3 is forward-compat
   for a second source but does not implement one.
 
-## 3. Kind-Level Declaration
+## 3. Configuration Surface — `artifacts.yaml`
 
-### 3.1 Schema shape
+### 3.1 Where layout config lives — single home
 
-A kind opts into hierarchical rendering by adding an
-`x-layouts` block to its `kind.json`:
+**Layout configuration lives in `artifacts.yaml`, only.** The
+kind JSON describes the data shape (frontmatter properties,
+`x-dir`, `x-prefix`, `x-numbered`, `x-columns`,
+`x-status-colors`); it does **not** declare layouts.
 
-```json
-{
-  "x-dir": "tasks",
-  "x-prefix": "t",
-  "x-numbered": true,
-  "x-columns": ["id", "name", "status", "assignee"],
-  "x-layouts": {
-    "default": "tree",
-    "tree": {
-      "parent_field": "parent"
-    }
-  },
-  "properties": { ... }
-}
+A vault that wants tree-by-default for `task` writes one block:
+
+```yaml
+# artifacts.yaml
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
 ```
 
-Three keys are introduced under `x-layouts`. Each is independent;
-omitting any one is well-defined.
+That is the complete declaration. No kind file changes; no
+registry changes; no `meta["layouts"]` channel.
 
-| Key | Type | Required | Purpose |
-|-----|------|----------|---------|
-| `default` | string — `"table"` \| `"tree"` | no — falls back to `"table"` | Layout selected when no view, settings, or flag overrides |
-| `tree` | object | no — but **required to enable `default: "tree"`** | Tree-layout configuration. Absence means "no tree configuration declared"; setting `default: "tree"` without it is a load-time error per §3.3. |
-| `tree.parent_field` | string — frontmatter key name | yes (when `tree` block present) | Field on the artifact's frontmatter whose value points up to its parent (wikilink string) |
+### 3.2 The `default_layouts` map
 
-### 3.2 Forward-compat for traversal direction and second source
+`default_layouts` is a top-level key in `artifacts.yaml`,
+parallel to the existing `default_views`. Each entry maps a
+kind name to a **layout configuration object**.
 
-`tree.parent_field` is a **single string** in v1, not a list.
-Forward-compat is preserved by the **block name being
-`tree`**, not `parent_tree` or `from_parent`: future schema
-keys land *inside* the same block.
+| Field | Type | Required | Purpose |
+|-------|------|----------|---------|
+| `layout` | string — `"table"` \| `"tree"` | yes | Layout name; must be in `views.LAYOUTS` |
+| `parent_field` | string — frontmatter key name | required when `layout: tree`, forbidden otherwise | Field on the artifact's frontmatter whose value points up to its parent (wikilink string) |
+
+A **string-form shorthand** is accepted for layouts that take
+no configuration:
+
+```yaml
+default_layouts:
+  task: table        # equivalent to: task: { layout: table }
+  spec: table
+```
+
+The shorthand is rejected for layouts that require config
+(today, `tree`):
+
+```yaml
+default_layouts:
+  task: tree         # ValidationError — tree requires parent_field
+```
+
+This keeps simple cases simple and forces explicitness exactly
+where it is needed.
+
+### 3.3 Parent-field placement decision
+
+`parent_field` lives in the layout config object — not on the
+kind JSON, not in a separate `x-hierarchy` slot. The decision
+log (§16) records the alternatives considered; the operative
+argument:
+
+- The user's pivot rejected layout config on the kind. A
+  `parent_field` slot under any other kind-side key
+  (`x-hierarchy.parent_field`, `x-tree.parent_field`,
+  whatever name) recreates the coupling the user removed.
+- `parent_field` is read by exactly one consumer: the tree
+  layout. Other layouts neither produce nor consume it. That
+  is the literal definition of layout configuration — config
+  scoped to a layout's needs.
+- Splitting it across kind JSON (data property: "this kind
+  has a parent") and `artifacts.yaml` (presentation: "the
+  tree layout walks the parent field") is two homes for one
+  datum. Single home wins.
+
+Trade-off accepted: a vault that switches between two tree-
+configurable kinds repeats the parent-field name in two
+`default_layouts` entries. The cost is one identifier per
+kind. The clarity gain (one home, no kind-side residue)
+is worth it.
+
+### 3.4 Forward-compat — same arguments, different surface
+
+The forward-compat properties from the pre-revision §3.2 carry
+over with a renamed surface. The block is now a **YAML
+mapping** under `default_layouts[<kind>]` (or under a saved
+view — see §10) instead of a JSON object on the kind. The
+extension shapes are identical.
 
 #### Direction: up-pointer vs. down-pointer
 
-Two shapes a future kind may need:
+```yaml
+# v1 — declared
+default_layouts:
+  task: { layout: tree, parent_field: parent }
 
-```jsonc
-// v1 — declared
-"tree": { "parent_field": "parent" }
-// renderer walks DOWN via an inverse map built from parent_field
-
-// Future — kind with no upward pointer (e.g. playlist→tracks)
-"tree": { "children_field": "tracks" }
-// renderer walks DOWN via the literal list at parent[children_field]
+# Future — kind with no upward pointer (e.g. playlist→tracks)
+default_layouts:
+  playlist: { layout: tree, children_field: tracks }
 ```
 
-**Precedence rule (locked here so v2 doesn't re-litigate it):**
-when both `parent_field` and `children_field` are declared on
-the same kind, **`parent_field` is the traversal source**.
-`children_field` is denormalized metadata the layout does not
-read. There is no divergence policy because there is no
-divergence to resolve — only one field drives the walk.
-
-`children_field` is **not implemented in v1**; the rule is
-documented now so the eventual implementer has nothing to
-decide.
+Precedence rule (unchanged): when both `parent_field` and
+`children_field` are declared on the same entry,
+`parent_field` is the traversal source. Not implemented in
+v1.
 
 #### Second source (parent + depends_on)
 
-A future multi-source design adds new keys inside the same
-block (e.g. `tree.sources: [{field: "parent"}, {field:
-"depends_on"}]`). The single-string `parent_field` becomes
-a deprecated alias for the one-source case; v1 callers
-stay readable.
+A future multi-source design adds keys to the same object:
+
+```yaml
+default_layouts:
+  task:
+    layout: tree
+    sources:
+      - field: parent
+      - field: depends_on
+```
+
+The single-string `parent_field` becomes a deprecated alias
+for the one-source case.
 
 #### Default layout name
 
-The `default: "tree"` value is also forward-compat: a future
-board layout declares `default: "board"` and the same
+A future board layout declares `layout: board` and the same
 resolution chain (§8.2) selects it without code changes in
 `cli/`.
 
-### 3.3 Validation at registry load
+### 3.5 Validation at settings load
 
-`registry._load_vault_kinds` (today: `registry.py:130–151`)
-gains three checks when `x-layouts` is present:
+`ViewsSettings.from_base` validates each `default_layouts`
+entry at parse time. Three checks:
 
-1. `x-layouts.default`, if present, must be one of the
-   currently-registered layout names (`table`, `tree`). Unknown
-   value → `ValidationError(f"unknown layout {name!r}")`.
-2. If `x-layouts.default == "tree"`, `x-layouts.tree` must be
-   present. Otherwise → `ValidationError("kind {k!r} declares
-   default layout 'tree' but has no x-layouts.tree block")`.
-3. If `x-layouts.tree` is present, `parent_field` must be a
-   string and must match a property name in the same schema's
-   `properties` map. (Catches typos and prevents pointing at a
-   field that does not exist.) Failure → `ValidationError`.
+1. **Layout known.** `entry.layout` must be in `views.LAYOUTS`.
+   Unknown → `ValueError("default_layouts[<kind>].layout =
+   <name> is not a registered layout")`. Surfaced as exit 2 by
+   the CLI.
+2. **Required config present.** If `entry.layout == "tree"`,
+   `entry.parent_field` must be a non-empty string. Otherwise →
+   `ValueError("default_layouts[<kind>] declares layout 'tree'
+   but has no parent_field")`.
+3. **Spurious config rejected.** If `entry.layout == "table"`,
+   `entry.parent_field` must be absent. Otherwise →
+   `ValueError("default_layouts[<kind>].parent_field is set but
+   layout is 'table'")`. (Cheap typo guard; mirrors the
+   §3.3-old check that `x-layouts.tree` was forbidden when
+   `default == "table"`.)
 
-`KindDef.meta` carries the parsed result under `meta["layouts"]`:
+The kind-name key (`task`, `spec`, etc.) is **not validated**
+against the registered kinds list at parse time. Reason: a
+vault may declare a preference for a kind it does not yet
+have without an error. Same discipline as `default_views`.
 
-```python
-{
-  "default": "tree",
-  "tree": {"parent_field": "parent"},
-}
+A typo on the kind name (e.g. `taks` instead of `task`) is
+detected only when the user runs `art ls --kind taks` and
+nothing matches — not at settings load. This is an accepted
+ergonomic cost; the alternative is making `default_layouts`
+fail-loud on every fresh vault before kinds are added.
+
+### 3.6 Validation at use (parent_field × kind schema)
+
+The kind-schema check (old §3.3 rule 3 — `parent_field` must
+match a property in the kind's `properties` map) **moves** to
+`render_tree`'s call site, not registry load. When the CLI
+resolves `parent_field` for a tree render, the renderer reads
+`item.frontmatter.get(parent_field)` per row. A
+`parent_field` that does not exist on any artifact yields
+empty values → every artifact appears as a root → flat
+output. That is silent and not what the user wants.
+
+Add a single guard in `cli/commands/list.py` immediately
+after `resolve_parent_field` (see §8.2): if `kind_def is not
+None` and `parent_field not in kind_def.schema_properties`,
+raise `ValidationError("kind '<k>' has no property
+'<parent_field>'; declared by default_layouts or view
+config")`, exit 2.
+
+The check requires `KindDef` to expose a property-name
+accessor. The minimal addition is a `properties` attribute
+already present in the parsed schema; if it is not currently
+exposed on `KindDef`, adding it is a small migration step
+recorded in §13.
+
+This validation **is not in the renderer** — the renderer
+stays kind-agnostic. The CLI is the only caller that has
+both a kind schema and a layout choice in hand.
+
+### 3.7 Concrete declaration for the artifacts-os vault
+
+The vault's own `artifacts.yaml` gains:
+
+```yaml
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
 ```
 
-Consumers (`views/`, `cli/`) read `meta["layouts"]` only;
-they do not re-parse `x-layouts`. This matches the existing
-discipline used for `meta["columns"]` and `meta["status_colors"]`
-(s0007 § "KindDef.meta keys consumed by views").
-
-### 3.4 Concrete declarations for the v1 vault
-
-Only `task` declares tree in v1. The other four kinds (`agent`,
-`note`, `research`, `spec`) **do not** add `x-layouts`; they
-fall back to table — no behaviour change.
-
-```json
-// artifacts/kinds/task.json
-"x-layouts": { "default": "tree", "tree": { "parent_field": "parent" } }
-
-// artifacts/kinds/spec.json   — not added in v1
-// artifacts/kinds/research.json — not added in v1
-// artifacts/kinds/note.json   — not added in v1
-// artifacts/kinds/agent.json  — not added in v1
-```
-
-This is the complete migration footprint of task #2 (kind
-schema). One file changes; four are inspected and confirmed
-unaffected.
+That single block reproduces the pre-revision shipped
+behaviour. No other kind needs an entry; the four other
+kinds (`agent`, `note`, `research`, `spec`) fall through to
+`table`.
 
 ## 4. Layout Abstraction
 
@@ -278,12 +401,15 @@ This is what makes the abstraction cheap: 90% of `render_table`
 is reused; the new code is `compute_tree` (a pure ordering
 pass) and a thin wrapper that injects the prefix.
 
-### 4.3 Selecting the layout — kind default
+### 4.3 Selecting the layout — settings default
 
-A kind selects its default layout via
-`meta["layouts"]["default"]`. When the key is absent, the
-default is `"table"`. The resolution chain that lets a user
-override this is in §8.2.
+A vault selects a per-kind default layout via
+`default_layouts[kind]` in `artifacts.yaml` (§3.2). When the
+key is absent, the default is `"table"`. The resolution chain
+that lets a user override per-invocation is in §8.2.
+
+(Pre-revision, this slot was on the kind JSON. See §0 and
+§16 for the pivot.)
 
 ### 4.4 Extensibility argument — without designing a second new layout
 
@@ -418,20 +544,27 @@ def render_tree(
     columns: list[FieldSpec],
     *,
     kind_def: KindDef | None = None,
-    parent_field: str | None = None,
+    parent_field: str,                       # required, no default
     sort_key: Callable[[ArtifactMeta], object] | None = None,
+    is_known_stem: Callable[[str], bool] | None = None,
 ) -> Table:
     """Render *items* as a tree-prefixed table.
 
-    *parent_field* defaults to kind_def.meta["layouts"]["tree"]
-    ["parent_field"] when None. Raises ValidationError when both
-    are None — tree layout requires a parent field.
+    *parent_field* is required; the caller (CLI) resolves it
+    from artifacts.yaml via the §8.2 chain and passes the result.
+    The renderer does not consult kind_def for parent_field.
     """
 ```
 
-The CLI passes `parent_field` explicitly only when overriding;
-in the common path it leaves the parameter `None` and lets the
-function read from `kind_def.meta`.
+Post-revision, `parent_field` is **required**; there is no
+fallback to `kind_def.meta` because `meta["layouts"]` no
+longer exists. The renderer is mechanism-agnostic — it
+receives the resolved parent-field name from the CLI and
+operates on the in-memory item list.
+
+`kind_def` is still passed (kept for status_colors,
+default_columns, and other `views/` consumers); it just
+contributes nothing to layout resolution.
 
 The `sort_key` parameter is the binding seam to
 `--sort` / `view.sort` — see §6.2.
@@ -710,25 +843,23 @@ Adding `--layout` to the reserved-flag set in `_RESERVED_FILTER_FLAG_NAMES`
 (`cli/commands/list.py:24–27`) prevents a future kind property
 named `layout` from colliding.
 
-### 8.2 Resolution chain — explicit > view > kind default > implicit
+### 8.2 Resolution chain — explicit > view > settings default > implicit
 
-Five rungs, top wins:
+**Four rungs**, top wins. The pre-revision fifth rung (`kind_def
+.meta["layouts"]["default"]`) is removed:
 
 1. **Explicit `--layout NAME`** — user intent, last-mile.
-2. **View config** — `view_cfg.layout` (a new optional field on
+2. **View config** — `view_cfg.layout` (an optional field on
    `ViewConfig`; see §10.1). Set when the user is using a saved
    view that pins a layout.
 3. **`default_layouts[kind]` settings map** — kind-scoped user
    preference under `default_layouts:` in `artifacts.yaml` (see
-   §10.2). Lets an end-user say "always tree for tasks on this
-   vault" without editing the kind file.
-4. **Kind default** — `kind_def.meta["layouts"]["default"]`,
-   sourced from `x-layouts.default` in the schema.
-5. **Implicit** — `"table"`. Every kind without any of the
-   above ends up as table. This is the v1 default for every
-   kind except `task`.
+   §10.2 / §3.2).
+4. **Implicit** — `"table"`. Every kind without any of the
+   above ends up as table. The v1 default for every kind except
+   `task` (which the vault declares via §3.7).
 
-The chain is implemented in a new helper:
+Layout-name resolution is implemented in a single helper:
 
 ```python
 def resolve_layout(
@@ -742,16 +873,71 @@ def resolve_layout(
     if view_cfg is not None and getattr(view_cfg, "layout", None):
         return view_cfg.layout
     if settings is not None and settings.views is not None:
-        m = settings.views.default_layouts        # see §10.2
+        m = settings.views.default_layouts                       # see §10.2
         if kind_def is not None and kind_def.name in m:
-            return m[kind_def.name]
-    if kind_def is not None:
-        return kind_def.meta.get("layouts", {}).get("default", "table")
+            return m[kind_def.name].layout                        # entry is a LayoutConfig
     return "table"
 ```
 
+`kind_def` is still passed in (the helper signature is
+preserved for compatibility with existing call sites and
+because validation in §3.6 needs it) — it just no longer
+contributes a layer to the chain.
+
 Validation: the resolved name must be in `views.LAYOUTS`. If
 not, raise `ValidationError`; exit 2.
+
+#### Parent-field resolution — sibling chain
+
+When the resolved layout is `tree`, `parent_field` is resolved
+through a parallel chain consulting the same slots, so a user
+who passes `--layout tree` ad-hoc can still draw a tree:
+
+1. **View config** — `view_cfg.parent_field`.
+2. **`default_layouts[kind].parent_field`** — even if that
+   entry's `layout` differs from the resolved layout. Reason:
+   the user may have set `default_layouts.task: { layout: table,
+   parent_field: parent }` to declare "this kind is a tree but
+   I want flat by default", then run `art ls --kind task
+   --layout tree` to see the tree this once. The
+   `parent_field` is reusable because it is a property of the
+   data, not of the chosen render.
+3. **None** — if neither slot supplies one,
+   `ValidationError("layout 'tree' requires parent_field;
+   declare it in artifacts.yaml under default_layouts[<kind>]
+   or a view config")`, exit 2.
+
+There is no `--parent-field` CLI flag in v1. A user who needs
+ad-hoc tree on a kind without configured `parent_field` is one
+edit to `artifacts.yaml` away. (A future `--parent-field` flag
+slots in trivially as rung 0 if user research justifies it;
+not designed here.)
+
+```python
+def resolve_parent_field(
+    view_cfg: ViewConfig | None,
+    settings: ViewsSettings | None,
+    kind_def: KindDef | None,
+) -> str | None:
+    if view_cfg is not None and getattr(view_cfg, "parent_field", None):
+        return view_cfg.parent_field
+    if settings is not None and settings.views is not None:
+        m = settings.views.default_layouts
+        if kind_def is not None and kind_def.name in m:
+            pf = m[kind_def.name].parent_field
+            if pf:
+                return pf
+    return None
+```
+
+Then in `run()`: `if layout == "tree": pf = resolve_parent_field(...);
+if pf is None: raise ValidationError(...)`.
+
+#### Property-existence check
+
+After resolving `parent_field`, the CLI verifies it matches
+a property in `kind_def.schema_properties` (§3.6). This catches
+typos in `artifacts.yaml` at use time.
 
 ### 8.3 Opt-out — flat output on a hierarchical kind
 
@@ -766,14 +952,12 @@ Or, for a per-vault preference:
 ```yaml
 # artifacts.yaml
 default_layouts:
-  task: table
+  task: table         # string-form shorthand; equivalent to { layout: table }
 ```
 
-Both leave `art ls --kind task` rendering flat regardless of
-the kind's `x-layouts.default: tree`. The first is a one-shot;
-the second is durable.
+The first is a one-shot; the second is durable.
 
-A view can also pin layout:
+A view can pin layout:
 
 ```yaml
 views:
@@ -784,6 +968,11 @@ views:
 ```
 
 `art ls --view active --kind task` then renders flat.
+
+To opt **into** tree on a vault that previously declared
+`default_layouts.task: table`, the user passes `--layout tree`
+once — or edits `artifacts.yaml` to use the object form with
+`parent_field`.
 
 ### 8.4 `-q` and `-j` carve-outs — unchanged
 
@@ -805,18 +994,23 @@ nothing. The flag was a no-op anyway.
 
 ### 8.5 Resolution-chain test matrix
 
-The CLI integration tests (per §13) cover these rows:
+The kind-default rung is removed; the matrix shrinks
+correspondingly. The CLI integration tests (per §13) cover
+these rows:
 
-| Kind layout default | settings `default_layouts` | view `layout` | flag `--layout` | Effective |
-|---------------------|----------------------------|---------------|-----------------|-----------|
-| (absent) | (absent) | (absent) | (absent) | `table` |
-| `tree` | (absent) | (absent) | (absent) | `tree` |
-| `tree` | `{task: table}` | (absent) | (absent) | `table` |
-| `tree` | `{task: table}` | `tree` | (absent) | `tree` |
-| `tree` | `{task: table}` | `tree` | `table` | `table` |
-| `tree` | (absent) | (absent) | `tree` | `tree` |
-| (absent on kind) | (absent) | (absent) | `tree` | `tree` (works on any kind that *can* resolve a parent_field; ValidationError if not) |
-| (absent) | (absent) | (absent) | `nope` | exit 2, `unknown layout 'nope'` |
+| settings `default_layouts[task]` | view `layout` | flag `--layout` | Effective layout | Effective parent_field |
+|----------------------------------|---------------|-----------------|------------------|------------------------|
+| (absent) | (absent) | (absent) | `table` | n/a |
+| `{layout: tree, parent_field: parent}` | (absent) | (absent) | `tree` | `parent` |
+| `{layout: tree, parent_field: parent}` | (absent) | `table` | `table` | n/a |
+| `{layout: tree, parent_field: parent}` | `table` (view) | (absent) | `table` | n/a |
+| `{layout: tree, parent_field: parent}` | `table` (view) | `tree` | `tree` | `parent` (rung 2 in §8.2 sibling chain) |
+| `table` (string-form) | (absent) | (absent) | `table` | n/a |
+| `table` (string-form) | `{layout: tree, parent_field: parent}` (view) | (absent) | `tree` | `parent` |
+| (absent) | (absent) | `tree` | exit 2 — "layout 'tree' requires parent_field" |
+| (absent) | (absent) | `nope` | exit 2 — "unknown layout 'nope'" |
+| `{layout: tree}` (no parent_field) | n/a | n/a | exit 2 at settings parse — "default_layouts[task] declares layout 'tree' but has no parent_field" |
+| `{layout: table, parent_field: parent}` | n/a | n/a | exit 2 at settings parse — "parent_field is set but layout is 'table'" |
 
 ### 8.6 Help text
 
@@ -894,7 +1088,7 @@ unchanged.
 
 ## 10. Settings Layer — `ViewConfig`, `ViewsConfig`, `default_layouts`
 
-### 10.1 `ViewConfig` — add optional `layout` field
+### 10.1 `ViewConfig` — add `layout` and `parent_field`
 
 ```python
 @dataclass
@@ -902,7 +1096,8 @@ class ViewConfig:
     columns: str
     filters: dict[str, Any] = field(default_factory=dict)
     sort: str | None = None
-    layout: str | None = None      # NEW — None means "fall through"
+    layout: str | None = None             # None means "fall through"
+    parent_field: str | None = None       # required when layout: tree
 ```
 
 YAML:
@@ -913,6 +1108,7 @@ views:
     columns: id,name,assignee,status
     filters: { status: in-progress }
     layout: tree
+    parent_field: parent           # required because layout: tree
 
   active-flat:
     columns: id,name,assignee,status
@@ -920,161 +1116,232 @@ views:
     layout: table
 ```
 
-Validation: if `layout` is set, it must be one of
-`views.LAYOUTS`. Otherwise → `ValidationError` at settings
-parse time (in `_parse_view`, `views/models.py:71–82`). Emitted
-as exit 2 by the CLI.
+Validation at `_parse_view`:
+
+| Condition | Outcome |
+|-----------|---------|
+| `layout` set but not in `views.LAYOUTS` | `ValueError("view 'layout' = <name> is not a registered layout")` |
+| `layout: tree` and `parent_field` absent or empty | `ValueError("view declares layout 'tree' but has no parent_field")` |
+| `layout: table` (or any non-tree) and `parent_field` set | `ValueError("view 'parent_field' is set but layout is not 'tree'")` |
 
 `layout` is **optional** — every existing view file keeps
 working unchanged. None means "fall through to the
-default_layouts / kind / implicit chain" per §8.2.
+`default_layouts` / implicit chain" per §8.2.
 
-### 10.2 `ViewsConfig` — add `default_layouts: dict[str, str]`
+### 10.2 `ViewsConfig` — `default_layouts: dict[str, LayoutConfig]`
 
 Symmetric to the existing `default_views: dict[str, str]`
-(s0007 § "Settings YAML Schema"). Maps kind name → layout
-name. Lets the user pin a layout per-kind without writing a
-view.
+(s0007 § "Settings YAML Schema"). Maps kind name to a
+**`LayoutConfig`** dataclass, not a bare string. The string-
+form shorthand from §3.2 is parsed into a `LayoutConfig` at
+load time.
 
 ```python
+@dataclass(frozen=True)
+class LayoutConfig:
+    layout: str                              # in views.LAYOUTS
+    parent_field: str | None = None          # required when layout: tree
+
 @dataclass
 class ViewsConfig:
     views: dict[str, ViewConfig]
     default_views: dict[str, str]
-    default_layouts: dict[str, str]      # NEW — empty dict if absent
+    default_layouts: dict[str, LayoutConfig]   # CHANGED — was dict[str, str]
 ```
 
-YAML:
+YAML (full vocabulary):
 
 ```yaml
 default_views:
   session: sessions
 
 default_layouts:
-  task: table          # opt out of tree on this vault
-  spec: table          # explicit (matches implicit anyway)
+  task:
+    layout: tree
+    parent_field: parent
+  spec: table             # string-form shorthand → LayoutConfig(layout="table")
+  research: table
 ```
 
-Validation at parse time: each value must be in
-`views.LAYOUTS`. Each key need not be a registered kind (so
-a vault can declare a preference for a kind it does not yet
-have without an error). Unknown layout name → `ValidationError`,
-exit 2.
+Parse-time validation per §3.5:
+
+```python
+def _parse_default_layouts(raw: object) -> dict[str, LayoutConfig]:
+    if not isinstance(raw, dict):
+        raise ValueError("default_layouts must be a mapping")
+    out: dict[str, LayoutConfig] = {}
+    for kind_name, entry in raw.items():
+        if isinstance(entry, str):
+            entry = {"layout": entry}
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"default_layouts[{kind_name!r}] must be a string or mapping"
+            )
+        layout = entry.get("layout")
+        if not isinstance(layout, str) or layout not in LAYOUTS:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}].layout = {layout!r}"
+                f" is not a registered layout; known: {sorted(LAYOUTS)}"
+            )
+        parent_field = entry.get("parent_field")
+        if layout == "tree" and not parent_field:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}] declares layout 'tree'"
+                " but has no parent_field"
+            )
+        if layout != "tree" and parent_field is not None:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}].parent_field is set but"
+                f" layout is {layout!r}"
+            )
+        out[kind_name] = LayoutConfig(layout=layout, parent_field=parent_field)
+    return out
+```
+
+The kind-name key is intentionally unvalidated against the
+registry (see §3.5).
 
 ### 10.3 Vocabulary-collision risk — addressed
 
-The n0002 risk: `ViewConfig` already speaks the language of
-"how the user wants to look at data". Adding `layout` could
-collide with `views` itself.
+The pre-revision argument carries over verbatim. `views` is
+the module name and configuration namespace; `layout` is a
+field within a view; `default_layouts` is a sibling top-level
+key parallel to `default_views`. No collision.
 
-**Resolution**: `views` is the **module name** and the
-**configuration namespace**. `layout` is a **field within a
-view**. The two are at different levels — a view has a
-columns string, a filters dict, a sort key, and now a layout
-name. No collision: the view declares "use the tree layout
-for this saved query"; the layout is internal vocabulary
-of the renderer.
-
-The existing top-level `views:` and `default_views:`
-keys keep their meaning (saved queries; per-kind default
-view binding). `default_layouts:` is the new sibling key,
-parallel to `default_views:` but for the layout dimension.
-The two are independent: a vault may set `default_views.task =
-active` and `default_layouts.task = table` simultaneously —
-the active view runs, in flat-table form.
+`parent_field` is a field on `ViewConfig` and `LayoutConfig`;
+it does not appear at top level and does not collide with any
+existing settings key.
 
 ### 10.4 `ViewsSettings.from_base` updates
 
-`from_base` (in `views/models.py:42–68`) gains parsing of:
-
-- `base.raw["default_layouts"]` (optional dict)
-
-```python
-raw_dl = base.raw.get("default_layouts") or {}
-if not isinstance(raw_dl, dict):
-    raise ValueError("default_layouts must be a mapping")
-for k, v in raw_dl.items():
-    if v not in views.LAYOUTS:
-        raise ValueError(f"default_layouts[{k!r}] = {v!r} is not a registered layout")
-```
-
-`_parse_view` is extended to read `layout`:
+`from_base` (in `views/models.py:42–68`) parses
+`base.raw["default_layouts"]` via `_parse_default_layouts`
+above. `_parse_view` is extended to read `layout` and
+`parent_field` together:
 
 ```python
 def _parse_view(d: dict) -> ViewConfig:
     if "columns" not in d:
         raise ValueError("view entry missing required 'columns' field")
     layout = d.get("layout")
-    if layout is not None and layout not in views.LAYOUTS:
+    parent_field = d.get("parent_field")
+    if layout is not None and layout not in LAYOUTS:
         raise ValueError(f"view 'layout' = {layout!r} is not a registered layout")
+    if layout == "tree" and not parent_field:
+        raise ValueError("view declares layout 'tree' but has no parent_field")
+    if layout != "tree" and parent_field is not None:
+        raise ValueError(
+            f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
+        )
     return ViewConfig(
         columns=d["columns"],
         filters=dict(d.get("filters") or {}),
         sort=d.get("sort"),
         layout=layout,
+        parent_field=parent_field,
     )
 ```
 
 The layout-validation in both helpers reads from
-`views.layouts.LAYOUTS` — i.e. the same registry the CLI uses.
-A circular import is avoided by importing inside the function
-body (Python permits this).
+`views.layouts.LAYOUTS`. The circular-import workaround
+already in place (`from artifacts_os.views.layouts import
+LAYOUTS` inside the function body) is preserved.
 
-## 11. `x-columns` Migration — Compatibility Path
+## 11. Kind-File Compatibility Path
 
-### 11.1 Decision — preserve `x-columns` unchanged
+### 11.1 Decision — `x-columns` preserved; `x-layouts` deleted
 
-`x-columns` keeps its meaning, its key name, its position in
-`kind.json`, and its parsed home in `meta["columns"]`. **No
-migration is required for any existing kind file**, in v1 or
-beyond.
+Two orthogonal kind-file decisions, one for each block that
+the original spec touched:
 
-### 11.2 Rationale — column model is layout-independent
+| Block | Disposition | Where it lives now |
+|-------|-------------|--------------------|
+| `x-columns` | **preserved unchanged** | kind JSON; parsed into `meta["columns"]` |
+| `x-layouts` | **deleted entirely** | configuration moves to `artifacts.yaml` (§3) |
 
-The note (n0002 Risk #1) flags the migration blast radius if
-the kind-file shape changes. The cleanest path is to not
-change it: `x-columns` lists the column projection the
-**user reads**, and that projection is independent of the
-layout that draws it. The same `["id", "name", "status",
-"assignee"]` works for the table layout and for the tree
-layout — only the renderer changes; the columns do not.
+No new kind-side block (e.g. `x-hierarchy`, `x-tree`) replaces
+`x-layouts`. The `parent_field` datum that lived under
+`x-layouts.tree.parent_field` is **not** retained on the kind;
+it moves to the layout config in `artifacts.yaml`. See §3.3
+for the rationale.
 
-The `x-layouts` block (§3) is **additive**:
+### 11.2 Rationale — column model is layout-independent (unchanged)
 
-- Existing kind files: `x-columns` works as today; no
-  `x-layouts`; layout falls through to `table` (implicit
-  default). No behaviour change.
-- New / opted-in kind files: `x-columns` keeps its job;
-  `x-layouts` declares the layout default and tree
-  configuration. Two orthogonal blocks, one per concern.
+`x-columns` lists the column projection the user reads; that
+projection is independent of the layout that draws it. The
+same `["id", "name", "status", "assignee"]` works for the
+table layout and for the tree layout — only the renderer
+changes.
 
-### 11.3 Why not consolidate into `x-layouts.table.columns`
+The argument for keeping `x-columns` kind-side is unchanged
+from the original spec; the user pivot was specifically about
+*layout* configuration, and columns are a property of the data
+projection, not of the chosen render. (Compare: `parent_field`
+is consumed only by tree, so it is layout-coupled and moves
+with the layout.)
 
-An alternative considered: move the `x-columns` list under
-`x-layouts.table.columns`, justifying "each layout owns its
-own column list". This is rejected:
+### 11.3 Why not a narrower `x-hierarchy` block
 
-- Every existing kind file (5 in this vault, plus the 5
-  template kinds, plus any third-party vault using
-  artifacts-os) would need editing for zero user-visible
-  benefit.
-- Tree shares the same column list as table; making the
-  user duplicate it under both layouts is friction.
-- The "each layout owns its columns" framing is a v3
-  problem at best — when there is a third layout that
-  genuinely wants different columns.
+An alternative considered: keep a slim `x-hierarchy.parent_field`
+on the kind, distinct from any layout name, on the rationale
+that "this kind has a parent pointer" is a structural property
+of the data. Rejected:
 
-A future layout that needs different columns can declare
-`x-layouts.<name>.columns` *additively*, with documented
-fall-through to `x-columns` when absent. v1 does not need
-that escape hatch.
+- The user pivot was explicit: layout config does not live on
+  the kind. `x-hierarchy` is layout config under a different
+  name; the only layout that consumes `parent_field` is the
+  tree layout.
+- Splitting `parent_field` (kind-side) from `layout: tree`
+  (settings-side) creates two homes for one tightly coupled
+  pair. Settings users have to look in two files; vault
+  authors have to remember to update both when adding a new
+  hierarchical kind.
+- A second hierarchical kind (today, none; tomorrow, perhaps
+  `playlist` with a `tracks` field) is one `default_layouts`
+  entry away — same friction as `x-hierarchy` but in one file.
 
-### 11.4 Rollback story
+### 11.4 Backward-compatibility statement
 
-If `x-layouts` ever needs to be redesigned, kind files that
-declared it can have it stripped without affecting their
-table behaviour — `x-columns` carries on. The migration
-"out" of v1 is as cheap as the migration "in".
+This revision is **breaking against the as-shipped v1**. Three
+edges break:
+
+1. `x-layouts` on `kind.json` is no longer parsed. A vault
+   that wrote one to a custom kind silently loses the
+   configuration — nothing reads it.
+2. `KindDef.meta["layouts"]` is removed. Any caller that
+   reads it breaks. (In v1, the only consumer was
+   `cli/commands/list.py`'s `resolve_layout`, which is being
+   rewritten in this revision; no other consumers existed.)
+3. `render_tree(parent_field=None)` no longer falls back to
+   `kind_def.meta` — `parent_field` becomes a required keyword
+   argument. Callers that relied on the fallback get a
+   `TypeError` (good fail-loud; the migration is one keyword).
+
+**Downstream-user posture.** No artifacts-os user has
+`x-layouts` on a custom kind in production (the original
+shipped on 2026-05-06 and is being revised the same day).
+The migration any downstream user would need:
+
+```diff
+  // artifacts/kinds/<my-kind>.json
+- "x-layouts": {
+-   "default": "tree",
+-   "tree": { "parent_field": "parent" }
+- }
+
+  # artifacts.yaml
++ default_layouts:
++   <my-kind>:
++     layout: tree
++     parent_field: parent
+```
+
+### 11.5 Rollback story
+
+If `default_layouts` ever needs to be redesigned, removing
+the block from `artifacts.yaml` reverts every kind to flat
+table — same single-file scope as the migration "in". The
+kind JSON is untouched throughout.
 
 ## 12. Out-of-Scope (verbatim from n0002 § "Out of scope")
 
@@ -1089,74 +1356,161 @@ does not relax any of these in v1.
 - **Layouts driven by `depends_on`.** Tree-of-parents only for
   now.
 
-## 13. Implementation Outline (for follow-up tasks)
+## 13. Migration Plan — As-Shipped Work
 
-The four follow-up tasks from n0002 § "Work breakdown" map to
-this spec:
+This revision lands after t0115, t0116, t0117 are `done` and
+t0118 is `rejected`. The PM uses this section verbatim to
+queue the next round of implementation tasks. Each block lists
+**what to revert**, **what to add**, and **expected diff scope**.
 
-### Task #2 — Kind schema + migration (developer)
+### 13.1 Revert kind schema (touch t0115)
 
-1. Add `x-layouts` block to `artifacts/kinds/task.json` per §3.4.
-2. Update `registry._load_vault_kinds` to:
-   - Validate `x-layouts` per §3.3.
-   - Populate `meta["layouts"]` per §3.3.
-3. No changes to `agent.json`, `note.json`, `research.json`,
-   `spec.json` (verify that `art ls --kind <each>` produces
-   identical output before/after).
-4. Tests: vault with `x-layouts` present and absent; invalid
-   `default`; missing `tree.parent_field`; `parent_field`
-   typo (not in `properties`).
+**Files affected:**
 
-### Task #3 — Tree renderer in `views/` (developer)
+| Path | Change |
+|------|--------|
+| `artifacts/kinds/task.json` | Remove the `x-layouts` block. `x-columns`, `x-status-colors`, and properties stay byte-unchanged. |
+| `src/artifacts_os/core/registry.py` | Remove `_KNOWN_LAYOUTS`, `_validate_and_parse_layouts`, the call site in `_load_vault_kinds` that populates `meta["layouts"]`. |
+| `tests/core/test_registry.py` | Remove the 8 tests added by t0115 (valid parse, absent block, unknown default, missing tree block, parent_field absent, parent_field wrong type, table-default-without-tree, non-object x-layouts). The 12 pre-existing registry tests stay. |
 
-1. New module `src/artifacts_os/views/layouts/`:
-   - `tree.py` — `compute_tree`, `render_tree`, `TreeNote`.
-   - `table.py` — re-export of `render_table` for symmetry.
-   - `__init__.py` — `LAYOUTS` registry.
-2. Promote `core.discover._unwrap_wikilink` to public
-   `core.discover.unwrap_wikilink` (no behaviour change; just
-   a rename + back-compat alias kept private for one cycle).
-3. Add `Registry.exists_stem(stem) -> bool` for the §6.4
-   B-vs-C distinction.
-4. Re-export from `views/__init__.py`: `Layout`, `LAYOUTS`,
-   `render_tree`, `compute_tree`, `TreeNote`.
-5. Tests:
-   - Pure `compute_tree`: §6.4 cases A, B, C, D; sibling
-     order; sort-key threading.
-   - `render_tree` table output: prefix on first column,
-     annotations on cases B/C/D.
-   - Cycle detection emits one stderr warning; row gets `↻`.
+**Add:** `KindDef.schema_properties` accessor (§3.6). The
+parser already retains the kind JSON `properties` map; expose
+it on `KindDef` as `set[str]` of property names. One small
+field; no validation at registry load (the property-existence
+check moves to `cli/commands/list.py`, §8.2).
 
-### Task #4 — CLI wiring (developer; depends on #3)
+**Test scope:** existing 12 registry tests still pass; one
+new test confirms `kd.schema_properties` returns the expected
+set for `task.json`.
 
-1. Add `--layout` flag to `cli/commands/list.py` parser (§8.1).
-2. Add `--layout` to `_RESERVED_FILTER_FLAG_NAMES`.
-3. Add `resolve_layout` helper (§8.2).
-4. Modify `run()` to call `views.LAYOUTS[name](items, columns,
-   kind_def=..., parent_field=...)` for tree and pass
-   `sort_key` (when active) instead of `_apply_sort` on flat
-   list.
-5. Validate `--layout NAME` against `LAYOUTS`.
-6. Tests: §8.5 resolution-chain matrix; `-q`/`-j` unchanged
-   under `--layout tree`; the verification target (§6.5) on
-   the artifacts-os vault itself.
+**Cut as:** *one task*, type `implementation`, assignee
+`developer`. Title: `revert-x-layouts-from-kind-schema`.
 
-### Task #5 — Documentation (author / technical-writer)
+### 13.2 Renderer touch-up (touch t0116)
 
-1. `docs/settings.md` — add `default_layouts` section parallel
-   to existing `default_views`.
-2. `src/artifacts_os/views/README.md` — describe `LAYOUTS`,
-   `render_tree`, `compute_tree`, the `Layout` type alias.
-3. `src/artifacts_os/cli/README.md` — `--layout` flag under
-   `list`; resolution chain; `-q`/`-j` carve-out.
-4. `docs/adding-a-kind.md` — `x-layouts` block, when to
-   declare tree, the `parent_field` contract.
-5. `CLAUDE.md` "Coding Style" / "Naming Conventions" — no
-   changes required (no new naming convention).
+**Files affected:**
 
-Tasks #2 and #3 share no files except the regression tests on
-the artifacts-os vault itself. They can run in parallel; their
-join point is task #4 (CLI wiring), which depends on both.
+| Path | Change |
+|------|--------|
+| `src/artifacts_os/views/layouts/tree.py` | `render_tree`: change `parent_field: str \| None = None` to `parent_field: str` (required, no default). Remove the `if resolved_parent_field is None and kind_def is not None: ...` fallback block (today: roughly lines 174–183). The `kind_def` parameter stays — it carries `status_colors` for the underlying table render. |
+| `tests/views/...` | Update any `render_tree(...)` test call sites that omitted `parent_field` (relied on the kind_def fallback). The 44 tests added by t0116 should be reviewed; the cases that exercised the fallback either pivot to passing `parent_field` explicitly or become tests of the new "missing parent_field" surface (now a TypeError from missing kwarg, not a ValidationError from the fallback). |
+
+`compute_tree`, `TreeNote`, the `LAYOUTS` registry,
+`Registry.exists_stem`, `unwrap_wikilink`, and the algorithm
+in §6 are **unchanged**. The renderer remains
+mechanism-agnostic.
+
+**Cut as:** *one task*, type `implementation`, assignee
+`developer`. Sequence: independent of 13.1, can run in
+parallel. Title: `make-render-tree-parent-field-required`.
+
+### 13.3 Settings model — `LayoutConfig` and `parent_field` on views (new)
+
+**Files affected:**
+
+| Path | Change |
+|------|--------|
+| `src/artifacts_os/views/models.py` | Add `LayoutConfig` dataclass per §10.2. Change `ViewsConfig.default_layouts` from `dict[str, str]` to `dict[str, LayoutConfig]`. Add `parent_field: str \| None = None` to `ViewConfig`. Replace inline `default_layouts` validation with `_parse_default_layouts` (§10.2). Extend `_parse_view` to read and validate `parent_field` per §10.4. |
+| `tests/views/test_models.py` (or wherever models tests live) | Add tests for the parse-time validation matrix: string-form vs object-form `default_layouts`; tree without parent_field; non-tree with parent_field; unknown layout name; both `view.layout` and `view.parent_field` paired correctly and incorrectly. |
+
+**Sequence:** independent of 13.1 and 13.2. 13.4 (CLI)
+depends on this landing — it consumes `LayoutConfig.parent_field`.
+
+**Cut as:** *one task*, type `implementation`, assignee
+`developer`. Title: `extend-views-models-for-layout-config`.
+
+### 13.4 CLI wiring rework (touch t0117)
+
+**Files affected:**
+
+| Path | Change |
+|------|--------|
+| `src/artifacts_os/cli/commands/list.py` | `resolve_layout`: drop the `kind_def.meta.get("layouts", ...)` rung (today: lines 360–361). Add `resolve_parent_field` helper per §8.2 sibling chain. In `run()`: after `resolve_layout` returns, if layout == "tree" call `resolve_parent_field`, ValidationError if None, then verify `parent_field in kind_def.schema_properties` (§3.6). Pass the resolved `parent_field` to `render_tree`. |
+| `src/artifacts_os/cli/commands/list.py` (reserved set) | `_RESERVED_FILTER_FLAG_NAMES` keeps `"layout"`. No change required; included for completeness. |
+| `tests/cli/test_list_layout.py` | Update `TestResolveLayout` to match the §8.5 matrix (drop kind-default rows, add `LayoutConfig` rows). Add `TestResolveParentField`. Update integration tests that asserted "tree by default on `task` because `x-layouts` declares it" to instead set `default_layouts.task = LayoutConfig(layout="tree", parent_field="parent")` in the test vault's `artifacts.yaml`. |
+
+**Add tests for:** ValidationError on `--layout tree` without
+parent_field; ValidationError when parent_field doesn't match
+a property in the kind schema (`docs/settings.md` typo guard);
+parent-field reuse across `default_layouts` and view config.
+
+**Cut as:** *one task*, type `implementation`, assignee
+`developer`, **depends_on** 13.1 (`KindDef.schema_properties`),
+13.2 (`render_tree` signature), 13.3 (`LayoutConfig`). Title:
+`rewire-cli-resolve-layout-for-settings-only`.
+
+### 13.5 Vault-config migration
+
+**Files affected:**
+
+| Path | Change |
+|------|--------|
+| `artifacts/artifacts.yaml` | Add a `default_layouts:` block per §3.7: `task: { layout: tree, parent_field: parent }`. |
+
+This is the single-line change that preserves the §6.5
+verification target after the kind-side block is removed.
+
+**Sequence:** must land **with or before** 13.4 (otherwise
+`art ls --kind task` flips from tree to table on this vault
+between 13.1 landing and 13.4 landing). Recommended:
+**bundle into 13.4's diff** — adding the `artifacts.yaml`
+block and wiring the CLI to read it ship together so the
+behaviour is contiguous.
+
+### 13.6 Documentation respec (re-cut t0118)
+
+t0118 was rejected because it documented the pre-revision
+design. Re-cut after 13.4 lands. Per-file scope:
+
+| Path | Scope |
+|------|-------|
+| `docs/settings.md` | New "Layout selection" subsection. Document `default_layouts` (string-form and object-form, parent_field requirement for tree), `view.layout` + `view.parent_field`. Worked examples: vault wants flat tasks (`default_layouts.task: table`); vault wants tree tasks (`default_layouts.task: { layout: tree, parent_field: parent }`). Resolution-chain summary (4 rungs per §8.2) including the parent-field sibling chain. Link to `s0022-tree-layout` once. |
+| `docs/adding-a-kind.md` | **Remove** the `x-layouts` section that t0118 added. Replace with a one-paragraph note: "Layout configuration lives in `artifacts.yaml`, not `kind.json`. See [docs/settings.md](settings.md#layout-selection)." Remove `x-layouts` from the kind.json reference table. |
+| `src/artifacts_os/views/README.md` | Keep the `Layout`, `LAYOUTS`, `render_tree`, `compute_tree`, `TreeNote` API descriptions. **Remove** the `"layouts"` row from the `KindDef.meta` convention table (it no longer exists). Update settings extension subsection: `view.layout`, `view.parent_field`, `default_layouts: dict[str, LayoutConfig]`. Link to `s0022-tree-layout` once. |
+| `src/artifacts_os/cli/README.md` | Keep `--layout` in the flag table. Rewrite the resolution-chain section (4 rungs, not 5). Add the parent-field sibling chain. Worked example: pivot the "default tree on tasks" source from `x-layouts` to `default_layouts.task` in `artifacts.yaml`. Remove every reference to kind-side layout config. |
+| `src/artifacts_os/ai/claude/skills/artifacts-os/SKILL.md` | One-paragraph adjustment: "Tree layout for tasks is configured in `artifacts.yaml`'s `default_layouts`. Override per-invocation with `--layout table`. `-q` / `-j` are unaffected." |
+
+Cross-link consistency: every doc that mentions the new
+behaviour links to `s0022-tree-layout` exactly once. Spec
+internals (algorithm, cycle policy) defer to §6 / §8 as
+before.
+
+**Cut as:** *one task*, type `documentation`, assignee
+`author`. Title: `document-tree-layout-revised`. Depends on
+13.4.
+
+### 13.7 End-to-end verification (re-run t0119)
+
+Verification target unchanged: `art ls --kind task` on this
+vault renders `t0042` under `t0036` and `t0043`–`t0046`
+under `t0041`. The configuration mechanism that produces
+that shape is now §3.7 (`artifacts.yaml`), not the kind
+file.
+
+Add to the verification matrix:
+
+- `art ls --kind task --layout table` → flat output (existing).
+- Removing the `default_layouts.task` block from
+  `artifacts.yaml` and re-running `art ls --kind task` →
+  flat output (the new opt-out path; replaces "remove
+  `x-layouts`" from the original test).
+- Setting `default_layouts: { task: tree }` (object form,
+  no `parent_field`) → exit 2 at settings load with the
+  parent_field error per §3.5 rule 2.
+
+**Cut as:** *one task*, type `feature` verification (parent:
+t0114), assignee `user`. Title: `verify-tree-layout-revised`.
+
+### 13.8 Sequencing summary
+
+```
+13.1 (revert kind schema)   ─┐
+13.2 (renderer touch-up)    ─┼─→ 13.4 (CLI wiring + 13.5 vault config) ─→ 13.6 (docs) ─→ 13.7 (verify)
+13.3 (settings models)      ─┘
+```
+
+13.1, 13.2, 13.3 run in parallel. 13.4 joins them and bundles
+13.5. 13.6 follows 13.4. 13.7 closes out.
 
 ## 14. Test Plan Summary
 
@@ -1177,7 +1531,7 @@ Direct map from n0002 § "Open questions for the spec":
 
 | n0002 question | Resolution | Spec section |
 |----------------|-----------|--------------|
-| Where is the hierarchy declared? | `x-layouts.tree.parent_field` on the kind schema. Single string in v1; block name reserved for forward-compat to multi-source. | §3.1, §3.2 |
+| Where is the hierarchy declared? | **Revised 2026-05-06**: in `artifacts.yaml` under `default_layouts[<kind>].parent_field` or on a view's `parent_field` field. Kind JSON does not declare layout (originally `x-layouts.tree.parent_field`; pivoted per §0). Single string in v1; the same forward-compat extensions land in the same map. | §3.1, §3.2, §3.4 |
 | What does a root look like? Parent outside slice? Missing parent? | Four `TreeNote` cases: NORMAL (root), ORPHAN_OUT_OF_SLICE (parent in registry but filtered out), ORPHAN_MISSING (parent not in registry), CYCLE_BREAK. Each rendered with a distinct annotation; all kept visible. | §6.4 |
 | What sibling order does the user see? | Default: by `id` (or `name` for non-numbered kinds). With `--sort`/`view.sort`: by that key, applied at every level; tree shape preserved. | §6.2 |
 | Cycles and orphans — fail loudly, break visibly, or silently flatten? | **Visible-break.** Render the back-edge row with `↻ cycle`, stop descending from that edge, emit one stderr warning per cycle. | §6.3 |
@@ -1188,6 +1542,7 @@ Direct map from n0002 § "Open questions for the spec":
 
 | Marker | Items |
 |--------|-------|
-| **Decided** | (1) Layout is a `Callable[(items, columns, kind_def), Renderable]` registered in `views.LAYOUTS`. (2) Tree returns `rich.Table`, not `rich.Tree`. (3) `x-layouts.tree.parent_field` is a single string in v1; forward-compat to multi-source by extending the same block. (4) Tree traversal lives in `views/`; `core.list_artifacts` stays flat. (5) Default sibling order is by `id` (or `name` for non-numbered kinds); `--sort` applies at every level with tree shape preserved. (6) Cycles → visible-break + `↻` annotation + single stderr warning. (7) Filtered-out parent → child is promoted to root with `↑[parent: <ref>]` Case B annotation. (8) `--layout` flag, no short form; resolution chain explicit > view > settings.default_layouts > kind.x-layouts.default > implicit "table". (9) `-q`/`-j` carve out: layout selection skipped; sort still applies on flat data. (10) `--fields` semantics under tree: same parser, prefix attaches to the **first** column. (11) `ViewConfig.layout: str \| None` and `ViewsConfig.default_layouts: dict[str, str]` are added; both optional. (12) `x-columns` preserved unchanged; `x-layouts` is additive. (13) Bidirectional traversal precedence: when a future kind declares both `parent_field` and `children_field`, `parent_field` is the traversal source; `children_field` is denormalized metadata the layout does not read. No divergence policy. |
+| **Decided (original 2026-05-06)** | (1) Layout is a `Callable[(items, columns, kind_def), Renderable]` registered in `views.LAYOUTS`. (2) Tree returns `rich.Table`, not `rich.Tree`. (3) ~~`x-layouts.tree.parent_field` is a single string in v1; forward-compat to multi-source by extending the same block.~~ — **superseded by R-1 below.** (4) Tree traversal lives in `views/`; `core.list_artifacts` stays flat. (5) Default sibling order is by `id` (or `name` for non-numbered kinds); `--sort` applies at every level with tree shape preserved. (6) Cycles → visible-break + `↻` annotation + single stderr warning. (7) Filtered-out parent → child is promoted to root with `↑[parent: <ref>]` Case B annotation. (8) `--layout` flag, no short form; ~~resolution chain explicit > view > settings.default_layouts > kind.x-layouts.default > implicit "table".~~ — **superseded by R-3 below.** (9) `-q`/`-j` carve out: layout selection skipped; sort still applies on flat data. (10) `--fields` semantics under tree: same parser, prefix attaches to the **first** column. (11) ~~`ViewConfig.layout: str \| None` and `ViewsConfig.default_layouts: dict[str, str]` are added; both optional.~~ — **revised by R-4 below.** (12) `x-columns` preserved unchanged; ~~`x-layouts` is additive.~~ — **`x-layouts` deleted entirely; see R-2 below.** (13) Bidirectional traversal precedence: when a future kind declares both `parent_field` and `children_field`, `parent_field` is the traversal source; `children_field` is denormalized metadata the layout does not read. No divergence policy. |
+| **Decided (revision 2026-05-06)** | **(R-1)** Layout configuration lives in `artifacts.yaml` only; kind JSON describes data shape. **(R-2)** `x-layouts` is **deleted entirely** from the kind schema — no narrower replacement (`x-hierarchy`, etc.). The `parent_field` datum moves into the layout config object alongside the layout name. Rationale §11.3. **(R-3)** Resolution chain is **four rungs**: explicit `--layout` > `view.layout` > `default_layouts[<kind>].layout` > implicit `"table"`. The kind-default rung is removed. **(R-4)** `default_layouts` becomes `dict[str, LayoutConfig]` (object-form) with a string-form shorthand for layouts that take no config. `LayoutConfig` carries `layout: str` and `parent_field: str \| None`. **(R-5)** `ViewConfig` gains a `parent_field: str \| None` field. **(R-6)** `parent_field` resolution follows a parallel sibling chain (view > `default_layouts[<kind>]`); a `--layout tree` invocation without a resolvable parent_field is a ValidationError, not a silent fall-through. **(R-7)** Property-existence check (`parent_field` matches a kind property) moves from registry-load to CLI-resolve, keeping the renderer kind-agnostic and the registry presentation-agnostic. **(R-8)** `render_tree(parent_field=...)` becomes required (no kind_def fallback). **(R-9)** Breaking change against shipped v1; one-day window of as-shipped behaviour, no third-party adopters. Migration documented in §11.4. |
 | **Recommended** | (a) Implement task #3 against task #2's kind schema using the artifacts-os vault as integration fixture. (b) Add a `Registry.exists_stem` helper at the same time as `render_tree` so cases B and C diagnose precisely. (c) Promote `core.discover._unwrap_wikilink` to public `unwrap_wikilink` to give `views/` a clean import path. (d) Use `pytest.warns(...)` for the cycle-warning test rather than capturing stderr directly. |
 | **Deferred** | A second concrete layout (board, timeline, card). Multi-source tree (`parent + depends_on`). Down-pointer kinds (`tree.children_field`). Hierarchical `art show`. TUI integration. `x-layouts.<layout>.columns` (per-layout column lists). Per-kind `prefix_column` override (currently fixed to first column). Loud-fail mode for cycles (the present rendering surfaces the bug; loud-fail is opt-in for a future release if user research shows operators want it). |
