@@ -1,15 +1,26 @@
 """Settings models for artifacts_os.views.
 
-Defines ViewConfig, ViewsConfig, and ViewsSettings — the settings
-extension for the views module.
+Defines LayoutConfig, ViewConfig, ViewsConfig, and ViewsSettings — the
+settings extension for the views module.
 
-Spec: s0007-artifacts-os-views-module
+Spec: s0007-artifacts-os-views-module, s0022-tree-layout §10.2 / §10.4
 """
 
 from dataclasses import dataclass, field
 from typing import Any
 
 from artifacts_os.core.models import Settings
+
+
+@dataclass(frozen=True)
+class LayoutConfig:
+    """Layout configuration for a single kind in ``default_layouts``.
+
+    Spec: s0022-tree-layout §10.2.
+    """
+
+    layout: str
+    parent_field: str | None = None
 
 
 @dataclass
@@ -19,7 +30,8 @@ class ViewConfig:
     columns: str
     filters: dict[str, Any] = field(default_factory=dict)
     sort: str | None = None
-    layout: str | None = None  # None means fall through to default_layouts / kind / implicit
+    layout: str | None = None  # None means fall through to default_layouts / implicit
+    parent_field: str | None = None  # required when layout: tree
 
 
 @dataclass
@@ -28,7 +40,7 @@ class ViewsConfig:
 
     views: dict[str, ViewConfig]
     default_views: dict[str, str]
-    default_layouts: dict[str, str] = field(default_factory=dict)
+    default_layouts: dict[str, LayoutConfig] = field(default_factory=dict)
 
 
 @dataclass(kw_only=True)
@@ -50,31 +62,20 @@ class ViewsSettings(Settings):
         """
         raw_views: dict | None = base.raw.get("views")
         raw_defaults: dict | None = base.raw.get("default_views")
-        raw_dl: dict = base.raw.get("default_layouts") or {}
+        raw_dl_raw: object = base.raw.get("default_layouts") or {}
 
-        if not isinstance(raw_dl, dict):
-            raise ValueError("default_layouts must be a mapping")
+        parsed_dl = _parse_default_layouts(raw_dl_raw)
 
-        # Import inside function body to avoid circular import (views → layouts → views).
-        from artifacts_os.views.layouts import LAYOUTS  # noqa: PLC0415
-
-        for k, v in raw_dl.items():
-            if v not in LAYOUTS:
-                raise ValueError(
-                    f"default_layouts[{k!r}] = {v!r} is not a registered layout;"
-                    f" known: {sorted(LAYOUTS)}"
-                )
-
-        if raw_views is None and raw_defaults is None and not raw_dl:
+        if raw_views is None and raw_defaults is None and not parsed_dl:
             views_config = None
         else:
-            parsed: dict[str, ViewConfig] = {}
+            parsed_views: dict[str, ViewConfig] = {}
             for name, entry in (raw_views or {}).items():
-                parsed[name] = _parse_view(entry)
+                parsed_views[name] = _parse_view(entry)
             views_config = ViewsConfig(
-                views=parsed,
+                views=parsed_views,
                 default_views=dict(raw_defaults or {}),
-                default_layouts=dict(raw_dl),
+                default_layouts=parsed_dl,
             )
 
         return cls(
@@ -85,16 +86,65 @@ class ViewsSettings(Settings):
         )
 
 
+def _parse_default_layouts(raw: object) -> dict[str, LayoutConfig]:
+    """Parse and validate the ``default_layouts`` mapping from raw YAML.
+
+    Accepts a dict of kind-name → string shorthand or object form.
+    Raises ValueError on unknown layout, missing parent_field for tree,
+    or spurious parent_field for non-tree layouts.
+
+    Spec: s0022-tree-layout §10.2 / §3.5.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("default_layouts must be a mapping")
+
+    # Import inside function body to avoid circular import (views → layouts → views).
+    from artifacts_os.views.layouts import LAYOUTS  # noqa: PLC0415
+
+    out: dict[str, LayoutConfig] = {}
+    for kind_name, entry in raw.items():
+        if isinstance(entry, str):
+            entry = {"layout": entry}
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"default_layouts[{kind_name!r}] must be a string or mapping"
+            )
+        layout = entry.get("layout")
+        if not isinstance(layout, str) or layout not in LAYOUTS:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}].layout = {layout!r}"
+                f" is not a registered layout; known: {sorted(LAYOUTS)}"
+            )
+        parent_field = entry.get("parent_field")
+        if layout == "tree" and not parent_field:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}] declares layout 'tree'"
+                " but has no parent_field"
+            )
+        if layout != "tree" and parent_field is not None:
+            raise ValueError(
+                f"default_layouts[{kind_name!r}].parent_field is set but"
+                f" layout is {layout!r}"
+            )
+        out[kind_name] = LayoutConfig(layout=layout, parent_field=parent_field)
+    return out
+
+
 def _parse_view(d: dict) -> ViewConfig:
     """Parse a single view entry dict into a ViewConfig.
 
-    Raises ValueError if the required ``columns`` key is absent or if
-    ``layout`` is set to an unrecognised layout name.
+    Raises ValueError if the required ``columns`` key is absent, if
+    ``layout`` is unrecognised, or if ``layout`` / ``parent_field``
+    are paired incorrectly.
+
+    Spec: s0022-tree-layout §10.4.
     """
     if "columns" not in d:
         raise ValueError("view entry missing required 'columns' field")
 
     layout = d.get("layout")
+    parent_field = d.get("parent_field")
+
     if layout is not None:
         # Import inside function body to avoid circular import.
         from artifacts_os.views.layouts import LAYOUTS  # noqa: PLC0415
@@ -104,10 +154,22 @@ def _parse_view(d: dict) -> ViewConfig:
                 f"view 'layout' = {layout!r} is not a registered layout;"
                 f" known: {sorted(LAYOUTS)}"
             )
+        if layout == "tree" and not parent_field:
+            raise ValueError("view declares layout 'tree' but has no parent_field")
+        if layout != "tree" and parent_field is not None:
+            raise ValueError(
+                f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
+            )
+    elif parent_field is not None:
+        # parent_field without any layout is also invalid
+        raise ValueError(
+            f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
+        )
 
     return ViewConfig(
         columns=d["columns"],
         filters=dict(d.get("filters") or {}),
         sort=d.get("sort"),
         layout=layout,
+        parent_field=parent_field,
     )

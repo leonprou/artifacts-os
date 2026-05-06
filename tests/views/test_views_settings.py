@@ -1,12 +1,12 @@
-"""Tests for ViewConfig, ViewsConfig, and ViewsSettings.
+"""Tests for ViewConfig, ViewsConfig, ViewsSettings, and LayoutConfig.
 
-Spec: s0007-artifacts-os-views-module
+Spec: s0007-artifacts-os-views-module, s0022-tree-layout §10.2 / §10.4
 """
 
 import pytest
 
 from artifacts_os.core import load_settings
-from artifacts_os.views import ViewConfig, ViewsConfig, ViewsSettings
+from artifacts_os.views import LayoutConfig, ViewConfig, ViewsConfig, ViewsSettings
 
 
 def _write_yaml(tmp_path, content: str):
@@ -181,3 +181,158 @@ def test_end_to_end_load_settings_then_from_base(tmp_path):
 
     # default_views
     assert settings.views.default_views == {"task": "active"}
+
+
+# ---------------------------------------------------------------------------
+# default_layouts — string-form shorthand
+# ---------------------------------------------------------------------------
+
+
+def test_default_layouts_string_form(tmp_path):
+    """String-form shorthand 'task: table' parses to LayoutConfig(layout='table')."""
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task: table\n"
+        "  spec: table\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+
+    assert settings.views is not None
+    assert settings.views.default_layouts["task"] == LayoutConfig(layout="table")
+    assert settings.views.default_layouts["spec"] == LayoutConfig(layout="table")
+
+
+# ---------------------------------------------------------------------------
+# default_layouts — object-form with tree + parent_field
+# ---------------------------------------------------------------------------
+
+
+def test_default_layouts_object_form_tree(tmp_path):
+    """Object-form {layout: tree, parent_field: parent} parses to LayoutConfig correctly."""
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+
+    assert settings.views is not None
+    lc = settings.views.default_layouts["task"]
+    assert lc == LayoutConfig(layout="tree", parent_field="parent")
+
+
+# ---------------------------------------------------------------------------
+# default_layouts — tree without parent_field → ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_default_layouts_tree_without_parent_field(tmp_path):
+    """Tree layout without parent_field raises ValueError at parse time."""
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: tree\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="parent_field"):
+        ViewsSettings.from_base(base)
+
+
+# ---------------------------------------------------------------------------
+# default_layouts — non-tree with parent_field → ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_default_layouts_non_tree_with_parent_field(tmp_path):
+    """Non-tree layout with parent_field set raises ValueError at parse time."""
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: table\n"
+        "    parent_field: parent\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="parent_field"):
+        ViewsSettings.from_base(base)
+
+
+# ---------------------------------------------------------------------------
+# default_layouts — unknown layout name → ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_default_layouts_unknown_layout_name(tmp_path):
+    """Unknown layout name raises ValueError mentioning registered layouts."""
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task: kanban\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="not a registered layout"):
+        ViewsSettings.from_base(base)
+
+
+# ---------------------------------------------------------------------------
+# view.layout + view.parent_field — paired correctly
+# ---------------------------------------------------------------------------
+
+
+def test_view_layout_and_parent_field_paired_correctly(tmp_path):
+    """view with layout=tree and parent_field parses to ViewConfig correctly."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  tree-view:\n"
+        "    columns: id,name,status\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+
+    assert settings.views is not None
+    vc = settings.views.views["tree-view"]
+    assert vc.layout == "tree"
+    assert vc.parent_field == "parent"
+
+
+# ---------------------------------------------------------------------------
+# view.layout + view.parent_field — paired incorrectly → ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_view_tree_layout_without_parent_field(tmp_path):
+    """view with layout=tree but no parent_field raises ValueError."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id,name\n"
+        "    layout: tree\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="parent_field"):
+        ViewsSettings.from_base(base)
+
+
+def test_view_non_tree_layout_with_parent_field(tmp_path):
+    """view with layout=table and parent_field set raises ValueError."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id,name\n"
+        "    layout: table\n"
+        "    parent_field: parent\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="parent_field"):
+        ViewsSettings.from_base(base)
