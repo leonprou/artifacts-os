@@ -119,7 +119,7 @@ views:
   # ===== AGENT views =====
 
   agents:
-    columns: name,description
+    columns: name,alias,description
     filters: { kind: agent }
     sort: name
 

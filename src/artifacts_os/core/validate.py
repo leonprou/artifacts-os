@@ -26,7 +26,9 @@ _BUILTIN_FIELDS = frozenset({
     "updated", "agent", "task", "parent", "subtasks", "artifacts", "owner",
     "assignee", "type",
     # Agent-specific fields
-    "aliases", "description", "model", "skills", "tools", "allowed-tools",
+    # `aliases` retained alongside `alias` as a temporary harness-compat shim;
+    # see t0112 for the canonical rename to `alias` (scalar).
+    "alias", "aliases", "description", "model", "skills", "tools", "allowed-tools",
     # Extended task/research fields
     "summary", "completed", "depends_on",
 })

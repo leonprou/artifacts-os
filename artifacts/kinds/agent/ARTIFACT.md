@@ -28,7 +28,7 @@ list agents`.
 | `tools` | Comma-separated list of allowed tools (legacy format). |
 | `allowed-tools` | YAML list of allowed tools with optional glob patterns (e.g. `Bash(git *)`). Preferred over `tools`. |
 | `skills` | YAML list of skill names this agent should invoke at startup or during work. |
-| `aliases` | YAML list of alternate names the harness may use to match task assignees. |
+| `alias` | Single alternate name the harness may use to match task assignees. Omit if no shorthand is needed. |
 
 ## How to author an agent
 

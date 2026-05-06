@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: technical-writer
+alias: tw
 aliases: [tw]
 description: >-
   Technical writer — owns the package's internal-facing

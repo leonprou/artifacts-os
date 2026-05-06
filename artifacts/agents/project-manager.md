@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: project-manager
+alias: pm
 aliases: [pm]
 description: >-
   Project coordinator — manages the task backlog, assigns agents,

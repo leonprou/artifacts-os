@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: developer
+alias: dev
 aliases: [dev]
 description: >-
   Hands-on implementer — turns technical specs into working code

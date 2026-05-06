@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: architect
+alias: arch
 aliases: [arch]
 description: >-
   Technical architect — designs systems, writes specs, chooses

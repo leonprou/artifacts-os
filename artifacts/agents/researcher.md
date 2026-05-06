@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: researcher
+alias: res
 aliases: [res]
 description: >-
   Research agent for gathering, analyzing, and synthesizing

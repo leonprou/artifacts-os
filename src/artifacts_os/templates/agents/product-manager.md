@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: product-manager
+alias: pdm
 aliases: [pdm]
 description: >-
   Product manager — hands-on user-story authoring, feature-task

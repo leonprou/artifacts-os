@@ -1,6 +1,7 @@
 ---
 kind: agent
 name: devrel
+alias: dr
 aliases: [dr]
 description: >-
   Developer relations agent — writes articles, tutorials, demos,
