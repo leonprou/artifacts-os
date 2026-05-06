@@ -6,8 +6,9 @@ kind: task
 name: fix-failing-tests
 owner: user
 started: 2026-05-05
-status: verified
+status: done
 type: implementation
+completed: 2026-05-06
 ---
 
 # Fix Failing Tests
