@@ -23,6 +23,11 @@ class KindDef:
     description: str | None = None
     has_template: bool = False
 
+    @property
+    def schema_properties(self) -> set[str]:
+        """Names of properties defined in the kind's JSON schema."""
+        return set(self.schema.get("properties", {}).keys())
+
 
 @dataclass
 class ArtifactMeta:

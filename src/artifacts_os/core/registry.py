@@ -60,62 +60,6 @@ def _validate_description(description: str, kind_name: str) -> str:
     return description
 
 
-# Layout names recognised in v1.
-_KNOWN_LAYOUTS: frozenset[str] = frozenset({"table", "tree"})
-
-
-def _validate_and_parse_layouts(
-    block: object,
-    kind_name: str,
-    schema: dict,
-) -> dict:
-    """Validate *block* (value of ``x-layouts``) and return the parsed dict.
-
-    Raises ``ValidationError`` for unknown ``default``, missing ``tree``
-    block when ``default == "tree"``, and invalid ``tree.parent_field``.
-    """
-    if not isinstance(block, dict):
-        raise ValidationError(
-            f"Kind '{kind_name}': 'x-layouts' must be an object"
-        )
-    result: dict = {}
-
-    default = block.get("default")
-    if default is not None:
-        if default not in _KNOWN_LAYOUTS:
-            raise ValidationError(
-                f"Kind '{kind_name}': unknown layout {default!r}"
-            )
-        result["default"] = default
-
-    tree_cfg = block.get("tree")
-    if default == "tree" and tree_cfg is None:
-        raise ValidationError(
-            f"Kind '{kind_name!r} declares default layout 'tree' but has no"
-            " x-layouts.tree block"
-        )
-    if tree_cfg is not None:
-        if not isinstance(tree_cfg, dict):
-            raise ValidationError(
-                f"Kind '{kind_name}': 'x-layouts.tree' must be an object"
-            )
-        parent_field = tree_cfg.get("parent_field")
-        if not isinstance(parent_field, str) or not parent_field:
-            raise ValidationError(
-                f"Kind '{kind_name}': 'x-layouts.tree.parent_field' must be"
-                " a non-empty string"
-            )
-        properties = schema.get("properties", {})
-        if parent_field not in properties:
-            raise ValidationError(
-                f"Kind '{kind_name}': 'x-layouts.tree.parent_field' value"
-                f" {parent_field!r} is not a property in the kind schema"
-            )
-        result["tree"] = {"parent_field": parent_field}
-
-    return result
-
-
 class Registry:
     def __init__(
         self,
@@ -223,10 +167,6 @@ class Registry:
                 meta["columns"] = schema["x-columns"]
             if "x-status-colors" in schema:
                 meta["status_colors"] = schema["x-status-colors"]
-            if "x-layouts" in schema:
-                meta["layouts"] = _validate_and_parse_layouts(
-                    schema["x-layouts"], name, schema
-                )
             required_fields = schema.get("x-required-fields")
 
             # --- L1: read ARTIFACT.md frontmatter only ---

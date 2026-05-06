@@ -3,12 +3,6 @@
   "x-prefix": "t",
   "x-numbered": true,
   "x-columns": ["id", "name", "status", "assignee"],
-  "x-layouts": {
-    "default": "tree",
-    "tree": {
-      "parent_field": "parent"
-    }
-  },
   "x-status-colors": {
     "backlog": "dim",
     "ready": "cyan",
