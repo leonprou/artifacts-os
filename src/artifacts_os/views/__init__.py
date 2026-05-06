@@ -18,6 +18,13 @@ from artifacts_os.views._views import (
     render_table,
 )
 from artifacts_os.views.models import ViewConfig, ViewsConfig, ViewsSettings
+from artifacts_os.views.layouts import (
+    Layout,
+    LAYOUTS,
+    TreeNote,
+    compute_tree,
+    render_tree,
+)
 
 __all__ = [
     "FieldSpec",
@@ -28,4 +35,9 @@ __all__ = [
     "ViewConfig",
     "ViewsConfig",
     "ViewsSettings",
+    "Layout",
+    "LAYOUTS",
+    "TreeNote",
+    "compute_tree",
+    "render_tree",
 ]

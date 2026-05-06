@@ -287,10 +287,14 @@ def search(
 # Graph traversal — parent / children
 # ---------------------------------------------------------------------------
 
-def _unwrap_wikilink(value: str) -> str:
+def unwrap_wikilink(value: str) -> str:
     """Return the inner ref of ``[[ref]]``, or the value unchanged."""
     m = _WIKILINK_RE.match(value.strip())
     return m.group(1) if m else value.strip()
+
+
+# Back-compat alias — kept private for one release cycle.
+_unwrap_wikilink = unwrap_wikilink
 
 
 def _ensure_meta(

@@ -13,7 +13,7 @@ except PackageNotFoundError:  # pragma: no cover — only hit in non-installed c
 from artifacts_os.core.vault import find_vault_root
 from artifacts_os.core.registry import Registry
 from artifacts_os.core.store import create, get, update
-from artifacts_os.core.discover import list_artifacts, resolve, search, parent, children
+from artifacts_os.core.discover import list_artifacts, resolve, search, parent, children, unwrap_wikilink
 from artifacts_os.core.models import Artifact, ArtifactMeta, KindDef, Settings, ProjectConfig
 from artifacts_os.core.settings import load_settings, UnsupportedSchemaVersion
 from artifacts_os.core.errors import (
@@ -37,6 +37,7 @@ __all__ = [
     "search",
     "parent",
     "children",
+    "unwrap_wikilink",
     "Artifact",
     "ArtifactMeta",
     "KindDef",
