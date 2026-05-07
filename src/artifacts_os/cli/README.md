@@ -76,7 +76,8 @@ artifacts show fix-login --kind task
 
 ```
 artifacts list [REF ...] [--kind KIND] [--status STATUS] [--filter K=V]...
-               [--view NAME] [--fields FIELDS] [-q | -j]
+               [--view NAME] [--fields FIELDS] [--layout NAME]
+               [--prune {strict|ancestors|subtree}] [-q | -j]
 ```
 
 Lists all artifacts as a table. Use filters to narrow the results.
@@ -89,6 +90,8 @@ Lists all artifacts as a table. Use filters to narrow the results.
 | `--filter K=V` | Frontmatter-equality filter (repeatable; last value per key wins) |
 | `--fields FIELDS`, `-f` | Choose which columns to display (comma-separated) |
 | `--view NAME`, `-V` | Apply a named view from `artifacts.yaml` (filters, columns, sort) |
+| `--layout NAME` | Presentation layout (`table`, `tree`); falls through to `default_layouts` in `artifacts.yaml` when omitted |
+| `--prune NAME` | Pruning mode for tree layouts (`strict`, `ancestors`, `subtree`); ignored on non-tree layouts |
 | `-q`, `--quiet` | One artifact name per line — good for scripts |
 | `-j`, `--json` | JSON array — good for pipelines |
 
@@ -198,16 +201,46 @@ validation is deferred to core (silent-no-match for unknown values).
 artifacts list --status review
 ```
 
+**Multi-value (CSV) input** — every enum-typed flag accepts a
+comma-separated list to match the union of those values
+(per [`s0023-multi-value-filters`](../../../artifacts/specs/s0023-multi-value-filters.md)).
+Single values still work unchanged.
+
+```bash
+# Single value
+artifacts list --kind task --status ready
+
+# Multi-value — "all in-flight work" in one call
+artifacts list --kind task --status ready,in-progress,review
+
+# Cross-kind, multi-value
+artifacts list --status ready,review
+```
+
+CSV validation:
+
+- Empty elements (`a,,b`, `a,`, `,a`) exit `2` with
+  `argument --status: empty value in CSV`.
+- In per-kind mode each element is validated against the enum;
+  a bogus element exits `2` with
+  `argument --status: invalid value '<elem>' (choose from: …)`.
+- Cross-kind mode skips per-element enum validation (enums
+  diverge by kind); bogus values silent-no-match in core.
+
 **Flag generation rules:**
 
 - One flag per schema `properties` entry; `--` + lowercase hyphenated name.
-- `enum` → `choices=` (per-kind only); `type: string` → free-form `TEXT`;
-  `type: integer` → argparse `int`; `type: boolean` → `true|false|1|0|yes|no`.
+- `enum` → CSV-aware `type=` callable with per-element enum
+  validation in per-kind mode (no `choices=`, since argparse
+  `choices=` runs against the raw string and would always
+  reject CSV input). `type: string` → free-form `TEXT`;
+  `type: integer` → argparse `int`; `type: boolean` →
+  `true|false|1|0|yes|no`.
 - `type: array` properties are skipped (use `--filter` for list-typed fields).
 - Flags that would collide with static flags (`--kind`, `--filter`,
-  `--view`, `--fields`, `--meta`, `--quiet`, `--json`, `--children`,
-  `--parent`) are silently skipped; those fields remain reachable via
-  `--filter k=v`.
+  `--view`, `--fields`, `--layout`, `--meta`, `--quiet`, `--json`,
+  `--children`, `--parent`) are silently skipped; those fields
+  remain reachable via `--filter k=v`.
 - `--status` is the only flag that is **augmented** in per-kind mode
   (keeping its `-s` short form) rather than being skipped.
 
@@ -279,6 +312,138 @@ view-filtered, view-sorted data.
 | `default_views.k = "v"` and `v` not found | `2` |
 
 To see what views are defined in the active vault, run `artifacts views`.
+
+#### Layouts — `--layout`
+
+`--layout NAME` picks the presentation layout for the result.
+The shipped layouts are `table` (flat, the historical default)
+and `tree` (parent-child rendering, with each row indented under
+its parent and a `└─` prefix on the first column). Layout
+configuration lives **only** in `artifacts.yaml` — kinds do not
+declare layouts.
+
+```bash
+# Default — falls through to default_layouts in artifacts.yaml
+# (this vault sets default_layouts.task = { layout: tree, parent_field: parent })
+artifacts list --kind task
+
+# Opt out for one call
+artifacts list --kind task --layout table
+
+# Force tree on a kind without a configured parent_field — exits 2
+artifacts list --kind spec --layout tree
+# → error: layout 'tree' requires parent_field; declare it in
+#   artifacts.yaml under default_layouts[spec] or a view config
+```
+
+`-q` and `-j` short-circuit before layout selection — they
+always emit the flat, sort-applied list. Combining `--layout`
+with `-q` / `-j` is silently ignored.
+
+**Resolution chain — explicit > view > settings > implicit.**
+Four rungs; first rung that resolves wins:
+
+| Rung | Source | Set by |
+|------|--------|--------|
+| 1 (highest) | `--layout NAME` | the user, per call |
+| 2 | `view.layout` | the active view in `artifacts.yaml` |
+| 3 | `default_layouts[<kind>]` | the vault's `default_layouts:` map in `artifacts.yaml` |
+| 4 (implicit) | `"table"` | nothing declared anywhere |
+
+**Parent-field sibling chain.** When the resolved layout is
+`tree`, the renderer needs a `parent_field`. It is resolved
+through a parallel chain consulting the same slots:
+
+| Rung | Source |
+|------|--------|
+| 1 (highest) | `view.parent_field` |
+| 2 | `default_layouts[<kind>].parent_field` |
+| 3 (implicit) | none — exits 2 with `layout 'tree' requires parent_field` |
+
+There is no `--parent-field` flag in v1; ad-hoc tree on a kind
+without a configured `parent_field` requires a one-line
+`artifacts.yaml` edit.
+
+**Worked example — default tree from `artifacts.yaml`.** The
+artifacts-os vault declares:
+
+```yaml
+# artifacts.yaml
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
+```
+
+Then:
+
+```bash
+# rung 3 — vault's default_layouts entry resolves layout=tree
+artifacts list --kind task
+# → tasks render as a tree
+
+# rung 1 — explicit flag beats everything
+artifacts list --kind task --layout table
+# → tasks render flat
+
+# rung 3 — flip the same map to opt out durably
+# artifacts/artifacts.yaml:
+#   default_layouts:
+#     task: table          # string-form shorthand
+artifacts list --kind task
+# → tasks render flat without --layout
+```
+
+Unknown layout names exit `2` with `error: unknown layout
+'<name>'`. The full algorithm (sibling order, cycle handling,
+orphan annotations) lives in
+[`s0022-tree-layout`](../../../artifacts/specs/s0022-tree-layout.md)
+§§ 6, 8.
+
+#### Prune modes — `--prune`
+
+For tree layouts, `--prune NAME` controls how the tree renders
+around a filtered slice. Three modes are defined:
+
+| Mode | Rendered set | Filter honesty |
+|------|--------------|----------------|
+| `strict` *(implicit default)* | only matched rows; orphan parents promote to root with `↑[parent: …]` | strict — every row matches |
+| `ancestors` | matched rows + each match's parent chain up to root, dimmed with `· (context)` | preserved via dim/marked context rows |
+| `subtree` | matched rows + each match's full descendant set, regardless of filter | relaxed — user opts into subtree expansion |
+
+```bash
+# Default = strict — the orphan annotation tells you a parent is hidden
+artifacts list --kind task --status verified
+# t0124  ↑[parent: t0114]   verified
+
+# ancestors — pull in the parent chain as context rows
+artifacts list --kind task --status verified --prune ancestors
+# t0114  · (context)        in-progress
+#   └─ t0124                verified
+
+# subtree — full descendant view of every active feature
+artifacts list --kind task --view active --prune subtree
+```
+
+`--prune` is silently ignored when the resolved layout is not
+`tree` (no hierarchy to prune). `-q` and `-j` short-circuit
+before pruning runs — their output is byte-for-byte identical
+regardless of `--prune`. `--children` and `--parent`
+neutralise prune (the user has already shaped an explicit
+slice).
+
+**Resolution chain — explicit > view > kind default > implicit.**
+
+| Rung | Source |
+|------|--------|
+| 1 (highest) | `--prune NAME` |
+| 2 | `view.prune` (named view in `artifacts.yaml`) |
+| 3 | `default_layouts[<kind>].prune` |
+| 4 (implicit) | `"strict"` |
+
+Unknown prune names exit `2` (argparse `choices` enforcement).
+The full design lives in
+[`s0024-tree-prune-modes`](../../../artifacts/specs/s0024-tree-prune-modes-strict-ancestors.md).
 
 ---
 

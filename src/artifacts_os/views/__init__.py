@@ -17,10 +17,11 @@ from artifacts_os.views._views import (
     parse_field_specs,
     render_table,
 )
-from artifacts_os.views.models import ViewConfig, ViewsConfig, ViewsSettings
+from artifacts_os.views.models import LayoutConfig, ViewConfig, ViewsConfig, ViewsSettings
 from artifacts_os.views.layouts import (
     Layout,
     LAYOUTS,
+    PRUNE_MODES,
     TreeNote,
     compute_tree,
     render_tree,
@@ -32,11 +33,13 @@ __all__ = [
     "format_field",
     "parse_field_specs",
     "render_table",
+    "LayoutConfig",
     "ViewConfig",
     "ViewsConfig",
     "ViewsSettings",
     "Layout",
     "LAYOUTS",
+    "PRUNE_MODES",
     "TreeNote",
     "compute_tree",
     "render_tree",

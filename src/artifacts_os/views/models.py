@@ -16,11 +16,14 @@ from artifacts_os.core.models import Settings
 class LayoutConfig:
     """Layout configuration for a single kind in ``default_layouts``.
 
-    Spec: s0022-tree-layout §10.2.
+    Spec: s0022-tree-layout §10.2; s0024-tree-prune-modes §5.3.
     """
 
     layout: str
     parent_field: str | None = None
+    # Prune mode for the tree layout (s0024 §5.3). None = inherit implicit
+    # default ("strict"). Must be unset for non-tree layouts.
+    prune: str | None = None
 
 
 @dataclass
@@ -32,6 +35,9 @@ class ViewConfig:
     sort: str | None = None
     layout: str | None = None  # None means fall through to default_layouts / implicit
     parent_field: str | None = None  # required when layout: tree
+    # Prune mode for tree-layout views (s0024 §5.2). None = inherit from
+    # default_layouts / implicit. Must be unset for non-tree views.
+    prune: str | None = None
 
 
 @dataclass
@@ -101,6 +107,9 @@ def _parse_default_layouts(raw: object) -> dict[str, LayoutConfig]:
     # Import inside function body to avoid circular import (views → layouts → views).
     from artifacts_os.views.layouts import LAYOUTS  # noqa: PLC0415
 
+    # Imported here too — same circular-import dance as LAYOUTS above.
+    from artifacts_os.views.layouts import PRUNE_MODES  # noqa: PLC0415
+
     out: dict[str, LayoutConfig] = {}
     for kind_name, entry in raw.items():
         if isinstance(entry, str):
@@ -126,7 +135,23 @@ def _parse_default_layouts(raw: object) -> dict[str, LayoutConfig]:
                 f"default_layouts[{kind_name!r}].parent_field is set but"
                 f" layout is {layout!r}"
             )
-        out[kind_name] = LayoutConfig(layout=layout, parent_field=parent_field)
+        prune = entry.get("prune")
+        if prune is not None:
+            if prune not in PRUNE_MODES:
+                raise ValueError(
+                    f"default_layouts[{kind_name!r}].prune = {prune!r}"
+                    f" is not a registered prune mode;"
+                    f" known: {sorted(PRUNE_MODES)}"
+                )
+            if layout != "tree":
+                raise ValueError(
+                    f"default_layouts[{kind_name!r}].prune is set but"
+                    f" layout is {layout!r} (prune is meaningful only for"
+                    " tree layouts; s0024 §3.7)"
+                )
+        out[kind_name] = LayoutConfig(
+            layout=layout, parent_field=parent_field, prune=prune
+        )
     return out
 
 
@@ -144,10 +169,11 @@ def _parse_view(d: dict) -> ViewConfig:
 
     layout = d.get("layout")
     parent_field = d.get("parent_field")
+    prune = d.get("prune")
 
     if layout is not None:
         # Import inside function body to avoid circular import.
-        from artifacts_os.views.layouts import LAYOUTS  # noqa: PLC0415
+        from artifacts_os.views.layouts import LAYOUTS, PRUNE_MODES  # noqa: PLC0415
 
         if layout not in LAYOUTS:
             raise ValueError(
@@ -160,16 +186,55 @@ def _parse_view(d: dict) -> ViewConfig:
             raise ValueError(
                 f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
             )
-    elif parent_field is not None:
-        # parent_field without any layout is also invalid
-        raise ValueError(
-            f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
-        )
+        if prune is not None:
+            if prune not in PRUNE_MODES:
+                raise ValueError(
+                    f"view 'prune' = {prune!r} is not a registered prune mode;"
+                    f" known: {sorted(PRUNE_MODES)}"
+                )
+            if layout != "tree":
+                raise ValueError(
+                    f"view 'prune' is set but layout is {layout!r} (prune is"
+                    " meaningful only for tree layouts; s0024 §3.7)"
+                )
+    else:
+        if parent_field is not None:
+            # parent_field without any layout is also invalid.
+            raise ValueError(
+                f"view 'parent_field' is set but layout is {layout!r} (not 'tree')"
+            )
+        if prune is not None:
+            raise ValueError(
+                f"view 'prune' is set but layout is {layout!r} (prune is"
+                " meaningful only for tree layouts; s0024 §3.7)"
+            )
+
+    raw_filters = dict(d.get("filters") or {})
+    _validate_filters_shape(raw_filters)
 
     return ViewConfig(
         columns=d["columns"],
-        filters=dict(d.get("filters") or {}),
+        filters=raw_filters,
         sort=d.get("sort"),
         layout=layout,
         parent_field=parent_field,
+        prune=prune,
     )
+
+
+def _validate_filters_shape(filters: dict[str, Any]) -> None:
+    """Validate ViewConfig filter values.
+
+    Per s0023-multi-value-filters § 3.3, an empty list value is always a
+    config bug — it means "match nothing", which is better expressed by
+    deleting the view. Raise ValueError naming the offending key.
+
+    Scalar values and non-empty list values pass through unchanged.
+    """
+    for key, value in filters.items():
+        if isinstance(value, list) and not value:
+            raise ValueError(
+                f"view filter {key!r} has empty list — "
+                "empty filter values are not allowed "
+                "(use a scalar or a non-empty list)"
+            )

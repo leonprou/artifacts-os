@@ -14,7 +14,12 @@ from rich.console import RenderableType
 
 from artifacts_os.core.models import ArtifactMeta, KindDef
 from artifacts_os.views._views import FieldSpec, render_table
-from artifacts_os.views.layouts.tree import TreeNote, compute_tree, render_tree
+from artifacts_os.views.layouts.tree import (
+    PRUNE_MODES,
+    TreeNote,
+    compute_tree,
+    render_tree,
+)
 
 # Layout callable type alias.
 # Concrete signature: (items, columns, *, kind_def=None, **kwargs) → RenderableType
@@ -30,6 +35,7 @@ LAYOUTS: dict[str, Layout] = {
 __all__ = [
     "Layout",
     "LAYOUTS",
+    "PRUNE_MODES",
     "TreeNote",
     "compute_tree",
     "render_tree",

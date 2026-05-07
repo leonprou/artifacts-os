@@ -1,6 +1,7 @@
-"""Tree layout: compute_tree, render_tree, TreeNote.
+"""Tree layout: compute_tree, render_tree, TreeNote, PRUNE_MODES.
 
-Spec: s0022-tree-layout §5, §6, §9
+Spec: s0022-tree-layout §5, §6, §9 (base) +
+      s0024-tree-prune-modes §3, §6 (prune modes)
 """
 
 import enum
@@ -8,6 +9,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+from rich.style import Style
 from rich.table import Table
 from rich.text import Text
 
@@ -24,6 +26,15 @@ class TreeNote(enum.Enum):
     ORPHAN_OUT_OF_SLICE = "orphan_out_of_slice"
     ORPHAN_MISSING = "orphan_missing"
     CYCLE_BREAK = "cycle_break"
+    # s0024 §6.2 — ancestor pulled in by prune=ancestors; render dim with
+    # `· (context)` annotation so the user can tell it didn't match the filter.
+    CONTEXT_ANCESTOR = "context_ancestor"
+
+
+#: Registered prune modes (s0024 §3.1). Adding a fourth mode means
+#: registering it here, teaching ``_apply_prune`` how to expand, and
+#: documenting the visual contract in s0024.
+PRUNE_MODES: frozenset[str] = frozenset({"strict", "ancestors", "subtree"})
 
 
 def _default_sort_key(item: ArtifactMeta) -> str:
@@ -127,6 +138,161 @@ def compute_tree(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Prune expansion (s0024 §6.3 / §6.4)
+# ---------------------------------------------------------------------------
+
+
+def _expand_ancestors(
+    items: list[ArtifactMeta],
+    *,
+    parent_field: str,
+    full_items: list[ArtifactMeta],
+) -> tuple[list[ArtifactMeta], set[str]]:
+    """Return (items + walked ancestors, set of ancestor stems).
+
+    For each item whose ``parent_field`` resolves to a stem outside the
+    matched set, walk upward via *full_items* until a root, a matched
+    ancestor, a missing parent, or a cycle is reached. Each newly
+    discovered ancestor is added to the working list.
+
+    The returned ancestor stem set is used by render_tree to mark those
+    rows as TreeNote.CONTEXT_ANCESTOR.
+
+    Cycle detection emits one stderr warning per cycle, identical wording
+    to s0022 §6.3.
+    """
+    matched_stems: set[str] = {item.path.stem for item in items}
+    full_by_stem: dict[str, ArtifactMeta] = {
+        m.path.stem: m for m in full_items
+    }
+    ancestors: dict[str, ArtifactMeta] = {}
+    warned_cycles: set[frozenset[str]] = set()
+
+    for item in items:
+        # Walk up from this item's direct parent.
+        cur_ref = item.frontmatter.get(parent_field)
+        # Track stems visited by *this* walk for cycle detection.
+        walk_visited: set[str] = {item.path.stem}
+        while cur_ref:
+            bare = unwrap_wikilink(str(cur_ref))
+            if not bare:
+                break
+            if bare in walk_visited:
+                # Cycle on the upward walk — warn once, halt walk.
+                cycle_key = frozenset(walk_visited | {bare})
+                if cycle_key not in warned_cycles:
+                    warned_cycles.add(cycle_key)
+                    print(
+                        "warning: cycle detected on parent chain of"
+                        f" {bare} (kind: {item.frontmatter.get('kind', 'unknown')})",
+                        file=sys.stderr,
+                    )
+                break
+            walk_visited.add(bare)
+
+            if bare in matched_stems:
+                # Reached a matched ancestor — child will attach beneath it.
+                break
+            if bare in ancestors:
+                # Already discovered via another walk — stop (no rework).
+                break
+            meta = full_by_stem.get(bare)
+            if meta is None:
+                # Parent missing from the full registry — child stays an
+                # orphan (Case C).
+                break
+            ancestors[bare] = meta
+            cur_ref = meta.frontmatter.get(parent_field)
+
+    expanded: list[ArtifactMeta] = list(items) + list(ancestors.values())
+    return expanded, set(ancestors.keys())
+
+
+def _expand_subtree(
+    items: list[ArtifactMeta],
+    *,
+    parent_field: str,
+    full_items: list[ArtifactMeta],
+) -> list[ArtifactMeta]:
+    """Return items + all descendants of every matched item.
+
+    For each x in *items*, BFS through children (computed from *full_items*)
+    and collect every descendant. Cycle-guarded by a global visited set.
+    """
+    matched_stems: set[str] = {item.path.stem for item in items}
+    full_by_stem: dict[str, ArtifactMeta] = {
+        m.path.stem: m for m in full_items
+    }
+
+    # Build a children_map over the full registry: parent_stem → list of meta.
+    children_map: dict[str, list[ArtifactMeta]] = {}
+    for m in full_items:
+        raw = m.frontmatter.get(parent_field)
+        if not raw:
+            continue
+        bare = unwrap_wikilink(str(raw))
+        if not bare:
+            continue
+        children_map.setdefault(bare, []).append(m)
+
+    descendants: dict[str, ArtifactMeta] = {}
+    visited: set[str] = set(matched_stems)
+    queue: list[str] = list(matched_stems)
+    while queue:
+        cur_stem = queue.pop(0)
+        for child in children_map.get(cur_stem, []):
+            child_stem = child.path.stem
+            if child_stem in visited:
+                continue
+            visited.add(child_stem)
+            descendants[child_stem] = child
+            queue.append(child_stem)
+
+    # full_by_stem unused below but kept for symmetry / future use.
+    del full_by_stem
+    return list(items) + list(descendants.values())
+
+
+def _apply_prune(
+    items: list[ArtifactMeta],
+    *,
+    prune: str,
+    parent_field: str,
+    full_items: list[ArtifactMeta] | None,
+) -> tuple[list[ArtifactMeta], set[str]]:
+    """Apply the requested prune mode and return (expanded_items, context_stems).
+
+    * ``strict`` — return items unchanged; no context stems.
+    * ``ancestors`` — walk upward via *full_items*, returning the matched
+      set plus discovered ancestors; ancestor stems flagged as context.
+    * ``subtree`` — expand every match's full descendant set via
+      *full_items*; no context stems (subtree opts out of filter honesty).
+
+    Raises ValueError on unknown mode or missing *full_items* for non-strict.
+    """
+    if prune == "strict":
+        return list(items), set()
+    if prune not in PRUNE_MODES:
+        raise ValueError(
+            f"unknown prune mode {prune!r}; known: {sorted(PRUNE_MODES)}"
+        )
+    if full_items is None:
+        raise ValueError(
+            f"prune={prune!r} requires full_items "
+            "(an unfiltered list to walk for ancestors / descendants)"
+        )
+    if prune == "ancestors":
+        return _expand_ancestors(
+            items, parent_field=parent_field, full_items=full_items
+        )
+    # subtree
+    return (
+        _expand_subtree(items, parent_field=parent_field, full_items=full_items),
+        set(),
+    )
+
+
 def _glyph(nodes: list[tuple[ArtifactMeta, int, TreeNote]], idx: int) -> str:
     """Return the tree-drawing prefix for the node at *idx*.
 
@@ -158,6 +324,8 @@ def render_tree(
     parent_field: str,
     sort_key: Callable[[ArtifactMeta], Any] | None = None,
     is_known_stem: Callable[[str], bool] | None = None,
+    prune: str = "strict",
+    full_items: list[ArtifactMeta] | None = None,
 ) -> Table:
     """Render *items* as a tree-prefixed Rich Table.
 
@@ -170,8 +338,31 @@ def render_tree(
     *is_known_stem* is used to distinguish Case B (parent filtered out,
     ↑[parent: ref]) from Case C (parent missing from vault, ?[parent: ref]).
     When None, both cases render as ?[parent: ref].
+
+    *prune* selects the prune mode (s0024 §3.1):
+
+    - ``strict`` (default) — render only the matched set; preserves the
+      existing s0022 §6.4 / §7 behaviour.
+    - ``ancestors`` — auto-include the parent chain of every matched
+      node up to root; rendered as dim ``· (context)`` rows.
+    - ``subtree`` — once a node matches, render its full descendant
+      subtree regardless of filter (no marking).
+
+    *full_items* — required when ``prune != 'strict'``. The unfiltered
+    list of artifacts (typically of the same kind) used to walk ancestors
+    and descendants.
     """
-    nodes = compute_tree(items, parent_field=parent_field, sort_key=sort_key)
+    # Apply prune expansion before tree assembly.
+    expanded_items, context_stems = _apply_prune(
+        items,
+        prune=prune,
+        parent_field=parent_field,
+        full_items=full_items,
+    )
+
+    nodes = compute_tree(
+        expanded_items, parent_field=parent_field, sort_key=sort_key
+    )
 
     table = Table()
     for col in columns:
@@ -181,7 +372,17 @@ def render_tree(
     if kind_def is not None:
         status_colors = kind_def.meta.get("status_colors", {})
 
+    dim_style = Style(dim=True)
+
     for idx, (item, depth, note) in enumerate(nodes):
+        is_context = item.path.stem in context_stems
+        # Promote the note when this row is a context ancestor — render_tree
+        # determines this from the prune-pass result rather than threading
+        # the note through compute_tree, which stays focused on assembly.
+        effective_note = (
+            TreeNote.CONTEXT_ANCESTOR if is_context else note
+        )
+
         row: list[Any] = []
         for col_idx, col in enumerate(columns):
             raw = item.frontmatter.get(col.key, "")
@@ -192,10 +393,16 @@ def render_tree(
                 prefix = _glyph(nodes, idx)
                 cell_str = prefix + cell_str
 
-                # Append annotation for non-normal nodes (§9.3).
-                if note == TreeNote.CYCLE_BREAK:
+                # Append annotation for non-normal nodes.
+                if effective_note == TreeNote.CYCLE_BREAK:
                     cell_str += "  ↻ cycle"
-                elif note in (TreeNote.ORPHAN_OUT_OF_SLICE, TreeNote.ORPHAN_MISSING):
+                elif effective_note == TreeNote.CONTEXT_ANCESTOR:
+                    # s0024 §3.3 filter-honesty marker.
+                    cell_str += "  · (context)"
+                elif effective_note in (
+                    TreeNote.ORPHAN_OUT_OF_SLICE,
+                    TreeNote.ORPHAN_MISSING,
+                ):
                     raw_parent = item.frontmatter.get(parent_field, "")
                     bare_ref = unwrap_wikilink(str(raw_parent)) if raw_parent else ""
                     if is_known_stem is not None and not is_known_stem(bare_ref):
@@ -208,7 +415,10 @@ def render_tree(
                         # Degraded: is_known_stem not provided; collapse B and C.
                         cell_str += f"  ?[parent: {bare_ref}]"
 
-            if col.key == "status" and cell_str in status_colors:
+            if effective_note == TreeNote.CONTEXT_ANCESTOR:
+                # Dim every cell in a context row so the eye skips past it.
+                row.append(Text(cell_str, style=dim_style))
+            elif col.key == "status" and cell_str in status_colors:
                 row.append(Text(cell_str, style=status_colors[cell_str]))
             else:
                 row.append(cell_str)

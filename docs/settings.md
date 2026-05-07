@@ -121,6 +121,45 @@ default_views:
   task: active   # auto-applies "active" view when --kind task is given
 ```
 
+#### Multi-value filters
+
+A filter value may be a list — every element is OR-ed within
+the key, while keys remain AND-ed across the dict. This is the
+SQL `IN`-style shape: `status: [ready, in-progress, review]`
+means "status is any of these three". Spec:
+[`s0023-multi-value-filters`](../artifacts/specs/s0023-multi-value-filters.md).
+
+| Filter value | Meaning |
+|--------------|---------|
+| Scalar (`str`/`int`/`bool`) | Equality, as today. |
+| `list` | OR-within-key — match if **any** element compares equal. |
+| `tags` (special) | Already list-membership; a list value means "any of these tags is present". |
+| Across keys | Always AND. |
+
+```yaml
+views:
+  # Scalar — single status
+  ready:
+    columns: id,name,assignee
+    filters: { kind: task, status: ready }
+
+  # List — all active (in-flight) work
+  active:
+    columns: id,name,status,assignee
+    filters: { kind: task, status: [ready, in-progress, review] }
+    sort: id
+
+  # AND-of-ORs — Alice's open work
+  alice-open:
+    columns: id,name,status
+    filters: { kind: task, status: [ready, in-progress], assignee: alice }
+```
+
+**Empty lists** are rejected at view-load time —
+`status: []` raises `ValueError` because an empty OR clause is
+always a config bug (it matches nothing; if that's the intent,
+delete the view).
+
 **Usage:**
 
 ```bash
@@ -140,6 +179,157 @@ for the full precedence model, error handling, and `-j`/`-q` contract.
 
 Run `artifacts views` to list every defined view from the command line; see
 [`cli/README.md`](../src/artifacts_os/cli/README.md) for the full reference.
+
+### Layout selection
+
+A view can be drawn as a flat table or as a parent-child tree.
+Layout configuration lives **only** in `artifacts.yaml` — kind
+JSON describes data shape, presentation is the vault's concern.
+Two settings keys steer the choice; both are optional and both
+default to "fall through to the implicit table".
+
+**`default_layouts`** — top-level map keyed by kind name, parallel
+to `default_views`. Each entry is either a **string-form**
+shorthand (for layouts that need no extra config) or an
+**object-form** mapping with explicit fields:
+
+| Field | Type | Required | Purpose |
+|-------|------|----------|---------|
+| `layout` | `"table"` \| `"tree"` | yes | Layout name; must be in the registry |
+| `parent_field` | string | required when `layout: tree`, forbidden otherwise | Frontmatter key on each artifact whose value points up to its parent (wikilink) |
+
+The string-form (`task: table`) is rejected for layouts that
+require config — `task: tree` raises `ValueError` at parse time
+because `tree` needs `parent_field`. Conversely, setting
+`parent_field` under a `layout: table` entry is also a parse-time
+error (cheap typo guard).
+
+**`view.layout` and `view.parent_field`** — optional fields on a
+single view definition. When `layout` is set, the view pins its
+own layout regardless of `default_layouts`. When `layout: tree`,
+`parent_field` is required on the same view.
+
+```yaml
+views:
+  active-tree:
+    columns: id,name,assignee,status
+    filters: { status: in-progress }
+    layout: tree
+    parent_field: parent
+
+  active-flat:
+    columns: id,name,assignee,status
+    filters: { status: in-progress }
+    layout: table
+```
+
+**Worked example — vault wants flat tasks.** Use the string-form
+shorthand:
+
+```yaml
+layout_version: 1
+project:
+  name: my-project
+
+default_layouts:
+  task: table          # this vault prefers flat for tasks
+```
+
+**Worked example — vault wants tree tasks.** Use the object-form
+with `parent_field`:
+
+```yaml
+layout_version: 1
+project:
+  name: my-project
+
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
+```
+
+`artifacts list --kind task` then renders as a parent-child tree
+with `└─` prefix on the first column.
+
+#### Resolution chain — 4 rungs
+
+The active layout is resolved per call. First rung that resolves
+wins:
+
+| Rung | Source |
+|------|--------|
+| 1 (highest) | `--layout NAME` (per call) |
+| 2 | `view.layout` (named view) |
+| 3 | `default_layouts[<kind>]` (vault default) |
+| 4 (implicit) | `"table"` |
+
+When the resolved layout is `tree`, `parent_field` is resolved
+through a **sibling chain** consulting the same slots in the
+same order — there is no `--parent-field` flag:
+
+| Rung | Source |
+|------|--------|
+| 1 (highest) | `view.parent_field` |
+| 2 | `default_layouts[<kind>].parent_field` |
+| 3 (implicit) | none — exits 2 with "layout 'tree' requires parent_field" |
+
+A user who passes `--layout tree` on a kind without a configured
+`parent_field` adds one entry to `artifacts.yaml`; the tool will
+not infer a field name.
+
+The full design and the rationale for the resolution order live
+in [`s0022-tree-layout`](../artifacts/specs/s0022-tree-layout.md).
+
+### Prune mode for tree layouts — `prune`
+
+When the layout is `tree`, the **prune mode** controls how the
+tree renders around a filtered slice. Three modes are defined:
+
+| Mode | Rendered set | When to use |
+|------|--------------|-------------|
+| `strict` *(default)* | only matched rows; orphan parents promote to root with `↑[parent: …]` annotation | triage queues — "what's actually active right now?" |
+| `ancestors` | matched rows + every match's parent chain up to root, rendered dim with `· (context)` | give context to narrow filters — "where does this active task live?" |
+| `subtree` | matched rows + every match's full descendant set, regardless of filter | feature progress reviews — "show everything around this active feature" |
+
+**Configuration surface.** Like `layout`, prune is set per
+view or per kind:
+
+```yaml
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
+    prune: ancestors      # vault-wide kind default
+
+views:
+  active:
+    columns: id,name,status,assignee
+    filters: { kind: task, status: [ready, in-progress, review, verified] }
+    layout: tree
+    parent_field: parent
+    prune: ancestors      # per-view override
+    sort: id
+```
+
+**Constraints.** `prune` is meaningful only on `layout: tree`
+views. Setting it on a `layout: table` (or layout-less) view is
+a parse-time `ValueError`. The recognised mode names are
+`strict`, `ancestors`, `subtree` — anything else fails parse.
+
+**Resolution chain.** Same shape as `layout` — first match wins:
+
+1. `--prune NAME` CLI flag (per call)
+2. `view.prune` (named view)
+3. `default_layouts[<kind>].prune` (vault-wide kind default)
+4. Implicit `strict`
+
+`--children` and `--parent` neutralise `prune`: when the user
+has already shaped an explicit slice, no automatic
+ancestor / subtree expansion happens.
+
+The full design lives in
+[`s0024-tree-prune-modes`](../artifacts/specs/s0024-tree-prune-modes-strict-ancestors.md).
 
 ---
 

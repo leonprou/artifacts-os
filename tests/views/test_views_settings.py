@@ -148,6 +148,63 @@ def test_empty_filters_defaults_to_empty_dict(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# multi-value filters (s0023): list-typed filter values round-trip; empty list rejected
+# ---------------------------------------------------------------------------
+
+
+def test_list_filter_value_round_trips(tmp_path):
+    """A list filter value parses through unchanged (s0023 § 3.1)."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  active:\n"
+        "    columns: id,name,status\n"
+        "    filters:\n"
+        "      kind: task\n"
+        "      status: [ready, in-progress, review]\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+    assert settings.views is not None
+    active = settings.views.views["active"]
+    assert active.filters == {
+        "kind": "task",
+        "status": ["ready", "in-progress", "review"],
+    }
+
+
+def test_empty_list_filter_value_rejected(tmp_path):
+    """`status: []` raises ValueError naming the offending key (s0023 § 3.3)."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id,name\n"
+        "    filters:\n"
+        "      status: []\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="empty list"):
+        ViewsSettings.from_base(base)
+
+
+def test_single_element_list_filter_value_allowed(tmp_path):
+    """A single-element list is a valid (degenerate) OR clause."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  one:\n"
+        "    columns: id,name\n"
+        "    filters:\n"
+        "      status: [ready]\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+    assert settings.views is not None
+    assert settings.views.views["one"].filters == {"status": ["ready"]}
+
+
+# ---------------------------------------------------------------------------
 # end-to-end: load_settings → ViewsSettings.from_base
 # ---------------------------------------------------------------------------
 
@@ -335,4 +392,141 @@ def test_view_non_tree_layout_with_parent_field(tmp_path):
     path = _write_yaml(tmp_path, yaml_content)
     base = load_settings(path)
     with pytest.raises(ValueError, match="parent_field"):
+        ViewsSettings.from_base(base)
+
+
+# ---------------------------------------------------------------------------
+# view.prune / default_layouts.<kind>.prune — s0024 §5.2 / §5.3
+# ---------------------------------------------------------------------------
+
+
+def test_view_prune_field_default_none():
+    """ViewConfig.prune defaults to None."""
+    vc = ViewConfig(columns="id,name")
+    assert vc.prune is None
+
+
+def test_layout_config_prune_field_default_none():
+    """LayoutConfig.prune defaults to None."""
+    lc = LayoutConfig(layout="table")
+    assert lc.prune is None
+
+
+def test_view_with_valid_prune_parses(tmp_path):
+    """tree view with prune=ancestors parses to ViewConfig.prune correctly."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  active:\n"
+        "    columns: id,name\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+        "    prune: ancestors\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+    assert settings.views is not None
+    assert settings.views.views["active"].prune == "ancestors"
+
+
+def test_view_with_subtree_prune_parses(tmp_path):
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  v:\n"
+        "    columns: id\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+        "    prune: subtree\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+    assert settings.views is not None
+    assert settings.views.views["v"].prune == "subtree"
+
+
+def test_view_with_unknown_prune_raises(tmp_path):
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+        "    prune: bogus\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="not a registered prune mode"):
+        ViewsSettings.from_base(base)
+
+
+def test_view_prune_on_table_layout_raises(tmp_path):
+    """prune is meaningful only on tree layouts (s0024 §3.7)."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id\n"
+        "    layout: table\n"
+        "    prune: ancestors\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="prune"):
+        ViewsSettings.from_base(base)
+
+
+def test_view_prune_without_layout_raises(tmp_path):
+    """prune set on a layout-less view is also a config error."""
+    yaml_content = _base_yaml(
+        "views:\n"
+        "  bad:\n"
+        "    columns: id\n"
+        "    prune: ancestors\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="prune"):
+        ViewsSettings.from_base(base)
+
+
+def test_default_layouts_with_prune_parses(tmp_path):
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+        "    prune: ancestors\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    settings = ViewsSettings.from_base(base)
+    assert settings.views is not None
+    cfg = settings.views.default_layouts["task"]
+    assert cfg.prune == "ancestors"
+
+
+def test_default_layouts_unknown_prune_raises(tmp_path):
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+        "    prune: bogus\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="not a registered prune mode"):
+        ViewsSettings.from_base(base)
+
+
+def test_default_layouts_prune_on_table_raises(tmp_path):
+    yaml_content = _base_yaml(
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: table\n"
+        "    prune: ancestors\n"
+    )
+    path = _write_yaml(tmp_path, yaml_content)
+    base = load_settings(path)
+    with pytest.raises(ValueError, match="prune"):
         ViewsSettings.from_base(base)

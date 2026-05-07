@@ -19,6 +19,11 @@ from artifacts_os.views import (
     format_field,
     default_columns,
     render_table,
+    Layout,              # callable type alias for layout functions
+    LAYOUTS,             # registry: layout name → layout function
+    render_tree,         # tree layout entry point
+    compute_tree,        # pure ordering helper used by render_tree
+    TreeNote,            # row annotation enum (NORMAL / ORPHAN_* / CYCLE_BREAK)
     ViewConfig,
     ViewsConfig,
     ViewsSettings,
@@ -126,6 +131,99 @@ KindDef(
 
 ---
 
+## Layouts
+
+A **layout** is a function that takes a list of `ArtifactMeta`
+plus a column list and returns a `rich` renderable. Layouts are
+the seam at which `views/` decides how rows are *arranged* —
+flat or hierarchical — without changing the column model
+(`FieldSpec`, `format_field`, `default_columns`,
+`status_colors`) the rest of the module owns.
+
+The shipped registry has two members:
+
+| Name   | Function       | What it draws                                    |
+|--------|----------------|--------------------------------------------------|
+| `table` | `render_table` | Flat `rich.Table`, one row per item, input order |
+| `tree`  | `render_tree`  | `rich.Table` with rows pre-ordered parent-before-children and a `└─` prefix on the first column; the caller (CLI) supplies `parent_field` — the renderer is mechanism-agnostic |
+
+`render_tree` returns a `rich.Table` (not `rich.Tree`) so the
+existing column model and status coloring carry over unchanged
+— the tree shape is encoded as a prefix on the first column.
+
+### Registry — `LAYOUTS`
+
+```python
+from artifacts_os.views import LAYOUTS, render_tree, render_table
+
+LAYOUTS["table"] is render_table   # True
+LAYOUTS["tree"] is render_tree     # True
+```
+
+The CLI looks up the chosen layout name in `LAYOUTS` and calls
+it. An unknown name raises `ValidationError`.
+
+### Registering a third layout
+
+A future layout (e.g. `board`) slots in additively:
+
+```python
+from artifacts_os.views.layouts import LAYOUTS
+
+def render_board(items, columns, *, kind_def=None, **kw):
+    ...   # return a rich renderable
+    return board
+
+LAYOUTS["board"] = render_board
+```
+
+Once registered, the new name becomes a valid value of
+`default_layouts[<kind>]`, `view.layout`, and `--layout`. No
+changes are required in the CLI resolution chain or in
+`render_table` / `render_tree`.
+
+The renderer ordering algorithm (parent-before-children
+traversal, sibling order, cycle handling, four orphan/cycle
+cases) is the responsibility of each layout. For `tree` see
+[`s0022-tree-layout`](../../../artifacts/specs/s0022-tree-layout.md)
+§ 6 for the full algorithm and § 8 for how the CLI selects a
+layout.
+
+### Prune modes — `PRUNE_MODES`
+
+`render_tree` accepts a `prune` keyword argument that controls
+how the tree renders around a filtered slice:
+
+| Mode | Behaviour |
+|------|-----------|
+| `strict` *(default)* | render only the matched set; orphans promote to root with `↑[parent: …]` |
+| `ancestors` | walk every match's parent chain via `full_items`; ancestors render as `TreeNote.CONTEXT_ANCESTOR` rows (dim, marked `· (context)`) |
+| `subtree` | expand every match's full descendant set via `full_items`; descendants render as normal rows |
+
+When `prune != "strict"`, the caller must pass `full_items`
+(an unfiltered `list[ArtifactMeta]`) so the engine can walk
+ancestors and descendants. The set of registered modes is
+exposed as `PRUNE_MODES`:
+
+```python
+from artifacts_os.views import PRUNE_MODES, render_tree
+
+table = render_tree(
+    matched_items, columns,
+    parent_field="parent",
+    prune="ancestors",
+    full_items=all_tasks,           # for ancestor / descendant walk
+    is_known_stem=registry.exists_stem,
+)
+
+assert PRUNE_MODES == frozenset({"strict", "ancestors", "subtree"})
+```
+
+The full design lives in
+[`s0024-tree-prune-modes`](../../../artifacts/specs/s0024-tree-prune-modes-strict-ancestors.md).
+
+---
+
 ## Usage Example
 
 End-to-end: list artifacts, build columns, render, print.
@@ -168,34 +266,69 @@ console.print(table)
 
 ## Settings Extension
 
-`views` owns the `views` and `default_views` top-level keys of
-`artifacts.yaml` end-to-end. `core.load_settings` parses the global
-section (`layout_version`, `project`) and stores the rest of the
-YAML document on `Settings.raw`; `views` reads its sections out of
-that dict and produces a typed `ViewsSettings` via
-`ViewsSettings.from_base`.
+`views` owns the `views`, `default_views`, and `default_layouts`
+top-level keys of `artifacts.yaml` end-to-end. `core.load_settings`
+parses the global section (`layout_version`, `project`) and
+stores the rest of the YAML document on `Settings.raw`; `views`
+reads its sections out of that dict and produces a typed
+`ViewsSettings` via `ViewsSettings.from_base`.
 
 ### `ViewConfig`
 
 A single named view: `columns` (field-spec string, same syntax as `parse_field_specs`),
-`filters` (frontmatter-key → expected value, default `{}`), `sort` (field key, default `None`).
-The caller parses `columns` into `FieldSpec` objects when needed.
+`filters` (frontmatter-key → expected value, default `{}`),
+`sort` (field key, default `None`), `layout` (layout name,
+default `None` — falls through to the `default_layouts` /
+implicit chain), `parent_field` (frontmatter key, required when
+`layout: "tree"`, forbidden otherwise). The caller parses
+`columns` into `FieldSpec` objects when needed.
+
+`filters` accepts both scalar and list values: a scalar means
+equality, a list means OR-within-key (per
+[`s0023-multi-value-filters`](../../../artifacts/specs/s0023-multi-value-filters.md)).
+Example:
+
+```yaml
+active-tree:
+  columns: id,name,status
+  filters: { kind: task, status: [ready, in-progress, review] }
+  layout: tree
+  parent_field: parent
+```
+
+Empty lists (`status: []`) are rejected with `ValueError` at
+`from_base` time — empty OR clauses are always config bugs.
+
+### `LayoutConfig`
+
+A single `default_layouts` entry: `layout` (layout name in
+`LAYOUTS`, required) and `parent_field` (frontmatter key,
+required when `layout: "tree"`, forbidden otherwise). YAML
+accepts a string-form shorthand (`task: table`) for layouts
+that need no extra config; tree entries must use the object form
+(`task: { layout: tree, parent_field: parent }`).
 
 ### `ViewsConfig`
 
-Holds both parsed sections: `views` (`dict[str, ViewConfig]`) and
-`default_views` (`dict[str, str]` mapping kind name → view name).
+Holds the parsed top-level keys: `views` (`dict[str, ViewConfig]`),
+`default_views` (`dict[str, str]` mapping kind name → view name),
+and `default_layouts` (`dict[str, LayoutConfig]` mapping kind
+name → typed layout config). `default_layouts` is parallel to
+`default_views` and steers the layout dimension of the resolution
+chain — see
+[`docs/settings.md`](../../../docs/settings.md#layout-selection).
 
 ### `ViewsSettings`
 
-Subclass of `core.Settings`. Adds `views: ViewsConfig | None` — `None` when neither
-`views` nor `default_views` is present in the settings file.
+Subclass of `core.Settings`. Adds `views: ViewsConfig | None` —
+`None` when none of `views`, `default_views`, or `default_layouts`
+is present in the settings file.
 
 #### `ViewsSettings.from_base(base: Settings) -> ViewsSettings`
 
-Constructs a `ViewsSettings` by reading the `views` and
-`default_views` sections out of `base.raw`. Chain it with
-`core.load_settings`:
+Constructs a `ViewsSettings` by reading the `views`,
+`default_views`, and `default_layouts` sections out of
+`base.raw`. Chain it with `core.load_settings`:
 
 ```python
 from pathlib import Path

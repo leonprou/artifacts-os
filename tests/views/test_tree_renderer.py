@@ -587,13 +587,14 @@ class TestViewsConfigLayout:
 
     def test_parse_view_with_valid_layout(self):
         base = self._make_base_settings(
-            {"views": {"active": {"columns": "id,name", "layout": "tree"}}}
+            {"views": {"active": {"columns": "id,name", "layout": "tree", "parent_field": "parent"}}}
         )
         from artifacts_os.views import ViewsSettings
 
         settings = ViewsSettings.from_base(base)
         assert settings.views is not None
         assert settings.views.views["active"].layout == "tree"
+        assert settings.views.views["active"].parent_field == "parent"
 
     def test_parse_view_with_invalid_layout_raises(self):
         base = self._make_base_settings(
@@ -606,11 +607,11 @@ class TestViewsConfigLayout:
 
     def test_default_layouts_parsed(self):
         base = self._make_base_settings({"default_layouts": {"task": "table"}})
-        from artifacts_os.views import ViewsSettings
+        from artifacts_os.views import ViewsSettings, LayoutConfig
 
         settings = ViewsSettings.from_base(base)
         assert settings.views is not None
-        assert settings.views.default_layouts == {"task": "table"}
+        assert settings.views.default_layouts == {"task": LayoutConfig(layout="table")}
 
     def test_default_layouts_unknown_value_raises(self):
         base = self._make_base_settings({"default_layouts": {"task": "nope"}})
@@ -628,3 +629,330 @@ class TestViewsConfigLayout:
         settings = ViewsSettings.from_base(base)
         assert settings.views is not None
         assert settings.views.default_layouts == {}
+
+
+# ---------------------------------------------------------------------------
+# render_tree — prune modes (s0024-tree-prune-modes §3, §6, §9)
+# ---------------------------------------------------------------------------
+
+
+class TestPruneStrict:
+    """prune='strict' is the s0022 v1 behaviour — included for invariance."""
+
+    def _cols(self):
+        return parse_field_specs("id,name")
+
+    def test_strict_default_when_unspecified(self):
+        # The default keyword is 'strict' — a render with no prune kwarg
+        # should match the s0022 §6.4 Case B output.
+        child = make_task("t0042", id="t0042", parent="t0036")
+        table = render_tree(
+            [child],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            is_known_stem=lambda s: s == "t0036",
+        )
+        cells = _first_col_cells(table)
+        assert "↑[parent: t0036]" in cells[0]
+
+    def test_strict_does_not_require_full_items(self):
+        items = [make_task("t0001", id="t0001")]
+        # No full_items kwarg — strict must not raise.
+        table = render_tree(
+            items,
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="strict",
+        )
+        assert isinstance(table, Table)
+
+
+class TestPruneAncestors:
+    def _cols(self):
+        return parse_field_specs("id,name")
+
+    def test_ancestor_walked_in_as_context(self):
+        """Filtered set has only t0042; t0036 walks in as context ancestor."""
+        t0036 = make_task("t0036", id="t0036")
+        t0042 = make_task("t0042", id="t0042", parent="t0036")
+        # Items (matched set) = [t0042]; full_items also has t0036.
+        table = render_tree(
+            [t0042],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[t0036, t0042],
+        )
+        cells = _first_col_cells(table)
+        # t0036 appears as a context row; t0042 is its child (no orphan annotation).
+        assert any("· (context)" in c and "t0036" in c for c in cells)
+        # t0042 is a child of t0036, not an orphan promoted to root.
+        assert all("↑[parent" not in c for c in cells)
+
+    def test_match_preservation_invariant(self):
+        """Every matched id appears in the rendered output."""
+        t0036 = make_task("t0036", id="t0036")
+        t0042 = make_task("t0042", id="t0042", parent="t0036")
+        t0050 = make_task("t0050", id="t0050")
+        items = [t0042, t0050]
+        table = render_tree(
+            items,
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[t0036, t0042, t0050],
+        )
+        cells = _first_col_cells(table)
+        for matched_id in ("t0042", "t0050"):
+            assert any(matched_id in c for c in cells)
+
+    def test_filter_honesty_invariant(self):
+        """Every non-matched row in ancestors mode carries (context) marker."""
+        t0036 = make_task("t0036", id="t0036")
+        t0042 = make_task("t0042", id="t0042", parent="t0036")
+        table = render_tree(
+            [t0042],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[t0036, t0042],
+        )
+        cells = _first_col_cells(table)
+        # t0036 is the only non-match and must be marked.
+        ancestor_cell = next(c for c in cells if "t0036" in c)
+        assert "· (context)" in ancestor_cell
+        match_cell = next(c for c in cells if "t0042" in c)
+        assert "· (context)" not in match_cell
+
+    def test_multi_level_ancestor_chain(self):
+        """Walk continues until root is reached."""
+        gp = make_task("t0001", id="t0001")
+        p = make_task("t0002", id="t0002", parent="t0001")
+        c = make_task("t0003", id="t0003", parent="t0002")
+        table = render_tree(
+            [c],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[gp, p, c],
+        )
+        cells = _first_col_cells(table)
+        assert any("t0001" in c and "· (context)" in c for c in cells)
+        assert any("t0002" in c and "· (context)" in c for c in cells)
+        assert any("t0003" in c and "· (context)" not in c for c in cells)
+
+    def test_walk_stops_at_matched_ancestor(self):
+        """Walking from c stops at p (matched) — c does not add p as context.
+
+        The walk from p continues upward to gp because gp is unmatched and
+        is the first context ancestor on p's chain.  p itself stays a
+        normal (not dimmed) row because it's in the matched set.
+        """
+        gp = make_task("t0001", id="t0001")  # NOT matched
+        p = make_task("t0002", id="t0002", parent="t0001")  # matched
+        c = make_task("t0003", id="t0003", parent="t0002")  # matched
+        table = render_tree(
+            [p, c],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[gp, p, c],
+        )
+        cells = _first_col_cells(table)
+        # p (matched) is NOT marked as context — that is what "walk stops"
+        # means at the matched-row level.
+        p_cell = next(c for c in cells if "t0002" in c)
+        assert "· (context)" not in p_cell
+        # gp appears as context (pulled in by p's walk past the matched line).
+        assert any("t0001" in c and "· (context)" in c for c in cells)
+
+    def test_ancestor_walk_handles_missing_parent_gracefully(self):
+        """When ancestor is not in full_items, fall back to Case C semantics."""
+        t0042 = make_task("t0042", id="t0042", parent="t9999")
+        table = render_tree(
+            [t0042],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[t0042],
+            is_known_stem=lambda s: False,
+        )
+        cells = _first_col_cells(table)
+        assert any("?[parent: t9999]" in c for c in cells)
+
+    def test_ancestor_walk_cycle_warning(self, capsys):
+        """A cycle in the parent chain emits one stderr warning and halts."""
+        # t0060 ↔ t0061 cycle; only t0060 is in the matched set.
+        t60 = ArtifactMeta(
+            id="t0060",
+            kind="task",
+            name="t0060",
+            title="t0060",
+            status=None,
+            tags=[],
+            created="2026-01-01",
+            path=Path("tasks/t0060.md"),
+            frontmatter={"id": "t0060", "kind": "task", "parent": "[[t0061]]"},
+        )
+        t61 = make_task("t0061", id="t0061", parent="t0060")
+        # Filter so only t60 is matched.
+        render_tree(
+            [t60],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="ancestors",
+            full_items=[t60, t61],
+        )
+        captured = capsys.readouterr()
+        warnings = [l for l in captured.err.splitlines() if "cycle" in l.lower()]
+        assert len(warnings) >= 1
+
+    def test_requires_full_items(self):
+        items = [make_task("t0001", id="t0001")]
+        with pytest.raises(ValueError, match="full_items"):
+            render_tree(
+                items,
+                self._cols(),
+                kind_def=_task_kind(),
+                parent_field="parent",
+                prune="ancestors",
+            )
+
+
+class TestPruneSubtree:
+    def _cols(self):
+        return parse_field_specs("id,name")
+
+    def test_descendants_render_unconditionally(self):
+        """When parent matches, all descendants render even if they don't match."""
+        p = make_task("t0001", id="t0001")  # matched
+        c1 = make_task("t0002", id="t0002", parent="t0001")  # NOT matched
+        c2 = make_task("t0003", id="t0003", parent="t0001")  # NOT matched
+        gc = make_task("t0004", id="t0004", parent="t0002")  # NOT matched
+        table = render_tree(
+            [p],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="subtree",
+            full_items=[p, c1, c2, gc],
+        )
+        cells = _first_col_cells(table)
+        for stem in ("t0001", "t0002", "t0003", "t0004"):
+            assert any(stem in c for c in cells)
+
+    def test_subtree_does_not_mark_descendants(self):
+        """Subtree opts out of filter honesty — no (context) markers."""
+        p = make_task("t0001", id="t0001")
+        c = make_task("t0002", id="t0002", parent="t0001")
+        table = render_tree(
+            [p],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="subtree",
+            full_items=[p, c],
+        )
+        cells = _first_col_cells(table)
+        for c_str in cells:
+            assert "· (context)" not in c_str
+
+    def test_subtree_does_not_walk_up(self):
+        """Hidden parent of a matched node is NOT pulled in as a row.
+
+        The parent reference may still appear as an `↑[parent: t0001]`
+        annotation on the orphan row, but t0001 itself is not a rendered
+        node.
+        """
+        gp = make_task("t0001", id="t0001")  # NOT matched
+        p = make_task("t0002", id="t0002", parent="t0001")  # matched
+        c = make_task("t0003", id="t0003", parent="t0002")  # NOT matched
+        table = render_tree(
+            [p],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="subtree",
+            full_items=[gp, p, c],
+            is_known_stem=lambda s: s in {"t0001", "t0002", "t0003"},
+        )
+        cells = _first_col_cells(table)
+        # gp must not appear AS A ROW (an annotation in another row is OK).
+        # Strip annotations: a row "owned" by gp would have "t0001" sit
+        # outside any "[parent: …]" suffix.
+        for c_str in cells:
+            # If the cell mentions t0001, it should be only inside an
+            # orphan annotation, never as the row's primary id.
+            primary, _, _ = c_str.partition("  ↑[parent:")
+            primary, _, _ = primary.partition("  ?[parent:")
+            assert "t0001" not in primary
+        # p and c must appear as primary rows.
+        assert any("t0002" in c.partition("  ↑")[0] for c in cells)
+        assert any("t0003" in c.partition("  ↑")[0] for c in cells)
+
+    def test_subtree_cycle_safe(self, capsys):
+        """A cycle in the descendant set does not cause infinite expansion."""
+        p = make_task("t0001", id="t0001")  # matched
+        # t0002 ↔ t0003 cycle inside p's subtree.
+        c1 = make_task("t0002", id="t0002", parent="t0001")
+        c2 = ArtifactMeta(
+            id="t0003",
+            kind="task",
+            name="t0003",
+            title="t0003",
+            status=None,
+            tags=[],
+            created="2026-01-01",
+            path=Path("tasks/t0003.md"),
+            frontmatter={"id": "t0003", "kind": "task", "parent": "[[t0002]]"},
+        )
+        # Make t0002 also point at t0003.
+        c1.frontmatter["parent"] = "[[t0003]]"
+        # Should not hang.
+        table = render_tree(
+            [p],
+            self._cols(),
+            kind_def=_task_kind(),
+            parent_field="parent",
+            prune="subtree",
+            full_items=[p, c1, c2],
+        )
+        assert isinstance(table, Table)
+
+    def test_requires_full_items(self):
+        items = [make_task("t0001", id="t0001")]
+        with pytest.raises(ValueError, match="full_items"):
+            render_tree(
+                items,
+                self._cols(),
+                kind_def=_task_kind(),
+                parent_field="parent",
+                prune="subtree",
+            )
+
+
+class TestPruneValidation:
+    def test_unknown_mode_raises(self):
+        items = [make_task("t0001", id="t0001")]
+        with pytest.raises(ValueError, match="unknown prune mode"):
+            render_tree(
+                items,
+                parse_field_specs("id"),
+                parent_field="parent",
+                prune="bogus",
+                full_items=items,
+            )
+
+    def test_prune_modes_constant_exposed(self):
+        from artifacts_os.views import PRUNE_MODES
+
+        assert PRUNE_MODES == frozenset({"strict", "ancestors", "subtree"})
