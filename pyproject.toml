@@ -1,6 +1,6 @@
 [project]
 name = "artifacts-os"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python library and CLI for storing, discovering, and managing structured markdown artifacts (tasks, specs, agents, research) in a vault directory."
 readme = "README.md"
 requires-python = ">=3.11"

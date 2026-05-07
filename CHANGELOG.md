@@ -1,5 +1,89 @@
 # Changelog
 
+## v0.2.0
+
+Second release of **artifacts-os**. Headline features: `artifacts init`
+bootstraps a fresh vault with kinds, agents, and Claude skills; a new
+**tree layout** for hierarchical artifacts wired through `views`,
+`core`, and the CLI's `--layout` flag; multi-value filters in
+`artifacts list`; and a generic, task-aware `release-changelog` skill.
+Two new agents (qa, product-manager brainstorming mode) and the
+agent-template consolidation round out the release.
+
+### Architecture
+
+- **Agent template consolidation** — every agent spec now ships from a
+  single source under `src/artifacts_os/templates/agents/` and is
+  copied into the vault's `artifacts/agents/` on `artifacts init`.
+  Eliminates the prior alias drift between in-tree and shipped copies
+  (t0112).
+- **Layout configuration relocated** — layouts live in
+  `artifacts.yaml`'s `default_layouts` and `view.layout` /
+  `view.parent_field`, no longer in `kind.json`. Resolution flows
+  through a 4-rung chain documented in `docs/settings.md` and
+  `src/artifacts_os/cli/README.md` (s0022, t0120, t0121, t0124).
+
+### Core
+
+- **Multi-value filters** — `artifacts list --status ready,in-progress`
+  treats comma-separated values as OR within a key (s0023, t0127).
+- **Tree-aware discovery** — `discover.py` exposes the data needed to
+  compute parent/child relationships for the tree renderer (t0116).
+- **Layout removed from `KindDef.meta`** — `kind.json` no longer carries
+  `x-layouts`; `core` returns layout-free models and the views layer
+  is the sole consumer of layout config (t0121, t0123).
+
+### Views
+
+- **Tree layout renderer** — new hierarchical layout for artifacts that
+  declare a parent field. Ships alongside the existing table renderer
+  through a registry (`LAYOUTS`) and a `Layout` protocol. Exposed as
+  `render_tree`, `compute_tree`, and `TreeNote` from the public views
+  API (s0022, t0116, t0122, t0123).
+- **Prune modes for tree** — `strict`, `ancestors`, and `lenient`
+  control how filtered nodes affect the rendered tree. Default is
+  `strict`; `ancestors` keeps the path to a matched node visible
+  (s0024, t0128, t0129).
+
+### CLI
+
+- **`artifacts init`** — bootstraps a vault: writes
+  `artifacts/artifacts.yaml`, registers built-in kinds, lays down agent
+  files, and installs the artifacts-os Claude skill into the local
+  `.claude/` tree. Documented in `docs/init-flow.md` (s0021, t0108,
+  t0110).
+- **`--layout {table,tree}`** — `artifacts list` accepts an explicit
+  layout flag; falls through to `default_layouts` in `artifacts.yaml`
+  if unspecified. `-q` / `-j` are unaffected (t0117, t0124).
+- **Multi-value filter syntax** — same comma-OR semantics as the core
+  filter API, surfaced through every kind-specific filter flag (t0127).
+
+### AI
+
+- **`artifacts init` ships Claude skills** — the `artifacts-os` skill
+  is installed into the vault's `.claude/skills/` tree at init time so
+  agents can find the right entry point without manual setup (t0110).
+- **Generic `release-changelog` skill** — task-aware and
+  project-agnostic. Reads `CLAUDE.md`'s release section for domain
+  categories and path mappings instead of hard-coding OpenStation
+  conventions (t0104, t0106).
+- **Tree-layout note in the artifacts-os skill** — one-paragraph guide
+  to `--layout` and `default_layouts` so agents reach for the right
+  knob when surfacing hierarchical artifacts (t0125).
+
+### Agents
+
+- **`qa` agent** — feature-verification agent definition added under
+  `artifacts/agents/qa.md` and the templates tree (t0111).
+- **product-manager brainstorming mode** — distinct ideation mode that
+  forbids task creation and lifecycle mutations while permitting
+  knowledge-capture writes (notes, research, strategy memos).
+- **Specs published this cycle** — `s0021-artifacts-init-flow`,
+  `s0022-tree-layout` (revised), `s0023-multi-value-filters`,
+  `s0024-tree-prune-modes-strict-ancestors`, and the
+  not-yet-implemented `s0025-artifact-events` (two-layer event stream
+  + opt-in subscriber model).
+
 ## v0.1.0
 
 First public release of **artifacts-os** — a Python library and CLI for
