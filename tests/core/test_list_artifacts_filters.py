@@ -193,6 +193,101 @@ def test_core_list_kind_in_filters_sugar(vault_s) -> None:
     assert items[0].kind == "task"
 
 
+def test_core_list_filter_list_value_or(vault_s) -> None:
+    """List filter value matches OR-within-key (s0023 § 3.1)."""
+    _, reg = vault_s
+    from artifacts_os import update
+    a = create(reg, "task", "A")
+    b = create(reg, "task", "B")
+    c = create(reg, "task", "C")
+    update(reg, a.id, status="ready")
+    update(reg, b.id, status="in-progress")
+    update(reg, c.id, status="done")
+    items = list_artifacts(
+        reg, kind="task", filters={"status": ["ready", "in-progress"]}
+    )
+    ids = sorted(i.id for i in items)
+    assert ids == sorted([a.id, b.id])
+
+
+def test_core_list_filter_list_value_combined_with_scalar_ands(vault_s) -> None:
+    """`status: [ready, in-progress], assignee: alice` AND-of-ORs (s0023 § 3.1)."""
+    _, reg = vault_s
+    from artifacts_os import update
+    a = create(reg, "task", "Alice ready", fields={"assignee": "alice"})
+    b = create(reg, "task", "Alice prog", fields={"assignee": "alice"})
+    c = create(reg, "task", "Bob ready", fields={"assignee": "bob"})
+    d = create(reg, "task", "Alice done", fields={"assignee": "alice"})
+    update(reg, a.id, status="ready")
+    update(reg, b.id, status="in-progress")
+    update(reg, c.id, status="ready")
+    update(reg, d.id, status="done")
+    items = list_artifacts(
+        reg,
+        kind="task",
+        filters={"status": ["ready", "in-progress"], "assignee": "alice"},
+    )
+    ids = sorted(i.id for i in items)
+    assert ids == sorted([a.id, b.id])
+
+
+def test_core_list_filter_list_value_missing_key_does_not_match(vault_s) -> None:
+    """Artifacts missing the filtered key never match a list value."""
+    _, reg = vault_s
+    create(reg, "task", "no-priority")
+    create(reg, "task", "high", fields={"priority": "high"})
+    items = list_artifacts(
+        reg, kind="task", filters={"priority": ["high", "urgent"]}
+    )
+    assert len(items) == 1
+    assert items[0].frontmatter.get("priority") == "high"
+
+
+def test_core_list_filter_list_value_stringified_comparison(vault_s) -> None:
+    """List elements are stringified before comparison (matches scalar path)."""
+    _, reg = vault_s
+    from artifacts_os import update
+    a = create(reg, "task", "A")
+    b = create(reg, "task", "B")
+    update(reg, a.id, status="ready")
+    update(reg, b.id, status="done")
+    # Even mixed-type elements compare via str() — bool stringified is "True"/"False".
+    items = list_artifacts(
+        reg, kind="task", filters={"status": ["ready", "in-progress", 0, False]}
+    )
+    assert len(items) == 1
+    assert items[0].id == a.id
+
+
+def test_core_list_tags_list_value_membership(vault_s) -> None:
+    """`tags: [a, b]` matches when any of the tags are present (s0023 § 3.1)."""
+    _, reg = vault_s
+    create(reg, "task", "A", fields={"tags": ["urgent", "core"]})
+    create(reg, "task", "B", fields={"tags": ["later"]})
+    create(reg, "task", "C", fields={"tags": ["nice-to-have"]})
+    items = list_artifacts(reg, filters={"tags": ["urgent", "later"]})
+    assert len(items) == 2
+    matched_tags = sorted(i.frontmatter.get("tags", [])[0] for i in items)
+    assert matched_tags == ["later", "urgent"]
+
+
+def test_core_list_tags_scalar_unchanged_by_other_list_filters(vault_s) -> None:
+    """Scalar `tags` keeps list-membership; other list-typed filters don't disturb it."""
+    _, reg = vault_s
+    from artifacts_os import update
+    a = create(reg, "task", "A", fields={"tags": ["urgent"]})
+    b = create(reg, "task", "B", fields={"tags": ["urgent"]})
+    update(reg, a.id, status="ready")
+    update(reg, b.id, status="done")
+    items = list_artifacts(
+        reg,
+        kind="task",
+        filters={"tags": "urgent", "status": ["ready", "in-progress"]},
+    )
+    assert len(items) == 1
+    assert items[0].id == a.id
+
+
 def test_core_list_kind_in_filters_wins(vault_s) -> None:
     """kind="task" + filters={"kind": "spec"}: filters dict kind wins (last set)."""
     _, reg = vault_s
@@ -336,11 +431,11 @@ def test_cli_kind_flag_only(cli_vault, stub_list) -> None:
 
 
 def test_cli_status_flag_only(cli_vault, stub_list) -> None:
-    """--status ready → kind=None, filters={"status": "ready"}."""
+    """--status ready → kind=None, filters={"status": ["ready"]} (CSV always lists per s0023)."""
     kind, filters = _run_cli("list", "--status", "ready", "-q",
                               stub_list=stub_list, cli_vault=cli_vault)
     assert kind is None
-    assert filters == {"status": "ready"}
+    assert filters == {"status": ["ready"]}
 
 
 def test_cli_filter_flag_single(cli_vault, stub_list) -> None:
@@ -372,7 +467,10 @@ def test_cli_filter_flag_last_wins(cli_vault, stub_list) -> None:
 
 
 def test_cli_view_kind_status(cli_vault, stub_list) -> None:
-    """View {kind: task, status: ready} → kind="task", filters={"status": "ready"}."""
+    """View {kind: task, status: ready} → kind="task", filters={"status": "ready"}.
+
+    View-config scalars round-trip as scalars; only CLI flags become lists.
+    """
     _write_artifacts_yaml(cli_vault, """
 views:
   active:
@@ -388,7 +486,7 @@ views:
 
 
 def test_cli_view_status_overridden_by_flag(cli_vault, stub_list) -> None:
-    """View {kind: task, status: ready} + --status all → {"status": "all"}."""
+    """View {kind: task, status: ready} + --status all → {"status": ["all"]} (CSV → list)."""
     _write_artifacts_yaml(cli_vault, """
 views:
   active:
@@ -400,7 +498,7 @@ views:
     kind, filters = _run_cli("list", "--view", "active", "--status", "all", "-q",
                               stub_list=stub_list, cli_vault=cli_vault)
     assert kind == "task"
-    assert filters == {"status": "all"}
+    assert filters == {"status": ["all"]}
 
 
 def test_cli_view_assignee_overridden_by_filter(cli_vault, stub_list) -> None:
@@ -440,7 +538,10 @@ views:
 
 
 def test_cli_view_complex_override(cli_vault, stub_list) -> None:
-    """View {kind: task, status: ready, type: spec} + --status all --filter type=feature."""
+    """View {kind: task, status: ready, type: spec} + --status all --filter type=feature.
+
+    --status flows through CSV-list parsing per s0023; --filter k=v stays scalar.
+    """
     _write_artifacts_yaml(cli_vault, """
 views:
   complex-view:
@@ -456,7 +557,7 @@ views:
         stub_list=stub_list, cli_vault=cli_vault
     )
     assert kind == "task"
-    assert filters == {"status": "all", "type": "feature"}
+    assert filters == {"status": ["all"], "type": "feature"}
 
 
 def test_cli_view_no_kind_plus_kind_flag(cli_vault, stub_list) -> None:
@@ -509,6 +610,76 @@ def test_cli_filter_unknown_key_cross_kind_exits_2(cli_vault, capsys) -> None:
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "unknown filter key 'asignee'" in err
+
+
+def test_cli_status_csv_multi_value(cli_vault, stub_list) -> None:
+    """--status ready,in-progress → filters={"status": ["ready", "in-progress"]} (s0023 § 3.4)."""
+    kind, filters = _run_cli(
+        "list", "--kind", "task", "--status", "ready,in-progress", "-q",
+        stub_list=stub_list, cli_vault=cli_vault
+    )
+    assert kind == "task"
+    assert filters == {"status": ["ready", "in-progress"]}
+
+
+def test_cli_status_csv_empty_element_exits_2(cli_vault, capsys) -> None:
+    """--status ready,,review → exit 2 with 'empty value in CSV' message."""
+    from artifacts_os.cli import main
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "--kind", "task", "--status", "ready,,review", "-q"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "empty value in CSV" in err
+
+
+def test_cli_status_csv_trailing_comma_exits_2(cli_vault, capsys) -> None:
+    """--status ready, → exit 2."""
+    from artifacts_os.cli import main
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "--kind", "task", "--status", "ready,", "-q"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "empty value in CSV" in err
+
+
+def test_cli_status_csv_invalid_enum_value_exits_2(cli_vault, capsys) -> None:
+    """--status ready,bogus → exit 2 (per-element enum validation, s0023 § 3.4)."""
+    from artifacts_os.cli import main
+    with pytest.raises(SystemExit) as exc:
+        main(["list", "--kind", "task", "--status", "ready,bogus", "-q"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "bogus" in err
+
+
+def test_cli_status_csv_cross_kind_mode(cli_vault, stub_list) -> None:
+    """Cross-kind --status ready,review → list passed through (no per-kind enum validation)."""
+    kind, filters = _run_cli(
+        "list", "--status", "ready,review", "-q",
+        stub_list=stub_list, cli_vault=cli_vault
+    )
+    assert kind is None
+    assert filters == {"status": ["ready", "review"]}
+
+
+def test_cli_status_csv_end_to_end_union(cli_vault, capsys) -> None:
+    """End-to-end: --status ready,in-progress returns the union of both statuses."""
+    from artifacts_os.cli import main
+    from artifacts_os.core import frontmatter as fm
+    root = cli_vault
+    (root / "artifacts" / "tasks" / "t0001-a.md").write_text(
+        fm.dump({"kind": "task", "id": "t0001", "name": "a", "status": "ready"}, "")
+    )
+    (root / "artifacts" / "tasks" / "t0002-b.md").write_text(
+        fm.dump({"kind": "task", "id": "t0002", "name": "b", "status": "in-progress"}, "")
+    )
+    (root / "artifacts" / "tasks" / "t0003-c.md").write_text(
+        fm.dump({"kind": "task", "id": "t0003", "name": "c", "status": "done"}, "")
+    )
+    main(["list", "--kind", "task", "--status", "ready,in-progress", "-q"])
+    out = capsys.readouterr().out
+    names = sorted(line for line in out.strip().split("\n") if line)
+    assert names == ["t0001-a", "t0002-b"]
 
 
 def test_cli_filter_bogus_status_value_returns_empty(cli_vault, capsys) -> None:

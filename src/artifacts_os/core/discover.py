@@ -116,6 +116,10 @@ def list_artifacts(
         The special key ``"tags"`` uses list-membership semantics
         (``str(value) in meta.tags``); all other keys use stringified
         equality (``str(meta.frontmatter.get(key, "")) == str(value)``).
+        A list value (other than for ``"tags"``) is interpreted as
+        OR-within-key — the artifact matches when **any** element
+        compares equal under the same stringified rule. See
+        s0023-multi-value-filters § 3.
 
     Deprecated
     ----------
@@ -156,7 +160,21 @@ def list_artifacts(
                 match = True
                 for k, v in filters.items():
                     if k == "tags":
-                        if str(v) not in (meta.frontmatter.get("tags") or []):
+                        # `tags` keeps list-membership semantics. A scalar
+                        # value means "the meta has this tag"; a list value
+                        # means "any of these tags is present".
+                        meta_tags = meta.frontmatter.get("tags") or []
+                        if isinstance(v, list):
+                            if not any(str(elem) in meta_tags for elem in v):
+                                match = False
+                                break
+                        elif str(v) not in meta_tags:
+                            match = False
+                            break
+                    elif isinstance(v, list):
+                        # Multi-value OR within key (s0023 § 3.1).
+                        meta_val = str(meta.frontmatter.get(k, ""))
+                        if not any(meta_val == str(elem) for elem in v):
                             match = False
                             break
                     else:
