@@ -54,11 +54,19 @@ _NOTE_SCHEMA = {
 
 @pytest.fixture
 def tree_vault(tmp_path, monkeypatch):
-    """Vault where task kind declares x-layouts.default = tree."""
+    """Vault where default_layouts.task = {layout: tree, parent_field: parent}."""
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts" / "artifacts.yaml").write_text(
+        "layout_version: 1\n"
+        "project:\n"
+        "  name: test\n"
+        "default_layouts:\n"
+        "  task:\n"
+        "    layout: tree\n"
+        "    parent_field: parent\n"
+    )
 
     import json as _json
     (kinds_dir / "task.json").write_text(_json.dumps(_TASK_TREE_SCHEMA))
@@ -106,15 +114,22 @@ def _write_artifacts_yaml(root: Path, extra: str) -> None:
 
 
 class TestResolveLayout:
-    """Unit tests for the resolve_layout helper (no vault needed)."""
+    """Unit tests for the resolve_layout helper (no vault needed).
+
+    4-rung chain (spec §8.2 post-revision):
+      rung1: explicit --layout flag
+      rung2: view.layout
+      rung3: default_layouts[kind] in artifacts.yaml
+      rung4: implicit "table"
+    """
 
     def _make_args(self, layout=None):
         from argparse import Namespace
         return Namespace(layout=layout)
 
-    def _make_view_cfg(self, layout=None, columns="id,name"):
+    def _make_view_cfg(self, layout=None, parent_field=None, columns="id,name"):
         from artifacts_os.views import ViewConfig
-        return ViewConfig(columns=columns, layout=layout)
+        return ViewConfig(columns=columns, layout=layout, parent_field=parent_field)
 
     def _make_settings(self, default_layouts: dict):
         """Build a ViewsSettings with the given default_layouts mapping."""
@@ -127,16 +142,13 @@ class TestResolveLayout:
         )
         return ViewsSettings.from_base(base)
 
-    def _make_kind_def(self, layout_default: str | None = None):
+    def _make_kind_def(self, schema_props: list[str] | None = None):
         from artifacts_os.core.models import KindDef
-        meta = {}
-        if layout_default is not None:
-            meta["layouts"] = {"default": layout_default}
-            if layout_default == "tree":
-                meta["layouts"]["tree"] = {"parent_field": "parent"}
-        return KindDef(name="task", dir="tasks", prefix="t", numbered=True, meta=meta)
-
-    from artifacts_os.cli.commands.list import resolve_layout as _rl
+        props = {p: {"type": "string"} for p in (schema_props or [])}
+        return KindDef(
+            name="task", dir="tasks", prefix="t", numbered=True,
+            schema={"properties": props},
+        )
 
     def _rl(self, args, view_cfg, settings, kind_def):
         from artifacts_os.cli.commands.list import resolve_layout
@@ -145,62 +157,161 @@ class TestResolveLayout:
     def test_rung1_explicit_flag_wins(self):
         """Explicit --layout overrides everything."""
         args = self._make_args(layout="table")
-        view = self._make_view_cfg(layout="tree")
-        settings = self._make_settings({"task": "tree"})
-        kind = self._make_kind_def("tree")
+        view = self._make_view_cfg(layout="tree", parent_field="parent")
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
         assert self._rl(args, view, settings, kind) == "table"
 
-    def test_rung2_view_cfg_beats_settings_and_kind(self):
-        """view.layout wins over settings.default_layouts and kind default."""
+    def test_rung2_view_cfg_beats_settings(self):
+        """view.layout wins over settings.default_layouts."""
         args = self._make_args(layout=None)
-        view = self._make_view_cfg(layout="tree")
+        view = self._make_view_cfg(layout="tree", parent_field="parent")
         settings = self._make_settings({"task": "table"})
-        kind = self._make_kind_def("table")
+        kind = self._make_kind_def(["parent"])
         assert self._rl(args, view, settings, kind) == "tree"
 
-    def test_rung3_settings_default_layouts_beats_kind(self):
-        """default_layouts[kind] wins over kind's x-layouts.default."""
+    def test_rung3_settings_default_layouts(self):
+        """default_layouts[kind] in artifacts.yaml is rung 3."""
+        args = self._make_args(layout=None)
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
+        assert self._rl(args, None, settings, kind) == "tree"
+
+    def test_rung3_settings_table_overrides_nothing(self):
+        """default_layouts.task=table → table (no kind rung to compete with)."""
         args = self._make_args(layout=None)
         settings = self._make_settings({"task": "table"})
-        kind = self._make_kind_def("tree")
+        kind = self._make_kind_def([])
         assert self._rl(args, None, settings, kind) == "table"
 
-    def test_rung4_kind_default_used_when_no_override(self):
-        """kind.meta["layouts"]["default"] used when no flag/view/settings."""
-        args = self._make_args(layout=None)
-        kind = self._make_kind_def("tree")
-        assert self._rl(args, None, None, kind) == "tree"
-
-    def test_rung5_implicit_table_when_all_absent(self):
-        """No overrides, no kind → "table"."""
+    def test_rung4_implicit_table_when_all_absent(self):
+        """No overrides, no settings → implicit "table"."""
         args = self._make_args(layout=None)
         assert self._rl(args, None, None, None) == "table"
 
-    def test_rung5_kind_without_layouts_meta_gives_table(self):
-        """Kind with no layouts meta falls back to implicit table."""
+    def test_rung4_implicit_table_no_kind_in_settings(self):
+        """Kind not in default_layouts → falls through to implicit "table"."""
         args = self._make_args(layout=None)
-        kind = self._make_kind_def(layout_default=None)
-        assert self._rl(args, None, None, kind) == "table"
+        settings = self._make_settings({"other": "table"})
+        kind = self._make_kind_def([])
+        assert self._rl(args, None, settings, kind) == "table"
 
-    def test_resolution_matrix_all_rungs_explicit_wins(self):
-        """Full matrix row: all sources set, explicit flag wins (§8.5 row 5)."""
+    def test_resolution_matrix_all_sources_explicit_wins(self):
+        """§8.5: all sources set, explicit flag wins."""
         args = self._make_args(layout="table")
-        view = self._make_view_cfg(layout="tree")
-        settings = self._make_settings({"task": "table"})
-        kind = self._make_kind_def("tree")
+        view = self._make_view_cfg(layout="tree", parent_field="parent")
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
         assert self._rl(args, view, settings, kind) == "table"
 
     def test_resolution_matrix_no_sources_gives_table(self):
-        """§8.5 row 1: kind has no default, all absent → table."""
+        """§8.5: all absent → table."""
         args = self._make_args(layout=None)
-        kind = self._make_kind_def(layout_default=None)
+        kind = self._make_kind_def([])
         assert self._rl(args, None, None, kind) == "table"
 
-    def test_resolution_matrix_kind_tree_no_override(self):
-        """§8.5 row 2: kind default=tree, no override → tree."""
+    def test_resolution_matrix_settings_tree_no_flag_gives_tree(self):
+        """§8.5: default_layouts.task=tree, no flag, no view → tree."""
         args = self._make_args(layout=None)
-        kind = self._make_kind_def("tree")
-        assert self._rl(args, None, None, kind) == "tree"
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
+        assert self._rl(args, None, settings, kind) == "tree"
+
+
+# ---------------------------------------------------------------------------
+# resolve_parent_field unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestResolveParentField:
+    """Unit tests for the resolve_parent_field helper (spec §8.2 parallel chain).
+
+    Chain (first match wins):
+      rung1: view.parent_field
+      rung2: default_layouts[kind].parent_field
+      (explicit CLI flag: future, not in scope)
+    Returns None when neither source provides a value.
+    """
+
+    def _make_args(self):
+        from argparse import Namespace
+        return Namespace()
+
+    def _make_view_cfg(self, parent_field=None, layout="tree", columns="id,name"):
+        from artifacts_os.views import ViewConfig
+        return ViewConfig(columns=columns, layout=layout, parent_field=parent_field)
+
+    def _make_settings(self, default_layouts: dict):
+        from artifacts_os.core.models import ProjectConfig, Settings
+        from artifacts_os.views import ViewsSettings
+        base = Settings(
+            layout_version=1,
+            project=ProjectConfig(name="test"),
+            raw={"default_layouts": default_layouts},
+        )
+        return ViewsSettings.from_base(base)
+
+    def _make_kind_def(self, schema_props: list[str] | None = None):
+        from artifacts_os.core.models import KindDef
+        props = {p: {"type": "string"} for p in (schema_props or [])}
+        return KindDef(
+            name="task", dir="tasks", prefix="t", numbered=True,
+            schema={"properties": props},
+        )
+
+    def _rpf(self, args, view_cfg, settings, kind_def):
+        from artifacts_os.cli.commands.list import resolve_parent_field
+        return resolve_parent_field(args, view_cfg, settings, kind_def)
+
+    def test_rung1_view_parent_field_wins(self):
+        """view.parent_field wins over default_layouts."""
+        args = self._make_args()
+        view = self._make_view_cfg(parent_field="parent", layout="tree")
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "other"}})
+        kind = self._make_kind_def(["parent", "other"])
+        assert self._rpf(args, view, settings, kind) == "parent"
+
+    def test_rung2_settings_default_layouts(self):
+        """default_layouts[kind].parent_field used when no view.parent_field."""
+        args = self._make_args()
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
+        assert self._rpf(args, None, settings, kind) == "parent"
+
+    def test_returns_none_when_all_absent(self):
+        """No view, no settings → None."""
+        args = self._make_args()
+        assert self._rpf(args, None, None, None) == "parent" if False else \
+            self._rpf(args, None, None, None) is None
+
+    def test_returns_none_no_view_no_settings(self):
+        """Explicit None from all sources → None."""
+        args = self._make_args()
+        kind = self._make_kind_def([])
+        assert self._rpf(args, None, None, kind) is None
+
+    def test_returns_none_kind_not_in_settings(self):
+        """Kind not in default_layouts → None."""
+        args = self._make_args()
+        settings = self._make_settings({"other": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def([])
+        assert self._rpf(args, None, settings, kind) is None
+
+    def test_view_none_parent_field_falls_through(self):
+        """view.parent_field=None falls through to settings."""
+        args = self._make_args()
+        view = self._make_view_cfg(parent_field=None, layout=None)
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "parent"}})
+        kind = self._make_kind_def(["parent"])
+        assert self._rpf(args, view, settings, kind) == "parent"
+
+    def test_both_rungs_set_view_wins(self):
+        """Full chain: view.parent_field beats default_layouts.parent_field."""
+        args = self._make_args()
+        view = self._make_view_cfg(parent_field="parent", layout="tree")
+        settings = self._make_settings({"task": {"layout": "tree", "parent_field": "other_field"}})
+        kind = self._make_kind_def(["parent", "other_field"])
+        assert self._rpf(args, view, settings, kind) == "parent"
 
 
 # ---------------------------------------------------------------------------
@@ -301,8 +412,8 @@ def _has_tree_glyph(out: str) -> bool:
 
 
 class TestDefaultTreePath:
-    def test_tree_layout_is_default_for_tree_kind(self, tree_vault, capsys):
-        """§8.2 rung 4: task kind's x-layouts.default=tree selects tree layout."""
+    def test_tree_layout_is_default_for_task_kind(self, tree_vault, capsys):
+        """§8.2 rung 3: default_layouts.task=tree selects tree layout."""
         _write_task(tree_vault, 36, "parent-task")
         _write_task(tree_vault, 42, "child-task", parent="t0036-parent-task")
         main(["list", "--kind", "task"])
@@ -388,6 +499,7 @@ views:
   tree-view:
     columns: id,name,status
     layout: tree
+    parent_field: parent
 """)
         main(["list", "--kind", "task", "--view", "tree-view"])
         out = capsys.readouterr().out
@@ -402,11 +514,88 @@ views:
   tree-view:
     columns: id,name,status
     layout: tree
+    parent_field: parent
 """)
         main(["list", "--kind", "task", "--view", "tree-view", "--layout", "table"])
         out = capsys.readouterr().out
         assert not _has_tree_glyph(out)
         assert "t0036" in out
+
+
+# ---------------------------------------------------------------------------
+# Validation errors for tree layout (§8.2, §3.6)
+# ---------------------------------------------------------------------------
+
+
+class TestValidationErrors:
+    """Validation errors when tree layout cannot be fully resolved."""
+
+    def test_tree_without_parent_field_exits_2(self, tree_vault, capsys):
+        """--layout tree with no parent_field source → ValidationError (exit 2)."""
+        # Use note kind which has no default_layouts entry — no parent_field source.
+        _write(tree_vault, "notes", "n0001-my-note.md", {
+            "kind": "note", "id": "n0001", "name": "n0001-my-note",
+        })
+        with pytest.raises(SystemExit) as exc:
+            main(["list", "--kind", "note", "--layout", "tree"])
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "parent_field" in err
+
+    def test_tree_from_settings_with_bad_parent_field_exits_2(self, tree_vault, capsys):
+        """parent_field not in kind schema properties → ValidationError (exit 2, §3.6)."""
+        _write_task(tree_vault, 1, "alpha")
+        # Overwrite artifacts.yaml: task tree with a typo'd parent_field.
+        _write_artifacts_yaml(tree_vault, (
+            "default_layouts:\n"
+            "  task:\n"
+            "    layout: tree\n"
+            "    parent_field: typo_parent\n"
+        ))
+        with pytest.raises(SystemExit) as exc:
+            main(["list", "--kind", "task"])
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "typo_parent" in err
+
+    def test_view_tree_with_bad_parent_field_exits_2(self, tree_vault, capsys):
+        """view.parent_field not in kind schema → ValidationError (exit 2)."""
+        _write_task(tree_vault, 1, "alpha")
+        _write_artifacts_yaml(tree_vault, (
+            "views:\n"
+            "  bad-tree:\n"
+            "    columns: id,name,status\n"
+            "    layout: tree\n"
+            "    parent_field: nonexistent\n"
+        ))
+        with pytest.raises(SystemExit) as exc:
+            main(["list", "--kind", "task", "--view", "bad-tree"])
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "nonexistent" in err
+
+    def test_parent_field_from_view_overrides_default_layouts(self, tree_vault, capsys):
+        """§8.5: view.parent_field=parent used even when default_layouts has different value.
+
+        Verifies parent_field reuse across default_layouts and view config.
+        """
+        _write_task(tree_vault, 36, "root")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root")
+        # Override tree_vault's artifacts.yaml: view uses parent_field=parent explicitly.
+        _write_artifacts_yaml(tree_vault, (
+            "default_layouts:\n"
+            "  task:\n"
+            "    layout: tree\n"
+            "    parent_field: parent\n"
+            "views:\n"
+            "  tree-via-view:\n"
+            "    columns: id,name,status\n"
+            "    layout: tree\n"
+            "    parent_field: parent\n"
+        ))
+        main(["list", "--kind", "task", "--view", "tree-via-view"])
+        out = capsys.readouterr().out
+        assert _has_tree_glyph(out)
 
 
 # ---------------------------------------------------------------------------
@@ -545,3 +734,183 @@ class TestLayoutHelp:
         out = capsys.readouterr().out
         # Help text should mention auto-detection per §8.6
         assert "auto-detects" in out or "auto_detects" in out or "auto" in out
+
+
+# ---------------------------------------------------------------------------
+# --prune flag and resolve_prune (s0024-tree-prune-modes §4, §5)
+# ---------------------------------------------------------------------------
+
+
+class TestResolvePrune:
+    """Unit tests for the resolve_prune helper (4-rung chain, s0024 §4)."""
+
+    def _make_args(self, prune=None):
+        from argparse import Namespace
+        return Namespace(prune=prune)
+
+    def _make_view_cfg(self, prune=None, layout="tree", parent_field="parent",
+                       columns="id,name"):
+        from artifacts_os.views import ViewConfig
+        return ViewConfig(
+            columns=columns, layout=layout, parent_field=parent_field, prune=prune
+        )
+
+    def _make_settings(self, default_layouts: dict):
+        from artifacts_os.core.models import ProjectConfig, Settings
+        from artifacts_os.views import ViewsSettings
+        base = Settings(
+            layout_version=1,
+            project=ProjectConfig(name="test"),
+            raw={"default_layouts": default_layouts},
+        )
+        return ViewsSettings.from_base(base)
+
+    def _make_kind_def(self):
+        from artifacts_os.core.models import KindDef
+        return KindDef(
+            name="task", dir="tasks", prefix="t", numbered=True,
+            schema={"properties": {"parent": {"type": "string"}}},
+        )
+
+    def _rp(self, args, view_cfg, settings, kind_def):
+        from artifacts_os.cli.commands.list import resolve_prune
+        return resolve_prune(args, view_cfg, settings, kind_def)
+
+    def test_rung1_explicit_flag_wins(self):
+        args = self._make_args(prune="subtree")
+        view = self._make_view_cfg(prune="ancestors")
+        settings = self._make_settings(
+            {"task": {"layout": "tree", "parent_field": "parent",
+                      "prune": "ancestors"}}
+        )
+        assert self._rp(args, view, settings, self._make_kind_def()) == "subtree"
+
+    def test_rung2_view_prune_beats_settings(self):
+        args = self._make_args(prune=None)
+        view = self._make_view_cfg(prune="ancestors")
+        settings = self._make_settings(
+            {"task": {"layout": "tree", "parent_field": "parent",
+                      "prune": "subtree"}}
+        )
+        assert self._rp(args, view, settings, self._make_kind_def()) == "ancestors"
+
+    def test_rung3_settings_default_layouts(self):
+        args = self._make_args(prune=None)
+        settings = self._make_settings(
+            {"task": {"layout": "tree", "parent_field": "parent",
+                      "prune": "ancestors"}}
+        )
+        assert self._rp(args, None, settings, self._make_kind_def()) == "ancestors"
+
+    def test_rung4_implicit_strict(self):
+        args = self._make_args(prune=None)
+        assert self._rp(args, None, None, None) == "strict"
+
+    def test_rung4_implicit_strict_when_kind_not_in_settings(self):
+        args = self._make_args(prune=None)
+        settings = self._make_settings(
+            {"other": {"layout": "tree", "parent_field": "parent",
+                       "prune": "ancestors"}}
+        )
+        assert self._rp(args, None, settings, self._make_kind_def()) == "strict"
+
+
+class TestPruneFlagEndToEnd:
+    """End-to-end CLI tests against the tree_vault fixture."""
+
+    def test_prune_subtree_includes_all_descendants(self, tree_vault, capsys):
+        """--prune subtree expands the descendant set when parent matches."""
+        _write_task(tree_vault, 36, "root", status="in-progress")
+        _write_task(tree_vault, 42, "leaf-a", parent="t0036-root", status="done")
+        _write_task(tree_vault, 43, "leaf-b", parent="t0036-root", status="done")
+        # Filter on in-progress; only t0036 matches.
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "subtree"])
+        out = capsys.readouterr().out
+        assert "t0036" in out
+        assert "t0042" in out
+        assert "t0043" in out
+
+    def test_prune_strict_excludes_descendants(self, tree_vault, capsys):
+        """--prune strict (default) only renders matched rows."""
+        _write_task(tree_vault, 36, "root", status="in-progress")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root", status="done")
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "strict"])
+        out = capsys.readouterr().out
+        assert "t0036" in out
+        assert "t0042" not in out
+
+    def test_prune_ancestors_marks_context_row(self, tree_vault, capsys):
+        """--prune ancestors walks up; ancestor row carries (context) marker."""
+        _write_task(tree_vault, 36, "root", status="done")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root", status="ready")
+        main(["list", "--kind", "task", "--status", "ready",
+              "--prune", "ancestors"])
+        out = capsys.readouterr().out
+        assert "t0036" in out
+        assert "(context)" in out
+
+    def test_prune_ancestors_default_strict_means_orphan(self, tree_vault, capsys):
+        """Without --prune, the default is strict — orphan annotation appears."""
+        _write_task(tree_vault, 36, "root", status="done")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root", status="ready")
+        main(["list", "--kind", "task", "--status", "ready"])
+        out = capsys.readouterr().out
+        # t0042 promoted to root with ↑ annotation; no (context) row.
+        assert "(context)" not in out
+        # The matched row appears.
+        assert "t0042" in out
+
+    def test_unknown_prune_value_exits_2(self, tree_vault, capsys):
+        _write_task(tree_vault, 1, "alpha")
+        with pytest.raises(SystemExit) as exc:
+            main(["list", "--kind", "task", "--prune", "bogus"])
+        assert exc.value.code == 2
+
+    def test_quiet_output_unchanged_by_prune(self, tree_vault, capsys):
+        """-q output is byte-for-byte identical regardless of --prune."""
+        _write_task(tree_vault, 36, "root", status="in-progress")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root", status="done")
+
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "strict", "-q"])
+        strict_out = capsys.readouterr().out
+
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "subtree", "-q"])
+        subtree_out = capsys.readouterr().out
+
+        assert strict_out == subtree_out
+
+    def test_json_output_unchanged_by_prune(self, tree_vault, capsys):
+        """-j output is identical regardless of --prune."""
+        _write_task(tree_vault, 36, "root", status="in-progress")
+        _write_task(tree_vault, 42, "leaf", parent="t0036-root", status="done")
+
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "strict", "-j"])
+        strict_out = json.loads(capsys.readouterr().out)
+
+        main(["list", "--kind", "task", "--status", "in-progress",
+              "--prune", "ancestors", "-j"])
+        ancestors_out = json.loads(capsys.readouterr().out)
+
+        assert strict_out == ancestors_out
+
+    def test_prune_in_help_text(self, tree_vault, capsys):
+        """--prune flag appears in list --help output."""
+        with pytest.raises(SystemExit):
+            main(["list", "--help"])
+        out = capsys.readouterr().out
+        assert "--prune" in out
+        assert "strict" in out
+        assert "ancestors" in out
+        assert "subtree" in out
+
+
+class TestPruneReservedFlag:
+    def test_prune_in_reserved_names(self):
+        """--prune is reserved so a kind property named 'prune' cannot collide."""
+        from artifacts_os.cli.commands.list import _RESERVED_FILTER_FLAG_NAMES
+        assert "prune" in _RESERVED_FILTER_FLAG_NAMES

@@ -1,5 +1,10 @@
 layout_version: 1
 
+default_layouts:
+  task:
+    layout: tree
+    parent_field: parent
+
 project:
   name: "artifacts-os"
   created: "2026-04-20"
@@ -7,22 +12,24 @@ project:
 views:
   # ===== TASK views =====
 
-  # Lifecycle slices
+  # All tasks (no status filter) — default for `art ls --kind task`
+  all:
+    columns: id,name,status,assignee,owner
+    filters: { kind: task }
+    sort: id
+
+  # All active (in-flight) work — multi-value status filter (s0023).
+  # Replaces the per-status `ready` / `in-progress` / `review` /
+  # `verified` views that were redundant with this single OR clause.
   active:
-    columns: id,name,assignee,status
-    filters: { kind: task, status: in-progress }
-    sort: -started
+    columns: id,name,status,assignee
+    filters: { kind: task, status: [ready, in-progress, review, verified] }
+    layout: tree
+    parent_field: parent
+    prune: subtree
+    sort: id
 
-  ready:
-    columns: id,name,assignee,created:date
-    filters: { kind: task, status: ready }
-    sort: created
-
-  review:
-    columns: id,name,assignee,owner
-    filters: { kind: task, status: review }
-    sort: -created
-
+  # Terminal/lifecycle slices retained — each has a unique role.
   backlog:
     columns: id,name,assignee,type
     filters: { kind: task, status: backlog }
@@ -130,7 +137,7 @@ views:
     sort: -created
 
 default_views:
-  task: ready
+  task: active
   spec: spec
   research: research
   agent: agents

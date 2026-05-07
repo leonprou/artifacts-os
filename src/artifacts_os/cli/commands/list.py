@@ -23,9 +23,11 @@ from artifacts_os.views.models import ViewConfig, ViewsSettings
 # the field remains reachable via ``--filter k=v``.
 # §13.4: "layout" is reserved so a future kind property named "layout" does
 # not silently collide with the --layout flag.
+# s0024 §5.1: "prune" reserved for the same reason — `--prune` is a CLI
+# flag, not a per-kind frontmatter filter.
 _RESERVED_FILTER_FLAG_NAMES: frozenset[str] = frozenset({
     "help", "kind", "filter", "view", "fields", "meta",
-    "quiet", "json", "children", "parent", "layout",
+    "quiet", "json", "children", "parent", "layout", "prune",
 })
 
 
@@ -46,6 +48,49 @@ def _parse_bool(value: str) -> bool:
     raise argparse.ArgumentTypeError(
         f"expected true/false/1/0/yes/no, got: {value!r}"
     )
+
+
+def _split_csv(raw: str) -> list[str]:
+    """Split *raw* on commas, rejecting empty elements.
+
+    Per s0023-multi-value-filters § 3.4, an empty CSV element
+    (``a,,b``, ``a,``, ``,a``) is a ValidationError. Single values
+    return a single-element list.
+    """
+    parts = raw.split(",")
+    if any(p == "" for p in parts):
+        raise argparse.ArgumentTypeError(
+            f"empty value in CSV (got {raw!r}); "
+            "use comma-separated non-empty values"
+        )
+    return parts
+
+
+def _make_enum_csv_type(enum_values: list, *, validate: bool):
+    """Return an argparse ``type=`` callable for an enum-string field.
+
+    The callable splits on ``,`` and (when *validate* is True) checks
+    each element against *enum_values*. Returns ``list[str]``.
+
+    Per s0023-multi-value-filters § 3.4, ``choices=`` on the underlying
+    argparse argument is dropped because it runs against the raw CSV
+    string and would reject any multi-value input.
+    """
+    enum_set = {str(v) for v in enum_values}
+    enum_listing = ", ".join(str(v) for v in enum_values)
+
+    def _csv_enum(raw: str) -> list[str]:
+        parts = _split_csv(raw)
+        if validate:
+            for elem in parts:
+                if elem not in enum_set:
+                    raise argparse.ArgumentTypeError(
+                        f"invalid value {elem!r} "
+                        f"(choose from: {enum_listing})"
+                    )
+        return parts
+
+    return _csv_enum
 
 
 def _flag_kwargs_for_prop(field: str, prop: dict) -> dict | None:
@@ -70,8 +115,12 @@ def _flag_kwargs_for_prop(field: str, prop: dict) -> dict | None:
     kwargs: dict[str, Any] = {"dest": field, "default": None, "help": help_text}
 
     if enum is not None:
-        kwargs["choices"] = enum
-        kwargs["metavar"] = "|".join(str(v) for v in enum)
+        # CSV-aware: --status ready,in-progress,review (s0023 § 3.4).
+        # `choices=` is dropped because argparse runs it against the raw
+        # string and would always reject multi-value input; the custom
+        # `type=` callable enforces enum membership per element.
+        kwargs["type"] = _make_enum_csv_type(enum, validate=True)
+        kwargs["metavar"] = "|".join(str(v) for v in enum) + "[,...]"
     elif prop_type == "integer":
         kwargs["type"] = int
         kwargs["metavar"] = "INT"
@@ -161,8 +210,13 @@ def _add_union_filter_flags(
         kwargs: dict[str, Any] = {"dest": field, "default": None, "help": help_text}
 
         if has_enum:
-            # Enums diverge across kinds — omit choices=, use generic metavar.
-            kwargs["metavar"] = "STATUS" if field == "status" else "VARIES"
+            # Enums diverge across kinds — no per-element validation, but
+            # still accept CSV input for parity with per-kind mode
+            # (s0023 § 3.4). Core's silent-no-match handles bogus values.
+            kwargs["type"] = _make_enum_csv_type([], validate=False)
+            kwargs["metavar"] = (
+                "STATUS[,...]" if field == "status" else "VARIES[,...]"
+            )
         else:
             # Determine the most permissive compatible type.
             all_types = {kp.get("type") for _, kp in kind_props if kp.get("type")}
@@ -233,6 +287,19 @@ def register(
         help=(
             "presentation layout for the result; auto-detects from kind when omitted"
             " (e.g. tasks render as a tree by default)"
+        ),
+    )
+
+    # s0024 §5.1 — --prune NAME (tree-only). Choices read from PRUNE_MODES so
+    # future modes register in one place.
+    p.add_argument(
+        "--prune",
+        default=None,
+        choices=sorted(views.PRUNE_MODES),
+        metavar="NAME",
+        help=(
+            "pruning mode for tree layouts (strict|ancestors|subtree);"
+            " ignored for non-tree layouts"
         ),
     )
 
@@ -346,8 +413,7 @@ def resolve_layout(
     1. Explicit ``--layout NAME`` flag.
     2. Active view's ``layout`` field.
     3. ``default_layouts[kind]`` in artifacts.yaml.
-    4. ``kind_def.meta["layouts"]["default"]`` (from ``x-layouts.default``).
-    5. Implicit ``"table"`` — universal fallback.
+    4. Implicit ``"table"`` — universal fallback.
     """
     if getattr(args, "layout", None):
         return args.layout
@@ -356,10 +422,60 @@ def resolve_layout(
     if settings is not None and settings.views is not None:
         m = settings.views.default_layouts
         if kind_def is not None and kind_def.name in m:
-            return m[kind_def.name]
-    if kind_def is not None:
-        return kind_def.meta.get("layouts", {}).get("default", "table")
+            return m[kind_def.name].layout
     return "table"
+
+
+def resolve_parent_field(
+    args: Any,
+    view_cfg: "ViewConfig | None",
+    settings: "ViewsSettings | None",
+    kind_def: "KindDef | None",
+) -> "str | None":
+    """Resolve the effective parent_field for tree layout per spec §8.2.
+
+    Chain (first match wins):
+    1. Active view's ``parent_field`` field.
+    2. ``default_layouts[kind].parent_field`` in artifacts.yaml.
+
+    Returns ``None`` when no source provides a parent_field.
+    """
+    if view_cfg is not None and getattr(view_cfg, "parent_field", None):
+        return view_cfg.parent_field
+    if settings is not None and settings.views is not None:
+        m = settings.views.default_layouts
+        if kind_def is not None and kind_def.name in m:
+            return m[kind_def.name].parent_field
+    return None
+
+
+def resolve_prune(
+    args: Any,
+    view_cfg: "ViewConfig | None",
+    settings: "ViewsSettings | None",
+    kind_def: "KindDef | None",
+) -> str:
+    """Resolve the effective prune mode per s0024 §4 precedence chain.
+
+    Chain (first match wins):
+    1. Explicit ``--prune NAME`` flag.
+    2. Active view's ``prune`` field.
+    3. ``default_layouts[kind].prune`` in artifacts.yaml.
+    4. Implicit ``"strict"`` — preserves s0022 §6.4 / §7 v1 behaviour.
+    """
+    if getattr(args, "prune", None):
+        return args.prune
+    if view_cfg is not None and getattr(view_cfg, "prune", None):
+        return view_cfg.prune
+    if settings is not None and settings.views is not None:
+        m = settings.views.default_layouts
+        if (
+            kind_def is not None
+            and kind_def.name in m
+            and m[kind_def.name].prune
+        ):
+            return m[kind_def.name].prune
+    return "strict"
 
 
 def _build_sort_key(sort_str: str | None):
@@ -559,14 +675,45 @@ def run(args, registry: Registry) -> int:
     sort_str = getattr(args, "_sort", None)
 
     if layout == "tree":
+        # Resolve parent_field (§8.2 parallel chain).
+        parent_field = resolve_parent_field(args, view_cfg, views_settings, kind_def)
+        if parent_field is None:
+            raise ValidationError(
+                "layout 'tree' requires a parent_field but none was resolved; "
+                "set default_layouts.<kind>.parent_field or view.parent_field "
+                "in artifacts.yaml (spec §8.2)"
+            )
+        # Property-existence guard: parent_field must be in the kind schema (§3.6).
+        if kind_def is not None and parent_field not in kind_def.schema_properties:
+            raise ValidationError(
+                f"parent_field {parent_field!r} is not a property of kind "
+                f"{kind_def.name!r}; known properties: "
+                f"{sorted(kind_def.schema_properties)}"
+            )
+
+        # Resolve prune mode (s0024 §4). --children / --parent neutralizes
+        # prune (§3.5) — those flags already define an explicit slice.
+        prune = resolve_prune(args, view_cfg, views_settings, kind_def)
+        if children_parent_path is not None or parent_requested:
+            prune = "strict"
+
+        # When prune != strict the renderer needs the unfiltered set of the
+        # same kind to walk ancestors / descendants (s0024 §6.3 / §6.4).
+        full_items: list | None = None
+        if prune != "strict":
+            full_items = list_artifacts(registry, kind=effective_kind)
+
         # Sort flows into compute_tree (§6.2); flat _apply_sort not applied.
         sort_key_fn = _build_sort_key(sort_str)
         table = views.render_tree(
             items,
             columns,
             kind_def=kind_def,
+            parent_field=parent_field,
             sort_key=sort_key_fn,
             is_known_stem=registry.exists_stem,
+            prune=prune,
+            full_items=full_items,
         )
     else:
         # Table layout: apply flat sort then render.
