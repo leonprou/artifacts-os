@@ -252,6 +252,13 @@ unavailable).
 
 ---
 
+## Layouts
+
+Layout configuration lives in `artifacts.yaml`, not `kind.json`.
+See [docs/settings.md](settings.md#layout-selection).
+
+---
+
 ## L1 Catalogue Surface
 
 After the L1 implementation (t0076), `artifacts kinds` shows a

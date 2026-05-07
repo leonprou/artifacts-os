@@ -46,6 +46,11 @@ artifacts list [--kind KIND] [--status STATUS] [--fields F1,F2,…] [-q | -j]
 Default output is a Rich table. **Always use `-j` or `-q` when piping
 or post-processing**; the table format is for humans.
 
+**Tree layout.** Tree layout for tasks is configured in
+`artifacts.yaml`'s `default_layouts` (kinds no longer declare
+layouts themselves). Override per-invocation with `--layout table`.
+`-q` / `-j` are unaffected. Full design: `s0022-tree-layout`.
+
 ```bash
 # All ready tasks
 artifacts list --kind task --status ready
