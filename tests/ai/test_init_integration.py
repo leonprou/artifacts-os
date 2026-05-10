@@ -22,7 +22,7 @@ def test_init_creates_vault_without_ai_dir(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     main(["init", "-y"])
 
-    assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
+    assert (tmp_path / "artifacts.yaml").is_file()
     # .claude/ is NOT created — AI install is out of scope
     assert not (tmp_path / ".claude").exists()
 
@@ -40,7 +40,7 @@ def test_init_with_yes_flag_is_non_interactive(tmp_path: Path, monkeypatch) -> N
     monkeypatch.chdir(tmp_path)
     main(["init", "-y"])
 
-    assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
+    assert (tmp_path / "artifacts.yaml").is_file()
     assert (tmp_path / "artifacts" / "kinds").is_dir()
 
 

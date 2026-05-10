@@ -75,4 +75,4 @@ def test_list_not_in_project(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc:
         main(["list"])
     assert exc.value.code == 2
-    assert "not in an artifacts-os project" in capsys.readouterr().err
+    assert "not in an artifacts-os vault" in capsys.readouterr().err

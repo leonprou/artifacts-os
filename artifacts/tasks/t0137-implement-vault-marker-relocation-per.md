@@ -98,6 +98,13 @@ Steps 1–4 cannot pass tests until step 5 lands; commit them
 together in a single atomic commit if a stricter "every
 commit is green" rule is enforced.
 
+## Progress
+
+### 2026-05-10 13:27:33 — Incomplete run (r0151)
+
+**Stop reason:** Non-zero exit code (8)
+**Stats:** cost=$1.53, turns=51
+
 ## Verification
 
 - [ ] `find_vault_root` probe path matches s0026 §6.2

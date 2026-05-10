@@ -389,7 +389,7 @@ def test_l1_catalogue_invocations_unchanged(tmp_path: Path) -> None:
     kinds_dir = tmp_path / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
     root = tmp_path
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     # Write a kind with ARTIFACT.md that has body content
     folder = kinds_dir / "task"
@@ -447,7 +447,7 @@ def test_cli_create_signature_unchanged(tmp_path: Path, monkeypatch) -> None:
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     schema = {"x-dir": "tasks", "x-prefix": "t", "x-numbered": True}
     (kinds_dir / "task.json").write_text(json.dumps(schema))
     (root / "artifacts" / "tasks").mkdir()
@@ -480,7 +480,7 @@ def test_cli_create_empty_body_path_still_works(tmp_path: Path, monkeypatch) -> 
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     schema = {
         "x-dir": "tasks",
         "x-prefix": "t",
@@ -524,7 +524,7 @@ def test_kind_catalog_entry_artifact_md_path_set_for_kinds_with_template(
     kinds_dir = tmp_path / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
     root = tmp_path
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     folder = kinds_dir / "note"
     folder.mkdir()
@@ -560,7 +560,7 @@ def test_kind_catalog_entry_artifact_md_path_none_when_no_template(
     kinds_dir = tmp_path / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
     root = tmp_path
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     folder = kinds_dir / "bare"
     folder.mkdir()

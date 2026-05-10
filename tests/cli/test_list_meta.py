@@ -12,7 +12,7 @@ from artifacts_os.cli import main
 
 
 def _write_yaml(root: Path, extra: str) -> None:
-    base = root / "artifacts" / "artifacts.yaml"
+    base = root / "artifacts.yaml"
     content = "layout_version: 1\nproject:\n  name: test\n" + extra
     base.write_text(content)
 

@@ -61,7 +61,7 @@ def _make_vault(tmp_path: Path) -> tuple[Path, Path]:
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True, exist_ok=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     return root, kinds_dir
 
 

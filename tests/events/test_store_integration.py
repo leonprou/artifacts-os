@@ -16,7 +16,7 @@ def make_vault(tmp_path: Path):
     def _make():
         root = tmp_path / "vault"
         (root / "artifacts" / "tasks").mkdir(parents=True)
-        (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+        (root / "artifacts.yaml").write_text("layout_version: 1\n")
         kinds = [
             KindDef(
                 name="task",

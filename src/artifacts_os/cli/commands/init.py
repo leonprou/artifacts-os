@@ -416,7 +416,7 @@ def run(args) -> int:  # no registry — called before vault setup
             return 2
 
     # ── Already-initialised guard ──────────────────────────────
-    settings_file = target / "artifacts" / "artifacts.yaml"
+    settings_file = target / "artifacts.yaml"
     if settings_file.is_file() and not args.force:
         print(
             f"error: already initialised at {target};"
@@ -536,7 +536,7 @@ def run(args) -> int:  # no registry — called before vault setup
             failures.append((rel, str(exc)))
 
     # artifacts.yaml
-    _do_write(target / "artifacts" / "artifacts.yaml", settings_content)
+    _do_write(target / "artifacts.yaml", settings_content)
 
     # kinds
     for kind_name in selected_kinds:

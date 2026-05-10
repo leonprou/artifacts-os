@@ -18,7 +18,7 @@ def register(subparsers) -> None:
         help="list, execute, or inspect named views",
         description=(
             "With no argument, lists all named views defined in "
-            "artifacts/artifacts.yaml. "
+            "artifacts.yaml. "
             "Pass a view name to execute it (list matching artifacts). "
             "Use 'show <name>' to inspect a single view's full definition."
         ),

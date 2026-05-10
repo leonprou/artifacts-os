@@ -39,8 +39,9 @@ def make_vault(tmp_path: Path):
 
     def _make(kinds: list[KindDef] | None = None) -> tuple[Path, Registry]:
         root = tmp_path / "vault"
-        (root / "artifacts").mkdir(parents=True)
-        (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+        root.mkdir(parents=True)
+        (root / "artifacts.yaml").write_text("layout_version: 1\n")
+        (root / "artifacts").mkdir(parents=True, exist_ok=True)
         ks = kinds if kinds is not None else _default_kinds()
         for kd in ks:
             (root / "artifacts" / kd.dir).mkdir(parents=True, exist_ok=True)

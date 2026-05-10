@@ -29,9 +29,8 @@ def clean_emitters():
 
 
 def _write_yaml(root: Path, content: str) -> None:
-    artifacts = root / "artifacts"
-    artifacts.mkdir(parents=True, exist_ok=True)
-    (artifacts / "artifacts.yaml").write_text(content)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "artifacts.yaml").write_text(content)
 
 
 # ---------------------------------------------------------------------------

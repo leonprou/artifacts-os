@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0
+
+- **Vault marker relocated to project root** — `artifacts.yaml` now lives at
+  `<vault-root>/artifacts.yaml` instead of `<vault-root>/artifacts/artifacts.yaml`.
+  Existing vaults require a one-line migration; see [docs/migration.md](docs/migration.md).
+
 ## v0.2.0
 
 Second release of **artifacts-os**. Headline features: `artifacts init`

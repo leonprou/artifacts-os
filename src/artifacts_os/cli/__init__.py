@@ -10,6 +10,7 @@ Implementation spec: s0003-artifacts-os-cli-module
 """
 
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from artifacts_os.core import (
@@ -53,7 +54,7 @@ def _load_views_settings(root) -> "ViewsSettings | None":
     try:
         from pathlib import Path
         from artifacts_os.views.models import ViewsSettings
-        settings_path = Path(root) / "artifacts" / "artifacts.yaml"
+        settings_path = Path(root) / "artifacts.yaml"
         base = load_settings(settings_path)
         return ViewsSettings.from_base(base)
     except ValueError:
@@ -69,7 +70,7 @@ def _load_cli_settings(root) -> CliSettings | None:
     """
     try:
         from pathlib import Path
-        settings_path = Path(root) / "artifacts" / "artifacts.yaml"
+        settings_path = Path(root) / "artifacts.yaml"
         base = load_settings(settings_path)
         return CliSettings.from_base(base)
     except Exception:
@@ -280,7 +281,13 @@ def _run(argv: Sequence[str]) -> int:
             return args.func(args) or 0
 
         if root is None:
-            print("error: not in an artifacts-os project", file=sys.stderr)
+            print(
+                "error: not in an artifacts-os vault (no artifacts.yaml found"
+                f" walking up from {Path.cwd()}).\n"
+                "If your vault was created before v0.3.0, see the migration"
+                " note: docs/migration.md",
+                file=sys.stderr,
+            )
             return 2
 
         registry = Registry(_registered_kinds, root=root)

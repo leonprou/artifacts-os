@@ -74,7 +74,7 @@ def vault_s(tmp_path: Path):
     """Vault with schema-aware kinds for filter tests."""
     root = tmp_path / "vault"
     (root / "artifacts").mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     ks = _schema_kinds()
     for kd in ks:
         (root / "artifacts" / kd.dir).mkdir(parents=True, exist_ok=True)
@@ -369,7 +369,7 @@ def test_deprecated_status_explicit_filters_wins(vault_s) -> None:
 # ---------------------------------------------------------------------------
 
 def _write_artifacts_yaml(root: Path, extra: str) -> None:
-    base = root / "artifacts" / "artifacts.yaml"
+    base = root / "artifacts.yaml"
     content = "layout_version: 1\nproject:\n  name: test\n" + extra
     base.write_text(content)
 
@@ -381,7 +381,7 @@ def cli_vault(tmp_path: Path, monkeypatch):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text(
+    (root / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
     )
     schema = {

@@ -177,7 +177,7 @@ class TestVariableInterpolation:
     def test_18_2_4_created_is_today(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         main(["init", "--template", "minimal", "--kinds", "none", "--agents", "none"])
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        text = (tmp_path / "artifacts.yaml").read_text()
         import datetime
         assert datetime.date.today().isoformat() in text
 
@@ -201,22 +201,22 @@ class TestStepSkipping:
             "--kinds", "task",
             "--agents", "none",
         ])
-        assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        assert (tmp_path / "artifacts.yaml").is_file()
+        text = (tmp_path / "artifacts.yaml").read_text()
         assert "layout_version" in text
 
     def test_18_3_3_yes_flag_uses_defaults(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         main(["init", "-y"])
-        assert (tmp_path / "artifacts" / "artifacts.yaml").is_file()
+        assert (tmp_path / "artifacts.yaml").is_file()
         # standard is the default tier — check for its marker
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        text = (tmp_path / "artifacts.yaml").read_text()
         assert "default_views" in text
 
     def test_18_3_3_yes_with_template_override(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         main(["init", "-y", "--template", "minimal"])
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        text = (tmp_path / "artifacts.yaml").read_text()
         # minimal omits the standard-tier 'default_views' / per-type slices
         assert "default_views" not in text
         assert "features" not in text
@@ -315,7 +315,7 @@ class TestExistingFileGuard:
         monkeypatch.chdir(tmp_path)
         main(["init", "--template", "minimal", "--kinds", "none", "--agents", "none"])
         # Write something custom to check it gets overwritten
-        yaml_path = tmp_path / "artifacts" / "artifacts.yaml"
+        yaml_path = tmp_path / "artifacts.yaml"
         yaml_path.write_text("# custom\n")
         main([
             "init",
@@ -426,7 +426,7 @@ class TestRenderedSettings:
             "--kinds", "task",
             "--agents", "none",
         ])
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        text = (tmp_path / "artifacts.yaml").read_text()
         data = yaml.safe_load(text)
         views = (data or {}).get("views") or {}
         for name, view in views.items():
@@ -680,7 +680,7 @@ class TestFullVaultStructure:
             "--kinds", "none",
             "--agents", "none",
         ])
-        text = (project / "artifacts" / "artifacts.yaml").read_text()
+        text = (project / "artifacts.yaml").read_text()
         assert "my-awesome-project" in text
 
     def test_project_name_from_claude_md(self, tmp_path, monkeypatch):
@@ -692,7 +692,7 @@ class TestFullVaultStructure:
             "--kinds", "none",
             "--agents", "none",
         ])
-        text = (tmp_path / "artifacts" / "artifacts.yaml").read_text()
+        text = (tmp_path / "artifacts.yaml").read_text()
         assert "My Fancy Project" in text
 
     def test_kind_json_valid(self, tmp_path, monkeypatch):
@@ -718,7 +718,7 @@ class TestFullVaultStructure:
             "--kinds", "task",
             "--agents", "none",
         ])
-        assert (target / "artifacts" / "artifacts.yaml").is_file()
+        assert (target / "artifacts.yaml").is_file()
 
     def test_init_then_list_works(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)

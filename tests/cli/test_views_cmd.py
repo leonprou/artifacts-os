@@ -21,7 +21,7 @@ from artifacts_os.cli import main
 
 def _write_artifacts_yaml(root: Path, extra: str) -> None:
     """Rewrite artifacts.yaml with a valid base section plus *extra* YAML."""
-    base = root / "artifacts" / "artifacts.yaml"
+    base = root / "artifacts.yaml"
     content = "layout_version: 1\nproject:\n  name: test\n" + extra
     base.write_text(content)
 

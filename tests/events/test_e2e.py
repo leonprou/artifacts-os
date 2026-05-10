@@ -39,7 +39,7 @@ def _make_vault(root: Path) -> tuple[Path, Registry]:
 
 
 def _write_yaml(root: Path, content: str) -> None:
-    (root / "artifacts" / "artifacts.yaml").write_text(content)
+    (root / "artifacts.yaml").write_text(content)
 
 
 @pytest.fixture(autouse=True)

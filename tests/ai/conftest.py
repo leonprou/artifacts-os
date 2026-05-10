@@ -12,7 +12,7 @@ def vault(tmp_path: Path) -> Path:
     """Create a minimal initialised vault at tmp_path/vault."""
     root = tmp_path / "vault"
     (root / "artifacts" / "kinds").mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True, exist_ok=True)
     return root
 

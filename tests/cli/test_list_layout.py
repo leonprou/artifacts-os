@@ -58,7 +58,7 @@ def tree_vault(tmp_path, monkeypatch):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text(
+    (root / "artifacts.yaml").write_text(
         "layout_version: 1\n"
         "project:\n"
         "  name: test\n"
@@ -103,7 +103,7 @@ def _write_task(root, num, slug, *, parent=None, status="ready", created=None):
 
 def _write_artifacts_yaml(root: Path, extra: str) -> None:
     """Rewrite artifacts.yaml with required headers plus *extra* YAML."""
-    (root / "artifacts" / "artifacts.yaml").write_text(
+    (root / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n" + extra
     )
 

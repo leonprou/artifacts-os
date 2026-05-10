@@ -286,7 +286,7 @@ def install(
     """Install AI command files and skill files into target vault's tool directory.
 
     Args:
-        target: Vault root (must contain artifacts/artifacts.yaml).
+        target: Vault root (must contain artifacts.yaml).
         mode: "link" creates symlinks; "copy" copies files.
         tool: Target tool. If None, auto-detects from existing dirs.
         force: Overwrite files that differ from package version.
@@ -298,7 +298,7 @@ def install(
     Raises:
         ValueError: If target is not an initialised vault.
     """
-    if not (target / "artifacts" / "artifacts.yaml").is_file():
+    if not (target / "artifacts.yaml").is_file():
         raise ValueError(
             f"Not an artifacts-os vault: {target}. Run `artifacts init` first."
         )

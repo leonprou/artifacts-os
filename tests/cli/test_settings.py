@@ -97,7 +97,7 @@ def test_from_base_inherits_base_fields(tmp_path):
 
 def test_show_editor_default_opens_editor(vault, write_artifact, monkeypatch):
     """cli.defaults.show.editor: true → subprocess.run called without -e."""
-    (vault / "artifacts" / "artifacts.yaml").write_text(
+    (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  defaults:\n    show:\n      editor: true\n"
     )
@@ -132,7 +132,7 @@ def test_show_explicit_editor_flag_opens_editor(vault, write_artifact, monkeypat
 
 def test_show_json_overrides_editor_default(vault, write_artifact, capsys, monkeypatch):
     """Explicit -j overrides cli.defaults.show.editor: true."""
-    (vault / "artifacts" / "artifacts.yaml").write_text(
+    (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  defaults:\n    show:\n      editor: true\n"
     )
@@ -165,7 +165,7 @@ def test_show_no_editor_default_renders_table(vault, write_artifact, capsys):
 
 def test_alias_dispatches_to_list(vault, write_artifact, capsys):
     """cli.aliases.ls: list → 'artifacts ls' runs list command."""
-    (vault / "artifacts" / "artifacts.yaml").write_text(
+    (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  aliases:\n    ls: list\n"
     )
@@ -180,7 +180,7 @@ def test_alias_dispatches_to_list(vault, write_artifact, capsys):
 
 def test_alias_dispatches_to_status(vault, write_artifact, capsys):
     """cli.aliases.t: status → 'artifacts t' runs status command."""
-    (vault / "artifacts" / "artifacts.yaml").write_text(
+    (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  aliases:\n    t: status\n"
     )
@@ -196,7 +196,7 @@ def test_alias_dispatches_to_status(vault, write_artifact, capsys):
 
 def test_unknown_command_falls_to_argparse_error(vault):
     """An unmapped command name exits with argparse error code 2."""
-    (vault / "artifacts" / "artifacts.yaml").write_text(
+    (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  aliases:\n    ls: list\n"
     )

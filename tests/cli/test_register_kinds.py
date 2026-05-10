@@ -74,7 +74,7 @@ def test_vault_overrides_caller_no_error(tmp_path: Path, monkeypatch) -> None:
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (kinds_dir / "task.json").write_text(
         json.dumps({"x-dir": "tasks", "x-prefix": "vault", "x-numbered": True})
     )

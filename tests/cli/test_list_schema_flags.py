@@ -96,7 +96,7 @@ def vault(tmp_path: Path, monkeypatch):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     for name, schema in _ALL_SCHEMAS.items():
         (kinds_dir / f"{name}.json").write_text(json.dumps(schema))
@@ -213,7 +213,7 @@ def test_L6_no_properties_schema_static_fallback(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     # Schema with empty properties
     (kinds_dir / "task.json").write_text(json.dumps({
@@ -236,7 +236,7 @@ def test_L6_no_properties_help_no_crash(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     (kinds_dir / "task.json").write_text(json.dumps({
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -262,7 +262,7 @@ def test_L7_reserved_name_skipped(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -395,7 +395,7 @@ def test_L13_filter_wins_over_generated_flag(vault):
 def test_L14_generated_flag_overrides_view_filter(vault):
     """L14: view declares assignee=developer; --assignee alice overrides it."""
     # Add a view to artifacts.yaml
-    yaml_path = vault / "artifacts" / "artifacts.yaml"
+    yaml_path = vault / "artifacts.yaml"
     yaml_path.write_text(
         "layout_version: 1\n"
         "project:\n"
@@ -424,7 +424,7 @@ def test_L14_generated_flag_overrides_view_filter(vault):
 
 def test_L15_view_filter_preserved_for_non_overridden_keys(vault):
     """L15: view assignee=developer kept; --type feature adds a new key."""
-    yaml_path = vault / "artifacts" / "artifacts.yaml"
+    yaml_path = vault / "artifacts.yaml"
     yaml_path.write_text(
         "layout_version: 1\n"
         "project:\n"
@@ -476,7 +476,7 @@ def test_L17_help_no_kind_empty_kinds_dir(tmp_path, monkeypatch, capsys):
     """L17: --help with empty kinds/ dir — no exception, static surface shown."""
     root = tmp_path / "vault"
     (root / "artifacts" / "kinds").mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -528,7 +528,7 @@ def test_L20_malformed_schema_json_fallback(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     (kinds_dir / "task.json").write_text("{invalid json!!!")
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
@@ -550,7 +550,7 @@ def test_L22_integer_type_coercion(tmp_path, monkeypatch):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -582,7 +582,7 @@ def test_L23_integer_invalid_value_exits_2(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -609,7 +609,7 @@ def test_L24_boolean_type_coercion(tmp_path, monkeypatch):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -644,7 +644,7 @@ def test_L25_boolean_invalid_value_exits_2(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -680,7 +680,7 @@ def test_L27_missing_description_fallback(tmp_path, monkeypatch, capsys):
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     schema = {
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
@@ -705,7 +705,7 @@ def test_L28_cross_kind_diverging_description_has_varies_suffix(tmp_path, monkey
     root = tmp_path / "vault"
     kinds_dir = root / "artifacts" / "kinds"
     kinds_dir.mkdir(parents=True)
-    (root / "artifacts" / "artifacts.yaml").write_text("layout_version: 1\n")
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     (root / "artifacts" / "specs").mkdir(parents=True)
     (kinds_dir / "task.json").write_text(json.dumps({

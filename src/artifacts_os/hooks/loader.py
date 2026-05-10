@@ -74,7 +74,7 @@ class Hook:
 
 
 def load_hooks(root: Path) -> list[Hook]:
-    """Parse the ``hooks:`` section from ``<root>/artifacts/artifacts.yaml``.
+    """Parse the ``hooks:`` section from ``<root>/artifacts.yaml``.
 
     Returns an empty list when the section is absent or empty.
     Raises ``ValueError`` for malformed entries (missing name, missing
@@ -82,7 +82,7 @@ def load_hooks(root: Path) -> list[Hook]:
     """
     import yaml
 
-    settings_path = root / "artifacts" / "artifacts.yaml"
+    settings_path = root / "artifacts.yaml"
     if not settings_path.exists():
         return []
 
