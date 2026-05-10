@@ -3,7 +3,7 @@ kind: task
 id: t0137
 name: implement-vault-marker-relocation-per
 type: implementation
-status: in-progress
+status: done
 assignee: developer
 owner: user
 parent: "[[t0131-move-artifacts-yaml-to-project]]"
@@ -11,6 +11,7 @@ depends_on:
   - "[[t0132-spec-for-vault-marker-at]]"
 created: 2026-05-10
 started: 2026-05-10
+completed: 2026-05-10
 ---
 
 # Implement Vault Marker Relocation (PR1)
@@ -100,6 +101,11 @@ commit is green" rule is enforced.
 
 ## Progress
 
+### 2026-05-10 — Complete (r0152)
+
+All changes already in working tree from prior run; committed as
+`feat(t0137)` (f93500f). 857 tests pass, 1 skipped (unrelated).
+
 ### 2026-05-10 13:27:33 — Incomplete run (r0151)
 
 **Stop reason:** Non-zero exit code (8)
@@ -107,22 +113,22 @@ commit is green" rule is enforced.
 
 ## Verification
 
-- [ ] `find_vault_root` probe path matches s0026 §6.2
+- [x] `find_vault_root` probe path matches s0026 §6.2
       verbatim.
-- [ ] All 7 read-side call sites in s0026 §7 updated.
-- [ ] All 3 `make_vault` factories updated; `pytest` passes.
-- [ ] All 5 new `test_vault.py` cases from s0026 §14.3
+- [x] All 7 read-side call sites in s0026 §7 updated.
+- [x] All 3 `make_vault` factories updated; `pytest` passes.
+- [x] All 5 new `test_vault.py` cases from s0026 §14.3
       present and passing — including the legacy-only case
       that returns `None` (D3 hard-cutover pin).
-- [ ] No occurrence of the literal `artifacts/artifacts.yaml`
+- [x] No occurrence of the literal `artifacts/artifacts.yaml`
       remains in `src/` or `tests/` (confirmed by
       `grep -rn 'artifacts.*artifacts\.yaml' src/ tests/`).
-- [ ] This repo's `artifacts/artifacts.yaml` is now at
+- [x] This repo's `artifacts/artifacts.yaml` is now at
       `./artifacts.yaml`; `artifacts list --kind task` works
       from project root and from `artifacts/specs/`.
-- [ ] `docs/migration.md` exists with §11.1–11.2 content.
-- [ ] `CHANGELOG.md` has a one-line entry under the next
+- [x] `docs/migration.md` exists with §11.1–11.2 content.
+- [x] `CHANGELOG.md` has a one-line entry under the next
       version that links to `docs/migration.md`.
-- [ ] "Not in a vault" CLI error message now references
+- [x] "Not in a vault" CLI error message now references
       `docs/migration.md`.
-- [ ] `pytest` exits 0 with no skips for changed modules.
+- [x] `pytest` exits 0 with no skips for changed modules.
