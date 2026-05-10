@@ -21,3 +21,11 @@ class AmbiguousError(ArtifactError):
 
 class ValidationError(ArtifactError):
     """Frontmatter failed schema or status validation. CLI maps to exit code 2."""
+
+
+class BlockedByPreHook(ArtifactError):
+    """A pre-phase hook with blocking=true rejected the operation.
+
+    CLI maps to exit code 11. The CRUD operation is aborted and the
+    artifact file is left unchanged.
+    """
