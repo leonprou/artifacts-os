@@ -24,6 +24,8 @@ MODULE_SUBPACKAGES = [
     "artifacts_os.tui",
     "artifacts_os.tui.screens",
     "artifacts_os.ai",
+    "artifacts_os.events",
+    "artifacts_os.hooks",
 ]
 
 
