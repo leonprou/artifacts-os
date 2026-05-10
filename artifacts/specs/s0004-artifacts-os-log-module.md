@@ -1,14 +1,23 @@
 ---
 kind: spec
 name: artifacts-os-log-module
-status: draft
+status: final
+version: 2
 created: 2026-04-20
+updated: 2026-05-10
 task: "[[0001-migrate-docs-specs-to-openstation]]"
 agent: manual
 id: s0004
 ---
 
 # artifacts-os: log Module
+
+> **Superseded sections:** The event-type table previously documented in
+> § "Event Types" below (`artifact.created`, `artifact.updated`, etc.) is
+> now the authoritative wire format defined in
+> [[s0025-artifact-events]] § C1. `Logger` / `LogReader` API is
+> unchanged by that spec. This spec retains its full Logger / LogReader
+> surface; only the event-type schema cross-reference moves to `s0025`.
 
 High-level spec for `artifacts_os.log`.
 

@@ -1,7 +1,7 @@
 # Architecture
 
 `artifacts-os` is a Python library for storing, discovering, and managing
-structured markdown artifacts. It is composed of six modules with a strict
+structured markdown artifacts. It is composed of eight modules with a strict
 one-way dependency DAG; no module may import from a peer or downstream module.
 
 ---
@@ -51,7 +51,9 @@ from artifacts_os.core import (
 | `core` | shipped | Vault location, storage, discovery, registry, settings, validation |
 | `views` | shipped | Formatting layer — column layout, Rich table rendering |
 | `cli` | shipped | `artifacts` console script — argument parsing, command dispatch |
-| `log` | stub | JSONL operation log (spec: s2063) |
+| `events` | shipped | Event catalog + always-on JSONL audit stream (spec: s0025) |
+| `hooks` | shipped | Opt-in declarative reactions — shell, notify, file-drop (spec: s0025) |
+| `log` | stub | JSONL operation log (spec: s0004) |
 | `tui` | stub | Interactive terminal browser (spec: s2065) |
 | `ai` | stub | Agent context and execution (spec: s2066) |
 
@@ -61,6 +63,9 @@ from artifacts_os.core import (
 
 ```
 core
+├── events
+│   └── hooks
+│       └── ai
 ├── views
 │   ├── cli
 │   └── tui
@@ -70,6 +75,8 @@ core
 
 Each module may import from its listed ancestors only. No peer imports
 across branches are permitted. `cli` depends on both `core` and `views`.
+`events` and `hooks` both depend on `core` only; `hooks` depends on `events`
+for the catalog types. `core` never imports from any downstream module.
 
 ---
 

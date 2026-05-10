@@ -333,6 +333,167 @@ The full design lives in
 
 ---
 
+## Events Section
+
+The `events:` key configures the always-on JSONL audit stream.
+All fields are optional; omitting the section entirely uses defaults.
+
+```yaml
+events:
+  enabled: true                    # default true; set false to disable stream
+  dir: artifacts/logs/events       # override default directory
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the audit stream |
+| `dir` | path | `artifacts/logs/events` | Directory where daily JSONL files are written |
+
+`EventsSettings.from_base` parses this section:
+
+```python
+from artifacts_os.events.settings import EventsSettings
+from artifacts_os.core import load_settings
+
+base = load_settings(root / "artifacts" / "artifacts.yaml")
+events_cfg = EventsSettings.from_base(base)
+print(events_cfg.enabled)  # True
+print(events_cfg.dir)      # None (use default) or Path("artifacts/logs/events")
+```
+
+---
+
+## Hooks Section
+
+The `hooks:` key configures the opt-in reactive layer. Each entry defines
+a named hook with a matcher and an action. Hooks are evaluated in
+declaration order.
+
+```yaml
+hooks:
+  - name: notify-on-review
+    matcher:
+      event: artifact.status_changed
+      kind: task
+      after: review
+    action:
+      type: notify
+      title: "Review needed: $ART_NAME"
+      body: "Task $ART_ID is ready for review"
+
+  - name: lint-before-create
+    phase: pre
+    blocking: true
+    matcher:
+      event: artifact.created
+      kind: task
+    action:
+      type: shell
+      command: "bin/lint-task $ART_PATH"
+      timeout: 30
+```
+
+### Hook Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | required | Unique hook name |
+| `matcher` | dict | `{}` | Key/value pairs that must all match (AND) |
+| `action` | dict | required | Action to execute |
+| `phase` | `"pre"` \| `"post"` | `"post"` | When the hook fires relative to the CRUD write |
+| `blocking` | bool | `false` | Pre-phase only — abort CRUD on failure when `true` |
+| `timeout` | int (seconds) | `30` | Timeout for shell/notify actions |
+
+### Matcher Keys
+
+| Key | Matches against | Example |
+|-----|----------------|---------|
+| `event` | Event type string; `"*"` catches all | `artifact.created` |
+| `kind` | `payload.kind` | `task` |
+| `id` | `payload.id` | `t0042` |
+| `name` | `payload.name` (slug) | `fix-the-bug` |
+| `stem` | `payload.stem` | `t0042-fix-the-bug` |
+| `changed` | List membership check | `[status]` |
+| `result` | From `artifact.validated` | `fail` |
+| `before` | Scalar before-value (`artifact.status_changed`) | `ready` |
+| `after` | Scalar after-value (`artifact.status_changed`) | `review` |
+| `fields.<key>` | Key in post-update frontmatter | `fields.assignee: developer` |
+| `before.<key>` | Pre-update value (`artifact.updated`) | `before.status: ready` |
+| `after.<key>` | Post-update value (`artifact.updated`) | `after.status: review` |
+
+A list value on any key is OR-ed within the key (e.g. `kind: [task, spec]`
+matches either). The `event: "*"` wildcard matches any event type.
+
+### Action Types
+
+#### `shell`
+
+```yaml
+action:
+  type: shell
+  command: "bin/my-script $ART_PATH"
+  timeout: 30
+```
+
+Runs via `/bin/sh -c`. Receives `ART_*` environment variables (see below).
+
+#### `notify`
+
+```yaml
+action:
+  type: notify
+  title: "Task ready: $ART_NAME"
+  body: "Status changed to $ART_AFTER_STATUS"
+  mechanism: auto   # "auto" | "bell" | "desktop"
+```
+
+Sends a desktop notification (macOS `osascript`, Linux `notify-send`,
+Windows PowerShell). Falls back to a terminal bell when no daemon is
+available.
+
+#### `file-drop`
+
+```yaml
+action:
+  type: file-drop
+  path: "artifacts/.notifications/{event}-{ts}.json"
+  payload: full   # "full" (default) or "summary"
+```
+
+Writes the event payload to a file. `path` supports `{event}`, `{ts}`,
+`{kind}`, `{id}` substitutions.
+
+### Environment Variables (`ART_*`)
+
+Hooks receive event context via environment variables:
+
+| Variable | Source |
+|----------|--------|
+| `ART_EVENT` | Event type string |
+| `ART_KIND` | `payload.kind` |
+| `ART_ID` | `payload.id` |
+| `ART_NAME` | `payload.name` |
+| `ART_STEM` | `payload.stem` |
+| `ART_PATH` | Absolute path to artifact |
+| `ART_VAULT_ROOT` | Vault root directory |
+| `ART_BEFORE_STATUS` | Status before update (on status-change events) |
+| `ART_AFTER_STATUS` | Status after update |
+| `ART_CHANGED` | Comma-joined changed field names |
+| `ART_PAYLOAD_JSON` | Full payload as JSON (escape hatch) |
+
+`HooksSettings.from_base` parses the raw hooks list:
+
+```python
+from artifacts_os.hooks.settings import HooksSettings
+from artifacts_os.core import load_settings
+
+base = load_settings(root / "artifacts" / "artifacts.yaml")
+hooks_cfg = HooksSettings.from_base(base)
+print(hooks_cfg.hooks)  # list of hook config dicts
+```
+
+---
+
 ## Schema Versioning
 
 `artifacts.yaml` must begin with `layout_version: 1`. Any other value (or
