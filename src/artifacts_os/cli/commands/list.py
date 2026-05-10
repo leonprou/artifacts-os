@@ -28,6 +28,8 @@ from artifacts_os.views.models import ViewConfig, ViewsSettings
 _RESERVED_FILTER_FLAG_NAMES: frozenset[str] = frozenset({
     "help", "kind", "filter", "view", "fields", "meta",
     "quiet", "json", "children", "parent", "layout", "prune",
+    # t0139 §5: --tail is a CLI cap, not a per-kind frontmatter filter.
+    "tail",
 })
 
 
@@ -307,6 +309,19 @@ def register(
     mode.add_argument("-q", "--quiet", action="store_true", help="one name per line")
     mode.add_argument("-j", "--json", action="store_true", dest="json_out",
                       help="JSON output")
+
+    p.add_argument(
+        "--tail",
+        nargs="?",
+        const=50,
+        default=None,
+        type=int,
+        metavar="N",
+        help=(
+            "show only the last N results after all filters and sorting "
+            "(default: 50). Without --tail, every matching artifact is shown."
+        ),
+    )
 
     # Schema-derived filter flags — sets _generated_filter_fields on the namespace.
     if schema is not None:
@@ -631,14 +646,19 @@ def run(args, registry: Registry) -> int:
         ref_paths: set = set(resolved_paths)
         items = [m for m in items if m.path in ref_paths]
 
+    tail_n: int | None = getattr(args, "tail", None)
+
     # -q and -j: layout selection skipped; sort still applies on flat data (§8.4).
     if args.quiet:
-        for item in _apply_sort(items, getattr(args, "_sort", None)):
+        sorted_items = _apply_sort(items, getattr(args, "_sort", None))
+        sorted_items = _apply_tail(sorted_items, tail_n)
+        for item in sorted_items:
             print(item.path.stem)
         return 0
 
     if args.json_out:
         sorted_items = _apply_sort(items, getattr(args, "_sort", None))
+        sorted_items = _apply_tail(sorted_items, tail_n)
         print(json.dumps([item.frontmatter for item in sorted_items], default=str))
         return 0
 
@@ -673,6 +693,14 @@ def run(args, registry: Registry) -> int:
         columns = _resolve_columns(args, view_cfg, registry, kind_def)
 
     sort_str = getattr(args, "_sort", None)
+
+    # --tail applies to the flat item set after sorting — spec wording is
+    # "the last N results after all filters and sorting are applied".  For
+    # tree layouts, this trims the input set passed to compute_tree, which
+    # may produce orphan children but matches the documented semantics.
+    if tail_n is not None:
+        items = _apply_sort(items, sort_str)
+        items = _apply_tail(items, tail_n)
 
     if layout == "tree":
         # Resolve parent_field (§8.2 parallel chain).
@@ -717,7 +745,9 @@ def run(args, registry: Registry) -> int:
         )
     else:
         # Table layout: apply flat sort then render.
-        items = _apply_sort(items, sort_str)
+        # (--tail was already applied above when set.)
+        if tail_n is None:
+            items = _apply_sort(items, sort_str)
         table = views.render_table(items, columns, kind_def=kind_def)
 
     Console().print(table)
@@ -795,6 +825,19 @@ def _apply_view(args: Any, settings: ViewsSettings | None) -> None:
 
     args._sort = view_cfg.sort
     args._view_cfg = view_cfg
+
+
+def _apply_tail(items: list, n: int | None) -> list:
+    """Return the last *n* items, or *items* unchanged when *n* is ``None``.
+
+    ``n <= 0`` returns ``[]`` to match Unix ``tail -n 0`` semantics.  This
+    helper is the shared post-sort cap used by ``--tail [N]`` (s_t0139).
+    """
+    if n is None:
+        return items
+    if n <= 0:
+        return []
+    return items[-n:]
 
 
 def _apply_sort(items: list, sort_key: str | None) -> list:

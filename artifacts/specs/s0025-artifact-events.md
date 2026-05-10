@@ -200,7 +200,7 @@ register a capturing emitter without touching either module.
 | C5 | Hook actions | `src/artifacts_os/hooks/actions.py` | `shell`, `notify`, `file-drop` action runners |
 | C6 | Settings extensions | `src/artifacts_os/events/settings.py`, `src/artifacts_os/hooks/settings.py` | `EventsSettings.from_base`, `HooksSettings.from_base` |
 | C7 | Core integration points | `src/artifacts_os/core/store.py` (modified) | `_dispatch` call sites in `create` / `update`, plus the `artifact.status_changed` derivative |
-| C8 | CLI tail command | `src/artifacts_os/cli/commands/events.py` | `artifacts events tail` for human inspection |
+| C8 | CLI events command | `src/artifacts_os/cli/commands/events.py` | `artifacts events` flat verb; `events tail` hidden alias; `--tail [N]`; Rich table output |
 
 ### C1 — Event Catalog
 
@@ -653,16 +653,30 @@ if "status" in changed_keys:
 `_dispatch` is a no-op when no emitters are registered — `core`
 adds three function calls and one new file. No new dependencies.
 
-### C8 — CLI Tail Command
+### C8 — CLI Events Command
 
 ```
-artifacts events tail [--since DATE] [--event TYPE] [--follow]
+artifacts events [--since DATE] [--event TYPE] [--follow]
+                 [--tail [N]] [--json]
+artifacts events tail [...]    # hidden backward-compat alias
 ```
 
 Reads the daily JSONL files via a thin reader in `events/`,
 filters by event type or timestamp, optionally follows. Useful
 for human inspection and as the primary discovery surface for the
 audit trail.
+
+Default output is a Rich table with columns `ts`, `event`,
+`kind`, `artifact`, matching the visual style of `artifacts list`.
+Events are emitted in chronological order (old → new); without
+`--tail` every matching event is shown. `--tail [N]` (default
+`N=50`) caps the snapshot only — `--follow` continues to stream
+new lines without a cap. `--json` / `-j` emits the raw JSONL
+records, one per line.
+
+The `events tail` form is a hidden alias preserved for
+backward compatibility (t0139); `tail` is stripped before argparse
+sees argv. No deprecation warning is emitted.
 
 ## Configuration
 
@@ -954,7 +968,7 @@ needs it to be.
 | V12 | C7 | A pre-phase hook with `blocking: false` that exits non-zero prints a warning, fires `hook.failed`, and the CRUD operation completes. |
 | V13 | C7 | A post-phase hook that exits non-zero never affects the CRUD outcome. |
 | V14 | C7 | `artifact.status_changed` is dispatched immediately after `artifact.updated` whenever `status` is in `changed`, and never otherwise (I6). |
-| V15 | C8 | `artifacts events tail --since YYYY-MM-DD` returns events from that date forward; `--follow` streams new entries. |
+| V15 | C8 | `artifacts events --since YYYY-MM-DD` returns events from that date forward; `--tail [N]` caps the snapshot; `--follow` streams new entries; `events tail` alias works identically. |
 | V16 | All | The four worked examples (agent, user, app, async runtime) work end-to-end against a test vault. |
 
 ## Build Sequence
@@ -972,8 +986,10 @@ Implementation order — each step is independently testable:
    dataclasses, type constants) and `events/stream.py` (JSONL
    writer). Register on `events` import. Verify JSONL file is
    created on first event.
-4. **C8 CLI tail** — `cli/commands/events.py`. Confirms the
-   stream is reachable end-to-end.
+4. **C8 CLI events command** — `cli/commands/events.py`. Flat
+   `artifacts events` verb with `--tail [N]`, `--since`, `--event`,
+   `--follow`, `--json`; hidden `tail` alias. `--limit` removed.
+   Confirms the stream is reachable end-to-end.
 5. **C6 settings extensions** — `EventsSettings` and
    `HooksSettings` parsing `events:` and `hooks:` from
    `artifacts.yaml`.

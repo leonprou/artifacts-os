@@ -256,6 +256,13 @@ def _run(argv: Sequence[str]) -> int:
     if cli_settings is not None:
         argv = _apply_aliases(argv, cli_settings.aliases)
 
+    # Backward-compat: `events tail [...]` was the original (subcommand) form.
+    # The flat parser at the top level handles every flag now (t0139), so
+    # strip the deprecated `tail` token before argparse sees it.  No warning
+    # is emitted — the alias is silent on purpose.
+    if len(argv) >= 2 and argv[0] == "events" and argv[1] == "tail":
+        argv = ["events"] + argv[2:]
+
     # Phase 1 — peek at create --kind to enable kind-aware help and flags.
     create_kind, create_schema = _peek_create_kind_schema(argv, cli_settings, root)
 

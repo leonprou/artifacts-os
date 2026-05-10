@@ -1,33 +1,54 @@
-"""cli events subcommand — inspect the artifact event stream.
+"""cli events command — inspect the artifact event stream.
 
 Usage::
 
-    artifacts events tail [--since DATE] [--event TYPE] [--follow]
+    artifacts events [--since DATE] [--event TYPE] [--follow]
+                     [--tail [N]] [--json]
+    artifacts events tail [...]    # hidden backward-compat alias
 
-Spec: s0025-artifact-events § C8
+The flat ``events`` form mirrors ``artifacts list``: same command shape,
+same Rich table style, same flag conventions. ``events tail`` is kept as
+a hidden alias that forwards to the same handler — argv preprocessing in
+``cli/__init__.py`` strips the deprecated ``tail`` token before parsing.
+
+Spec: s0025-artifact-events § C8 (initial); aligned with t0139.
 """
 from __future__ import annotations
 
 import json
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
+
+from rich.console import Console
+from rich.table import Table
+
+
+# ---------------------------------------------------------------------------
+# Command registration
+# ---------------------------------------------------------------------------
 
 
 def register(subparsers) -> None:
-    p = subparsers.add_parser("events", help="inspect the artifact event stream")
-    event_sub = p.add_subparsers(dest="events_command", metavar="SUBCOMMAND")
-    event_sub.required = True
+    """Register the flat ``events`` command on *subparsers*.
 
-    tail_p = event_sub.add_parser("tail", help="tail the event stream")
-    tail_p.add_argument(
+    All flags live at the top level — there is no required subcommand.
+    The deprecated ``events tail`` form is handled by an argv-preprocessing
+    step in ``cli/__init__.py`` that strips the ``tail`` token before
+    argparse sees it.
+    """
+    p = subparsers.add_parser(
+        "events",
+        help="inspect the artifact event stream",
+    )
+    p.add_argument(
         "--since",
         metavar="DATE",
         default=None,
         help="show events from this date forward (YYYY-MM-DD)",
     )
-    tail_p.add_argument(
+    p.add_argument(
         "--event",
         "-e",
         action="append",
@@ -36,42 +57,38 @@ def register(subparsers) -> None:
         default=None,
         help="filter by event type (may be repeated)",
     )
-    tail_p.add_argument(
+    p.add_argument(
         "--follow",
         "-f",
         action="store_true",
         default=False,
         help="continuously follow the stream for new entries",
     )
-    tail_p.add_argument(
+    p.add_argument(
         "--json",
         "-j",
         action="store_true",
         dest="json_out",
         default=False,
-        help="output raw JSONL lines (default: pretty-printed)",
+        help="output raw JSONL lines (default: Rich table)",
     )
-    tail_p.add_argument(
-        "--limit",
-        "-n",
+    p.add_argument(
+        "--tail",
+        nargs="?",
+        const=50,
+        default=None,
         type=int,
-        default=50,
         metavar="N",
-        help="max events to show in initial snapshot (0 = unlimited, default: 50)",
+        help=(
+            "show only the last N events from the snapshot (default: 50). "
+            "Without --tail, all matching events are shown old→new."
+        ),
     )
-    tail_p.set_defaults(func=_run_tail)
-
-    p.set_defaults(func=_dispatch_events)
-
-
-def _dispatch_events(args, registry) -> int:
-    """Fallback — should not be reached because subcommand is required."""
-    print("Usage: artifacts events <subcommand>", file=sys.stderr)
-    return 1
+    p.set_defaults(func=_run_events)
 
 
 # ---------------------------------------------------------------------------
-# Tail implementation
+# Snapshot collection
 # ---------------------------------------------------------------------------
 
 
@@ -88,12 +105,19 @@ def _parse_since(since_str: str | None) -> date | None:
     try:
         return date.fromisoformat(since_str)
     except ValueError:
-        print(f"error: --since {since_str!r} is not a valid YYYY-MM-DD date", file=sys.stderr)
+        print(
+            f"error: --since {since_str!r} is not a valid YYYY-MM-DD date",
+            file=sys.stderr,
+        )
         raise SystemExit(1)
 
 
 def _daily_files(events_dir: Path, since: date | None) -> list[Path]:
-    """Return sorted JSONL files from *events_dir*, optionally filtered by date."""
+    """Return sorted JSONL files from *events_dir*, optionally filtered by date.
+
+    Sort is ascending by filename (which is ``YYYY-MM-DD``) so callers see
+    events in chronological order — old → new.
+    """
     if not events_dir.is_dir():
         return []
     files: list[Path] = sorted(events_dir.glob("*.jsonl"))
@@ -103,7 +127,7 @@ def _daily_files(events_dir: Path, since: date | None) -> list[Path]:
 
 
 def _file_date(path: Path) -> date:
-    """Parse ``YYYY-MM-DD`` from the stem; fall back to epoch."""
+    """Parse ``YYYY-MM-DD`` from the stem; fall back to epoch on malformed names."""
     try:
         return date.fromisoformat(path.stem)
     except ValueError:
@@ -116,15 +140,6 @@ def _filter_event(record: dict, event_types: list[str] | None) -> bool:
     return record.get("event", "") in event_types
 
 
-def _format_record(record: dict, *, json_out: bool) -> str:
-    if json_out:
-        return json.dumps(record, ensure_ascii=False)
-    ts = record.get("ts", "")
-    event = record.get("event", "")
-    stem = record.get("stem") or record.get("id") or record.get("hook") or ""
-    return f"{ts}  {event:<30s}  {stem}"
-
-
 def _collect_file(
     path: Path,
     start_pos: int,
@@ -132,7 +147,8 @@ def _collect_file(
 ) -> tuple[list[dict], int]:
     """Read matching records from *path* starting at *start_pos*.
 
-    Returns ``(records, new_position)``.
+    Returns ``(records, new_position)``.  Malformed JSON lines are skipped
+    silently; the file position advances past them so they are not retried.
     """
     records: list[dict] = []
     if not path.exists():
@@ -153,7 +169,57 @@ def _collect_file(
     return records, pos
 
 
-def _run_tail(args, registry) -> int:
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+
+
+def _artifact_label(record: dict) -> str:
+    """Pick the best human-facing label for the event subject.
+
+    Prefers ``stem`` (full ``id-name`` for numbered kinds), falling back to
+    ``id``, then ``hook`` (for hook-fired/-failed events), then "".
+    """
+    return (
+        record.get("stem")
+        or record.get("id")
+        or record.get("hook")
+        or ""
+    )
+
+
+def _build_table(records: list[dict]) -> Table:
+    """Build a Rich table for *records* with columns: ts, event, kind, artifact."""
+    table = Table()
+    table.add_column("ts")
+    table.add_column("event")
+    table.add_column("kind")
+    table.add_column("artifact")
+    for record in records:
+        table.add_row(
+            str(record.get("ts", "")),
+            str(record.get("event", "")),
+            str(record.get("kind", "")),
+            _artifact_label(record),
+        )
+    return table
+
+
+def _format_record_plain(record: dict) -> str:
+    """Plain-text single-line format used during ``--follow`` streaming."""
+    ts = record.get("ts", "")
+    event = record.get("event", "")
+    kind = record.get("kind", "")
+    artifact = _artifact_label(record)
+    return f"{ts}  {event:<30s}  {kind:<10s}  {artifact}"
+
+
+# ---------------------------------------------------------------------------
+# Command runner
+# ---------------------------------------------------------------------------
+
+
+def _run_events(args, registry) -> int:
     events_dir = _events_dir(registry)
     if events_dir is None:
         print("error: vault root not found", file=sys.stderr)
@@ -163,11 +229,11 @@ def _run_tail(args, registry) -> int:
     event_types: list[str] | None = getattr(args, "event_types", None)
     follow: bool = getattr(args, "follow", False)
     json_out: bool = getattr(args, "json_out", False)
-    limit: int = getattr(args, "limit", 50)
+    tail: int | None = getattr(args, "tail", None)
 
     files = _daily_files(events_dir, since)
 
-    # --- Initial snapshot: collect, apply limit, print ---
+    # --- Initial snapshot: collect all matching records (old → new) ---
     snapshot: list[dict] = []
     file_positions: dict[Path, int] = {}
 
@@ -176,19 +242,35 @@ def _run_tail(args, registry) -> int:
         snapshot.extend(records)
         file_positions[path] = pos
 
-    # Apply limit (last N); limit=0 means unlimited
-    visible = snapshot[-limit:] if limit > 0 else snapshot
-    for record in visible:
-        print(_format_record(record, json_out=json_out))
+    # Apply --tail to the snapshot only.  ``tail is None`` → show all;
+    # ``tail <= 0`` → show none (matches Unix ``tail -n 0`` semantics and
+    # the parallel ``_apply_tail`` helper in cli/commands/list.py).
+    visible: list[dict]
+    if tail is None:
+        visible = snapshot
+    elif tail <= 0:
+        visible = []
+    else:
+        visible = snapshot[-tail:]
+
+    if json_out:
+        for record in visible:
+            print(json.dumps(record, ensure_ascii=False))
+    elif visible:
+        # Empty snapshot → print nothing (consistent with ``list``).
+        Console().print(_build_table(visible))
 
     if not follow:
         return 0
 
-    # --- Follow: stream new lines without a cap ---
+    # --- Follow: stream new lines without a cap, plain text per line. ---
     def _emit_new(path: Path, start_pos: int) -> int:
         records, pos = _collect_file(path, start_pos, event_types)
         for record in records:
-            print(_format_record(record, json_out=json_out))
+            if json_out:
+                print(json.dumps(record, ensure_ascii=False))
+            else:
+                print(_format_record_plain(record))
         return pos
 
     try:
