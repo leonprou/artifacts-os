@@ -22,6 +22,7 @@ from artifacts_os.core import (
     AmbiguousError,
     ValidationError,
 )
+from artifacts_os.core.errors import BlockedByPreHook
 from artifacts_os.cli.commands import list as _list_cmd
 from artifacts_os.cli.commands import show as _show_cmd
 from artifacts_os.cli.commands import create as _create_cmd
@@ -32,6 +33,7 @@ from artifacts_os.cli.commands import init as _init_cmd
 from artifacts_os.cli.commands import kinds as _kinds_cmd
 from artifacts_os.cli.commands import views as _views_cmd
 from artifacts_os.cli.commands import ai as _ai_cmd
+from artifacts_os.cli.commands import events as _events_cmd
 from artifacts_os.cli.settings import CliSettings
 
 
@@ -238,6 +240,7 @@ def _build_parser(
     _kinds_cmd.register(subparsers)
     _views_cmd.register(subparsers)
     _ai_cmd.register(subparsers)
+    _events_cmd.register(subparsers)
 
     return parser
 
@@ -291,6 +294,9 @@ def _run(argv: Sequence[str]) -> int:
     except ValidationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except BlockedByPreHook as exc:
+        print(f"error: blocked by pre-hook: {exc}", file=sys.stderr)
+        return 11
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
