@@ -21,6 +21,7 @@ from artifacts_os.core.errors import (
     NotFoundError,
     AmbiguousError,
     ValidationError,
+    BlockedByPreHook,
 )
 from artifacts_os.core.validate import validate_one, validate_many, ValidationIssue, ValidationResult
 from artifacts_os.core.kinds_catalog import KindCatalog, KindCatalogEntry
@@ -45,6 +46,7 @@ __all__ = [
     "NotFoundError",
     "AmbiguousError",
     "ValidationError",
+    "BlockedByPreHook",
     "validate_one",
     "validate_many",
     "ValidationIssue",

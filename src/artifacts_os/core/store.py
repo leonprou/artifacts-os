@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import jsonschema
 
 from artifacts_os.core import frontmatter as _frontmatter
+from artifacts_os.core import events as _events
 from artifacts_os.core.errors import ValidationError
 from artifacts_os.core.ids import next_prefixed_id, slugify
 from artifacts_os.core.models import Artifact, ArtifactMeta, KindDef
@@ -134,6 +135,25 @@ def create(
     fm_dict: dict = {"kind": kind, "id": aid, "name": slug, **fields}
     _validate_schema(kd, fm_dict)
 
+    stem = path.stem
+
+    # Pre-phase dispatch — fires BEFORE content is written to disk.
+    # If a blocking pre-hook raises BlockedByPreHook, clean up the
+    # reserved (empty) file and propagate.
+    try:
+        _events._dispatch_pre(
+            "artifact.created",
+            kind=kind,
+            id=aid,
+            name=slug,
+            stem=stem,
+            fields=dict(fm_dict),
+        )
+    except Exception:
+        os.close(fd)
+        path.unlink(missing_ok=True)
+        raise
+
     text = _frontmatter.dump(fm_dict, body)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -143,7 +163,19 @@ def create(
         raise
 
     parsed_meta, parsed_body = _frontmatter.parse(text)
-    return _build_artifact(path, parsed_meta, parsed_body)
+    artifact = _build_artifact(path, parsed_meta, parsed_body)
+
+    _events._dispatch(
+        "artifact.created",
+        kind=kind,
+        id=aid,
+        name=slug,
+        stem=stem,
+        path=str(path),
+        fields=dict(parsed_meta),
+    )
+
+    return artifact
 
 
 def get(
@@ -193,10 +225,60 @@ def update(
 
     _validate_schema(kd, new_meta)
 
+    # Compute diff for dispatch payload.
+    all_keys = set(meta) | set(new_meta)
+    changed_keys = [k for k in all_keys if meta.get(k) != new_meta.get(k)]
+    diff_before = {k: meta.get(k) for k in changed_keys}
+    diff_after = {k: new_meta.get(k) for k in changed_keys}
+
+    aid = meta.get("id", "")
+    name = meta.get("name", path.stem)
+    stem = path.stem
+
+    _events._dispatch_pre(
+        "artifact.updated",
+        kind=kind,
+        id=aid,
+        name=name,
+        stem=stem,
+        changed=list(changed_keys),
+        before=dict(diff_before),
+        after=dict(diff_after),
+        fields=dict(new_meta),
+    )
+
     new_text = _frontmatter.dump(new_meta, body)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(new_text, encoding="utf-8")
     os.replace(tmp, path)
 
     parsed_meta, parsed_body = _frontmatter.parse(new_text)
-    return _build_artifact(path, parsed_meta, parsed_body)
+    artifact = _build_artifact(path, parsed_meta, parsed_body)
+
+    _events._dispatch(
+        "artifact.updated",
+        kind=kind,
+        id=aid,
+        name=name,
+        stem=stem,
+        path=str(path),
+        changed=list(changed_keys),
+        before=dict(diff_before),
+        after=dict(diff_after),
+        fields=dict(parsed_meta),
+    )
+
+    if "status" in changed_keys:
+        _events._dispatch(
+            "artifact.status_changed",
+            kind=kind,
+            id=aid,
+            name=name,
+            stem=stem,
+            path=str(path),
+            before=diff_before["status"],
+            after=diff_after["status"],
+            fields=dict(parsed_meta),
+        )
+
+    return artifact
