@@ -51,6 +51,14 @@ def register(subparsers) -> None:
         default=False,
         help="output raw JSONL lines (default: pretty-printed)",
     )
+    tail_p.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=50,
+        metavar="N",
+        help="max events to show in initial snapshot (0 = unlimited, default: 50)",
+    )
     tail_p.set_defaults(func=_run_tail)
 
     p.set_defaults(func=_dispatch_events)
@@ -117,6 +125,34 @@ def _format_record(record: dict, *, json_out: bool) -> str:
     return f"{ts}  {event:<30s}  {stem}"
 
 
+def _collect_file(
+    path: Path,
+    start_pos: int,
+    event_types: list[str] | None,
+) -> tuple[list[dict], int]:
+    """Read matching records from *path* starting at *start_pos*.
+
+    Returns ``(records, new_position)``.
+    """
+    records: list[dict] = []
+    if not path.exists():
+        return records, start_pos
+    with path.open("r", encoding="utf-8") as fh:
+        fh.seek(start_pos)
+        for raw_line in fh:
+            raw_line = raw_line.rstrip("\n")
+            if not raw_line:
+                continue
+            try:
+                record = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if _filter_event(record, event_types):
+                records.append(record)
+        pos = fh.tell()
+    return records, pos
+
+
 def _run_tail(args, registry) -> int:
     events_dir = _events_dir(registry)
     if events_dir is None:
@@ -127,50 +163,42 @@ def _run_tail(args, registry) -> int:
     event_types: list[str] | None = getattr(args, "event_types", None)
     follow: bool = getattr(args, "follow", False)
     json_out: bool = getattr(args, "json_out", False)
+    limit: int = getattr(args, "limit", 50)
 
     files = _daily_files(events_dir, since)
 
-    # Track file positions for --follow
+    # --- Initial snapshot: collect, apply limit, print ---
+    snapshot: list[dict] = []
     file_positions: dict[Path, int] = {}
 
-    def _emit_file(path: Path, start_pos: int = 0) -> int:
-        """Emit records from *path* starting at *start_pos*. Returns new position."""
-        if not path.exists():
-            return start_pos
-        with path.open("r", encoding="utf-8") as fh:
-            fh.seek(start_pos)
-            pos = start_pos
-            for raw_line in fh:
-                raw_line = raw_line.rstrip("\n")
-                if not raw_line:
-                    continue
-                try:
-                    record = json.loads(raw_line)
-                except json.JSONDecodeError:
-                    continue
-                if _filter_event(record, event_types):
-                    print(_format_record(record, json_out=json_out))
-            pos = fh.tell()
-        return pos
-
-    # Initial pass
     for path in files:
-        file_positions[path] = _emit_file(path)
+        records, pos = _collect_file(path, 0, event_types)
+        snapshot.extend(records)
+        file_positions[path] = pos
+
+    # Apply limit (last N); limit=0 means unlimited
+    visible = snapshot[-limit:] if limit > 0 else snapshot
+    for record in visible:
+        print(_format_record(record, json_out=json_out))
 
     if not follow:
         return 0
 
-    # --follow: poll for new content
+    # --- Follow: stream new lines without a cap ---
+    def _emit_new(path: Path, start_pos: int) -> int:
+        records, pos = _collect_file(path, start_pos, event_types)
+        for record in records:
+            print(_format_record(record, json_out=json_out))
+        return pos
+
     try:
         while True:
             time.sleep(0.25)
-            # Check for new daily files
             current_files = _daily_files(events_dir, since)
             for path in current_files:
                 if path not in file_positions:
                     file_positions[path] = 0
-                pos = file_positions.get(path, 0)
-                file_positions[path] = _emit_file(path, pos)
+                file_positions[path] = _emit_new(path, file_positions[path])
     except KeyboardInterrupt:
         pass
 

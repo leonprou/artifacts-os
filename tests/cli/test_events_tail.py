@@ -79,3 +79,58 @@ def test_events_tail_empty_dir_returns_zero(vault: Path, capsys):
     """tail on a vault with no events dir returns 0."""
     code = _run(["events", "tail"])
     assert code == 0
+
+
+def test_events_tail_default_limit(vault: Path, capsys):
+    """Default limit of 50 shows last 50 of a larger set."""
+    events_dir = vault / "artifacts" / "logs" / "events"
+    events_dir.mkdir(parents=True)
+    lines = [
+        json.dumps({"ts": "2026-05-10T10:00:00+00:00", "event": "artifact.created",
+                    "kind": "task", "id": f"t{i:04d}", "stem": f"t{i:04d}-x"})
+        for i in range(80)
+    ]
+    (events_dir / "2026-05-10.jsonl").write_text("\n".join(lines) + "\n")
+
+    code = _run(["events", "tail"])
+    assert code == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 50
+    # last record should be visible; first 30 should be hidden
+    assert "t0079" in out[-1]
+    assert "t0000" not in "\n".join(out)
+
+
+def test_events_tail_limit_flag(vault: Path, capsys):
+    """--limit N shows last N records."""
+    events_dir = vault / "artifacts" / "logs" / "events"
+    events_dir.mkdir(parents=True)
+    lines = [
+        json.dumps({"ts": "2026-05-10T10:00:00+00:00", "event": "artifact.created",
+                    "kind": "task", "id": f"t{i:04d}", "stem": f"t{i:04d}-x"})
+        for i in range(10)
+    ]
+    (events_dir / "2026-05-10.jsonl").write_text("\n".join(lines) + "\n")
+
+    code = _run(["events", "tail", "--limit", "3"])
+    assert code == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 3
+    assert "t0009" in out[-1]
+
+
+def test_events_tail_limit_zero_shows_all(vault: Path, capsys):
+    """--limit 0 disables the cap."""
+    events_dir = vault / "artifacts" / "logs" / "events"
+    events_dir.mkdir(parents=True)
+    lines = [
+        json.dumps({"ts": "2026-05-10T10:00:00+00:00", "event": "artifact.created",
+                    "kind": "task", "id": f"t{i:04d}", "stem": f"t{i:04d}-x"})
+        for i in range(80)
+    ]
+    (events_dir / "2026-05-10.jsonl").write_text("\n".join(lines) + "\n")
+
+    code = _run(["events", "tail", "--limit", "0"])
+    assert code == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 80
