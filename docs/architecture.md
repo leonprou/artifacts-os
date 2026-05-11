@@ -106,6 +106,8 @@ not prescribe them.
 
 - Settings extension pattern — [settings.md](settings.md)
 - Adding a new artifact kind — [adding-a-kind.md](adding-a-kind.md)
+- Events stream and CLI reference — [events.md](events.md)
+- Hooks reactive layer — [hooks.md](hooks.md)
 - `views` public API — [../src/artifacts_os/views/README.md](../src/artifacts_os/views/README.md)
 - `cli` command reference — [../src/artifacts_os/cli/README.md](../src/artifacts_os/cli/README.md)
 - Authoritative specs: `s2060-artifacts-os-architecture`, `s2061-artifacts-os-module-system`

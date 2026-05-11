@@ -37,7 +37,7 @@ and no agents) without breaking existing vaults.
   source (`OPENSTATION_HOME`) is *not* — artifacts-os bundles
   templates in the wheel.
 - **Settings basis** —
-  `artifacts/artifacts.yaml` (this repo's current vault config)
+  `artifacts.yaml` (this repo's current vault config)
   is promoted verbatim as the basis for `advanced.yaml`. See §6.
 - **Kind ARTIFACT.md sources** —
   `artifacts/kinds/{task,note,spec,research}/ARTIFACT.md` and
@@ -86,7 +86,7 @@ and no agents) without breaking existing vaults.
 
 | ID  | Decision                                                                                                                | Rationale (brief)                                                                                                          |
 |-----|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
-| D1  | Subcommand is `artifacts init [DIRECTORY]`; pre-registry (no vault required); refuses if `artifacts/artifacts.yaml` exists *unless* `--force`. | Preserves the only behavioural guard the current init relies on; matches operator mental model from OpenStation.           |
+| D1  | Subcommand is `artifacts init [DIRECTORY]`; pre-registry (no vault required); refuses if `artifacts.yaml` exists *unless* `--force`. | Preserves the only behavioural guard the current init relies on; matches operator mental model from OpenStation.           |
 | D2  | Three-step prompt: tier (single) → kinds (multi) → agents (multi). Each step is skippable independently via its flag.    | Brainstorm pre-decision (Option Y) — three independent picks, not nested.                                                  |
 | D3  | Non-TTY without `-y` and without all three flags supplied → exit 2 with explicit error. `-y` accepts every default.       | Fail-loud avoids surprise when scripts pipe `init`. `-y` is the explicit "I know the defaults" override.                    |
 | D4  | Multi-select format: comma-separated numbers (e.g. `1,3,5`); empty input → defaults; `*` → all; `-` → none.                | Single-line, no extra dep, preserves keyboard-only accessibility. Per-item y/n is too chatty for 9-item agent lists.        |
@@ -592,7 +592,7 @@ Selected:
   agents   : (none)
 
 Writing files...
-  ✓ artifacts/artifacts.yaml
+  ✓ artifacts.yaml
   ✓ artifacts/kinds/task.json
   ✓ artifacts/kinds/task/ARTIFACT.md
   ✓ artifacts/tasks/.gitkeep
@@ -620,7 +620,7 @@ Selected:
   agents   : architect, developer
 
 Writing files...
-  ✓ artifacts/artifacts.yaml
+  ✓ artifacts.yaml
   ✓ artifacts/kinds/task.json
   ...
   ✓ artifacts/kinds/agent.json
@@ -642,7 +642,7 @@ Selected:
   agents   : architect, developer, author, researcher, technical-writer
 
 Writing files...
-  ✓ artifacts/artifacts.yaml
+  ✓ artifacts.yaml
   ✓ artifacts/kinds/task.json
   ...
   ✓ artifacts/agents/technical-writer.md
@@ -854,7 +854,7 @@ Selected:
   agents   : (none)
 
 Writing files...
-  ✓ artifacts/artifacts.yaml (overwritten)
+  ✓ artifacts.yaml (overwritten)
   ⊘ artifacts/kinds/task.json (exists, skipped — use --force was supplied; this file is per-file-locked)
   ✓ artifacts/kinds/task/ARTIFACT.md (overwritten)
   ...
@@ -910,7 +910,7 @@ Selected:
   agents   : (none)
 
 Writing files...
-  [would] ✓ artifacts/artifacts.yaml
+  [would] ✓ artifacts.yaml
   [would] ✓ artifacts/kinds/task.json
   ...
 
@@ -1002,7 +1002,7 @@ half-init on a typo.
 
 - `--name` flag — project name now derives from CLAUDE.md / cwd
   (§9.1). Operators who want a different name edit
-  `artifacts/artifacts.yaml` after init.
+  `artifacts.yaml` after init.
 - `--no-ai` flag — AI command install is out of scope (§3).
 - The `_default_settings()` inline string and the inline
   `_DEFAULT_KINDS` dict — replaced by bundled templates.
@@ -1061,7 +1061,7 @@ the existing module). Group by property:
 
 ### 18.5 Existing-file guard
 
-- 18.5.1 Pre-existing `artifacts/artifacts.yaml` without
+- 18.5.1 Pre-existing `artifacts.yaml` without
   `--force` → exit 2 with the §14.2 message.
 - 18.5.2 With `--force`, every existing file is overwritten and
   every missing file is written; output shows `(overwritten)` /
@@ -1128,7 +1128,7 @@ the existing module). Group by property:
   — prior art for `_select_template`, `_install_settings_template`,
   `_get_project_name`, `_derive_project_alias`. Functions to
   port (with edits) into `commands/init.py`.
-- `artifacts/artifacts.yaml` — basis for `advanced.yaml`.
+- `artifacts.yaml` — basis for `advanced.yaml`.
 - `artifacts/kinds/{task,note,spec,research,agent}/{kind.json,ARTIFACT.md}`
   — sources for the bundled kind templates. `agent/ARTIFACT.md`
   is new (§7.3).

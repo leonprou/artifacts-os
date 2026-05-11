@@ -151,7 +151,7 @@ find_vault_root(start: Path | None = None) → Path | None
 ```
 
 Walks up from `start` (default: `cwd`) until a directory containing
-`artifacts/artifacts.yaml` is found. Returns it, or `None`.
+`artifacts.yaml` is found. Returns it, or `None`.
 
 ### Errors (`errors.py`)
 
@@ -198,7 +198,7 @@ those live in `Settings.raw` for extension subclasses to read.
 from pathlib import Path
 from artifacts_os.core import load_settings
 
-base = load_settings(Path("artifacts/artifacts.yaml"))
+base = load_settings(Path("artifacts.yaml"))
 base.layout_version    # 1
 base.project.name      # "my-project"
 base.project.alias     # "mp" or None

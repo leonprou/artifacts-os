@@ -16,7 +16,7 @@ artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
 
 ### Step 1 — Settings tier
 
-Chooses one of two settings tiers, written as `artifacts/artifacts.yaml`.
+Chooses one of two settings tiers, written as `artifacts.yaml`.
 
 | Tier | Content |
 |------|---------|
@@ -120,7 +120,7 @@ Every write target is checked individually:
 - File exists, no `--force` → skip with `⊘` marker.
 - File exists, `--force` → overwrite with `(overwritten)` suffix.
 
-The top-level guard (`artifacts/artifacts.yaml` already exists) triggers
+The top-level guard (`artifacts.yaml` already exists) triggers
 exit 2 unless `--force` is supplied.
 
 ## Exit Codes

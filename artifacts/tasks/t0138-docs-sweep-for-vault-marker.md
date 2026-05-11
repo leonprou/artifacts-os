@@ -3,13 +3,15 @@ kind: task
 id: t0138
 name: docs-sweep-for-vault-marker
 type: documentation
-status: backlog
+status: done
 assignee: technical-writer
 owner: user
 parent: "[[t0131-move-artifacts-yaml-to-project]]"
 depends_on:
   - "[[t0137-implement-vault-marker-relocation-per]]"
 created: 2026-05-10
+started: 2026-05-10
+completed: 2026-05-11
 ---
 
 # Docs Sweep for Vault-Marker Relocation (PR2)
@@ -95,6 +97,34 @@ prose-y sentences require a brief read to keep meaning
 intact (e.g. "find a directory containing
 `artifacts/artifacts.yaml`" → "find a directory containing
 `artifacts.yaml`").
+
+## Findings
+
+Mechanical prose sweep complete. Every literal `artifacts/artifacts.yaml` reference in the scope set has been rewritten to `artifacts.yaml`.
+
+**Files changed (11 doc files):**
+- `CLAUDE.md` — "Artifact Storage" block + Settings section (2 occurrences)
+- `README.md` — Quick Start comment (1 occurrence)
+- `docs/settings.md` — intro line + 4 code-block `load_settings` calls
+- `docs/init-flow.md` — settings tier description + existing-file guard (2 occurrences)
+- `docs/adding-a-kind.md` — Optional Follow-Up section (1 occurrence)
+- `docs/creating-an-artifact.md` — opening prerequisite (1 occurrence)
+- `src/artifacts_os/core/README.md` — vault discovery description + worked example (2 occurrences)
+- `src/artifacts_os/views/README.md` — worked example `load_settings` call (1 occurrence)
+- `src/artifacts_os/cli/README.md` — auto-discovery prose, views section, code comment, init description, `artifacts views` description, `cli` section intro (6 occurrences)
+- `src/artifacts_os/ai/claude/skills/artifacts-os/SKILL.md` — trigger description (1 occurrence)
+- `artifacts/specs/s0021-artifacts-init-flow.md` — §1 Background, §4 D1, §10.4–10.6 transcripts, §14.2 example, §17, §19 (10 occurrences via `replace_all`)
+
+**Intentionally untouched:** `docs/migration.md` (describes the old→new migration path; old references are correct there) and `artifacts/specs/s0026-vault-marker-at-root.md` (historical references).
+
+**Note:** Line 835 of s0021 contains `if (target / "artifacts" / "artifacts.yaml").is_file()` — a Python code snippet with separate string arguments, not a literal `artifacts/artifacts.yaml` path. Not in grep scope; left as-is.
+
+## Progress
+
+### 2026-05-10 — technical-writer
+> time: 19:02
+
+Completed docs sweep: replaced all literal `artifacts/artifacts.yaml` references across CLAUDE.md, README.md, docs/ (settings.md, init-flow.md, adding-a-kind.md, creating-an-artifact.md), src/artifacts_os/*/README.md, SKILL.md, and s0021 spec amendment. Zero matches remain in scope files. docs/migration.md intentionally retains old path references.
 
 ## Verification
 

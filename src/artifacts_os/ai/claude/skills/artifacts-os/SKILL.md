@@ -1,6 +1,6 @@
 ---
 name: artifacts-os
-description: Fetch, search, and update artifacts in an artifacts-os vault using the `artifacts` CLI exclusively (no direct file reads/writes). Use when the user asks to find, list, filter, search, show, inspect, view, create, update, status-change, validate, or verify artifacts (tasks, specs, agents, research notes) — or whenever working in a project that contains an `artifacts/artifacts.yaml` vault marker.
+description: Fetch, search, and update artifacts in an artifacts-os vault using the `artifacts` CLI exclusively (no direct file reads/writes). Use when the user asks to find, list, filter, search, show, inspect, view, create, update, status-change, validate, or verify artifacts (tasks, specs, agents, research notes) — or whenever working in a project that contains an `artifacts.yaml` vault marker.
 ---
 
 # artifacts-os

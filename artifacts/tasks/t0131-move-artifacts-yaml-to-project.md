@@ -3,7 +3,7 @@ kind: task
 id: t0131
 name: move-artifacts-yaml-to-project
 type: feature
-status: in-progress
+status: done
 assignee: 
 owner: user
 created: 2026-05-09
@@ -11,6 +11,7 @@ subtasks:
   - "[[t0132-spec-for-vault-marker-at]]"
   - "[[t0137-implement-vault-marker-relocation-per]]"
   - "[[t0138-docs-sweep-for-vault-marker]]"
+completed: 2026-05-11
 ---
 
 # Move Artifacts.Yaml To Project Root

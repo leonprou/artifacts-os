@@ -505,7 +505,7 @@ registry kind with no body scaffolding needed.
 ## Optional Follow-Up
 
 **Named views.** Once a kind exists you can add named views for it
-in `artifacts/artifacts.yaml` (pre-configured filters, columns, sort
+in `artifacts.yaml` (pre-configured filters, columns, sort
 order). See
 [`src/artifacts_os/views/README.md`](../src/artifacts_os/views/README.md).
 

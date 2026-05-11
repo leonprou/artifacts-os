@@ -2,7 +2,7 @@
 
 The standard agent flow for creating an artifact instance. Run every
 command from the vault root (the directory containing
-`artifacts/artifacts.yaml`).
+`artifacts.yaml`).
 
 For adding a *new kind* (registering a new artifact type), see
 [`adding-a-kind.md`](adding-a-kind.md).

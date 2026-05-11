@@ -21,7 +21,7 @@ Optional extras: `views` (Rich rendering), `cli`, `tui` (Textual browser), `log`
 ```python
 from artifacts_os import find_vault_root, Registry, KindDef, create, get, list_artifacts
 
-# Locate the vault (walks up from CWD looking for artifacts/artifacts.yaml)
+# Locate the vault (walks up from CWD looking for artifacts.yaml)
 root = find_vault_root()
 
 # Define artifact kinds
@@ -116,6 +116,8 @@ Coding conventions:
 |------|---------|
 | [docs/architecture.md](docs/architecture.md) | Package overview, module map, dependency DAG, design principles |
 | [docs/settings.md](docs/settings.md) | Cross-cutting settings: public API, extension pattern, schema versioning |
+| [docs/events.md](docs/events.md) | Event catalog, JSONL stream format, `artifacts events` CLI reference |
+| [docs/hooks.md](docs/hooks.md) | Declarative hooks — shell, notify, file-drop actions; phase, blocking, env vars |
 | [docs/adding-a-kind.md](docs/adding-a-kind.md) | How to add a new artifact kind — `ARTIFACT.md` description contract, L1 catalogue surface, evaluation-first authoring, `kind.json` schema reference |
 | [docs/init-flow.md](docs/init-flow.md) | `artifacts init` three-step flow — settings tiers, kind/agent catalogues, variable interpolation, non-TTY behaviour |
 

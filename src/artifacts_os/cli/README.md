@@ -44,7 +44,7 @@ That's it. No configuration file is needed.
 
 `artifacts` finds your project automatically. Starting from the current
 directory, it walks up the directory tree until it finds a directory
-containing `artifacts/artifacts.yaml`. You can run the command from
+containing `artifacts.yaml`. You can run the command from
 anywhere inside the project — root, a subdirectory, or a nested
 worktree — and it will always find the right place.
 
@@ -259,7 +259,7 @@ any field not covered by generated flags.
 #### Views
 
 Named views let you pre-configure filters, columns, and sort order in
-`artifacts/artifacts.yaml` and invoke them with a single flag.
+`artifacts.yaml` and invoke them with a single flag.
 
 **Defining views:**
 
@@ -387,7 +387,7 @@ artifacts list --kind task --layout table
 # → tasks render flat
 
 # rung 3 — flip the same map to opt out durably
-# artifacts/artifacts.yaml:
+# artifacts.yaml:
 #   default_layouts:
 #     task: table          # string-form shorthand
 artifacts list --kind task
@@ -657,7 +657,7 @@ artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
 
 Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
 Walks a three-step selection flow (settings tier → kinds → agents), then writes
-`artifacts/artifacts.yaml`, per-kind storage directories, per-kind JSON schemas
+`artifacts.yaml`, per-kind storage directories, per-kind JSON schemas
 under `artifacts/kinds/`, and optionally installs agent specs.
 
 All steps can be driven by flags for non-interactive use. On a TTY, un-flagged
@@ -814,7 +814,7 @@ artifacts kinds task -e
 artifacts views [<view_name> | show <view_name>] [-q | -j]
 ```
 
-Lists all named views defined in `artifacts/artifacts.yaml`, executes a view
+Lists all named views defined in `artifacts.yaml`, executes a view
 by name, or inspects a single view's full definition.
 
 | Flag | Description |
@@ -898,7 +898,7 @@ If `<view_name>` is not defined, the command exits `2` with
 
 ## Project Configuration (`cli` section)
 
-The `cli` top-level key in `artifacts/artifacts.yaml` lets you set
+The `cli` top-level key in `artifacts.yaml` lets you set
 per-command defaults and command aliases.  Both sections are optional;
 if the key is absent entirely, the CLI behaves as if neither were configured.
 

@@ -1,6 +1,6 @@
 # Settings
 
-`artifacts-os` reads project configuration from `artifacts/artifacts.yaml`
+`artifacts-os` reads project configuration from `artifacts.yaml`
 at the vault root. `core` parses the global section and stores the full YAML
 document so that other modules can extract their own sections without
 coupling to the library's release cycle.
@@ -45,7 +45,7 @@ root = find_vault_root()
 if root is None:
     raise RuntimeError("No artifacts vault found")
 
-settings = load_settings(root / "artifacts" / "artifacts.yaml")
+settings = load_settings(root / "artifacts.yaml")
 
 print(settings.project.name)       # "my-project"
 print(settings.layout_version)     # 1
@@ -78,7 +78,7 @@ class MySettings(Settings):
         )
 
 # Usage
-base = load_settings(root / "artifacts" / "artifacts.yaml")
+base = load_settings(root / "artifacts.yaml")
 settings = MySettings.from_base(base)
 ```
 
@@ -355,7 +355,7 @@ events:
 from artifacts_os.events.settings import EventsSettings
 from artifacts_os.core import load_settings
 
-base = load_settings(root / "artifacts" / "artifacts.yaml")
+base = load_settings(root / "artifacts.yaml")
 events_cfg = EventsSettings.from_base(base)
 print(events_cfg.enabled)  # True
 print(events_cfg.dir)      # None (use default) or Path("artifacts/logs/events")
@@ -487,7 +487,7 @@ Hooks receive event context via environment variables:
 from artifacts_os.hooks.settings import HooksSettings
 from artifacts_os.core import load_settings
 
-base = load_settings(root / "artifacts" / "artifacts.yaml")
+base = load_settings(root / "artifacts.yaml")
 hooks_cfg = HooksSettings.from_base(base)
 print(hooks_cfg.hooks)  # list of hook config dicts
 ```

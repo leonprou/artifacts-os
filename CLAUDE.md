@@ -9,8 +9,8 @@ Artifacts is an agentic harness for using and organizing artifacts.
 ## Artifact Storage
 
 Store all project artifacts under `artifacts/`. The vault marker is
-`artifacts/artifacts.yaml` — `find_vault_root` walks up from CWD until
-it finds this file.
+`artifacts.yaml` (at the project root) — `find_vault_root` walks up from
+CWD until it finds this file.
 
 ## Project Structure
 
@@ -98,7 +98,7 @@ substituted at draft time.
 
 ## Settings
 
-Settings are parsed from `artifacts/artifacts.yaml` using a base-class +
+Settings are parsed from `artifacts.yaml` using a base-class +
 extension-subclass pattern: `core` owns `Settings` and `load_settings`;
 other modules extend via a `from_base` classmethod without coupling to
 the library's release cycle. See [`docs/settings.md`](docs/settings.md)
@@ -131,3 +131,22 @@ for the full API, worked example, and extension rules.
 - No lifecycle logic in `cli` (status transitions stay in OpenStation)
 - Doc updates accompany API changes — when a public API, re-export surface,
   or vault behaviour changes, update the corresponding doc in the same commit
+
+## CLI Conventions
+
+New `artifacts` commands and flag changes must match the established surface
+shape. The reference commands are `list`, `show`, `create`, `status`,
+`verify`, and `events`.
+
+- **Flat verbs** — one-word top-level verb, no nested subcommands. Streaming,
+  paging, and mode variants belong as flags on the verb, not as sub-verbs.
+- **Default Rich table output** — same column/style language as
+  `artifacts list`. `--json` / `-j` switches to raw JSON/JSONL for scripting.
+- **`--tail [N]` is the universal "last N" primitive** — `nargs="?"` with a
+  sensible `const` default (e.g. 50) and a sentinel `default` so the runner
+  can distinguish absent / present-no-value / present-with-value. Slice is
+  applied **after** filters and sorts. Do not introduce `--limit`-style
+  opt-out caps.
+- **Filter flags at the top level** — `--since`, `--event`, `--kind`,
+  `--status`, etc. live directly on the verb's parser, never behind a
+  subcommand.

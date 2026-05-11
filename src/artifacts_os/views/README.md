@@ -335,7 +335,7 @@ from pathlib import Path
 from artifacts_os.core import load_settings
 from artifacts_os.views import ViewsSettings
 
-base = load_settings(Path("artifacts/artifacts.yaml"))
+base = load_settings(Path("artifacts.yaml"))
 settings = ViewsSettings.from_base(base)
 
 if settings.views is not None:
