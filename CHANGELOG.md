@@ -2,9 +2,81 @@
 
 ## v0.3.0
 
-- **Vault marker relocated to project root** — `artifacts.yaml` now lives at
-  `<vault-root>/artifacts.yaml` instead of `<vault-root>/artifacts/artifacts.yaml`.
-  Existing vaults require a one-line migration; see [docs/migration.md](docs/migration.md).
+Third release of **artifacts-os**. Headline features: a new artifact
+**event stream** and declarative **hooks** layer that observe every
+CRUD operation and run user-defined side-effects; the **vault marker
+relocated** to the project root (one-line migration required); and a
+new `artifacts events` CLI for tailing the event log.
+
+### Architecture
+
+- **Event stream + hooks layer (s0025)** — every `create`, `update`,
+  status change, and `validate` call emits a typed event through a
+  central dispatcher. Hooks subscribe declaratively in
+  `artifacts.yaml` and run in `pre` or `post` phase, with
+  `BlockedByPreHook` aborting the operation when a blocking pre-hook
+  fails. New `src/artifacts_os/events/` and `src/artifacts_os/hooks/`
+  modules implement the dispatcher, catalog, JSONL stream writer,
+  hook loader, and built-in actions (t0130, t0135, t0136).
+- **Vault marker relocated to project root (s0026)** — `artifacts.yaml`
+  now lives at `<vault-root>/artifacts.yaml` instead of
+  `<vault-root>/artifacts/artifacts.yaml`. Hard cutover, pre-1.0;
+  existing vaults migrate with a one-line `git mv`. See
+  [`docs/migration.md`](docs/migration.md) (t0132, t0137, t0138).
+
+### Core
+
+- **Dispatcher wired into store** — `store.create` and `store.update`
+  call `_dispatch` for both pre and post phases, surfacing pre-hook
+  failures as `BlockedByPreHook` errors and emitting every CRUD as
+  a typed event (t0135).
+
+### Events
+
+- **Closed event catalog** — six event types:
+  `artifact.created`, `artifact.updated`, `artifact.status_changed`,
+  `artifact.validated`, `hook.fired`, `hook.failed`. Each fires
+  after its operation; pre-phase events are not persisted. The
+  catalog is closed — new types require a spec revision.
+- **Daily JSONL stream** — events append to
+  `artifacts/logs/events/YYYY-MM-DD.jsonl`, one record per line,
+  with ISO 8601 UTC timestamps. No configuration required; the
+  stream is on as soon as the package is installed. Full reference
+  in [`docs/events.md`](docs/events.md).
+
+### Hooks
+
+- **Declarative YAML hooks** — `hooks:` list in `artifacts.yaml`
+  matches event type + payload fields and runs an action (shell,
+  notification, file write). `pre` hooks can block operations;
+  `post` hooks log warnings on failure. A reentrancy guard prevents
+  catch-all hooks from recursing. Worked examples and full schema
+  in [`docs/hooks.md`](docs/hooks.md).
+
+### CLI
+
+- **`artifacts events`** — tail the JSONL event log with the same
+  flag shape as `artifacts list`. Defaults to a Rich table; `--json`
+  emits raw JSONL; `--tail [N]` (default 50) slices after filters
+  and sorts. Filter flags: `--since`, `--event`, `--kind`,
+  `--status` (s0027, t0139, t0140).
+- **`artifacts init` updated** — bootstraps the new marker location
+  (`<vault-root>/artifacts.yaml`) and produces the standard data
+  tree alongside it (t0137).
+
+### Log
+
+- **Log module aligned with events** — `src/artifacts_os/log/`
+  documentation rewritten against the s0025 event-stream model;
+  the operation-log surface now references the events catalog as
+  the source of truth.
+
+### Install
+
+- **Version bump** — `pyproject.toml` to `0.3.0`.
+- **Migration guide** — new [`docs/migration.md`](docs/migration.md)
+  covering the v0.3.0 vault-marker move with the one-line `git mv`
+  procedure.
 
 ## v0.2.0
 
