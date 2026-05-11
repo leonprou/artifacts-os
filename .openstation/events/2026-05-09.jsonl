@@ -1,0 +1,6 @@
+{"ts":"2026-05-09T21:04:31.144562+03:00","event":"task_created","task":"t0131-move-artifacts-yaml-to-project","status":"backlog","assignee":"","parent":""}
+{"ts":"2026-05-09T21:05:19.600861+03:00","event":"task_created","task":"t0132-spec-for-vault-marker-at","status":"ready","assignee":"architect","parent":"t0131-move-artifacts-yaml-to-project"}
+{"ts":"2026-05-09T21:05:23.012756+03:00","event":"task_created","task":"t0133-feat-relocate-artifacts-yaml-to","status":"backlog","assignee":"","parent":""}
+{"ts":"2026-05-09T21:05:57.304562+03:00","event":"task_created","task":"t0134-spec-relocate-vault-marker-to","status":"ready","assignee":"architect","parent":"t0133-feat-relocate-artifacts-yaml-to"}
+{"ts":"2026-05-09T21:06:44.503959+03:00","event":"status_transition","task":"t0134-spec-relocate-vault-marker-to","old_status":"ready","new_status":"rejected","forced":false}
+{"ts":"2026-05-09T21:06:52.123820+03:00","event":"status_transition","task":"t0133-feat-relocate-artifacts-yaml-to","old_status":"in-progress","new_status":"rejected","forced":false}

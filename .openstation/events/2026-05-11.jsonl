@@ -1,0 +1,9 @@
+{"ts":"2026-05-11T16:08:29.936711+03:00","event":"status_transition","task":"t0136-artifact-event-and-hook-system","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-11T16:08:32.893860+03:00","event":"status_transition","task":"t0136-artifact-event-and-hook-system","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-11T16:09:02.070087+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0136-artifact-event-and-hook-system","duration_ms":29166}
+{"ts":"2026-05-11T16:09:11.994746+03:00","event":"status_transition","task":"t0138-docs-sweep-for-vault-marker","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-11T16:09:15.720423+03:00","event":"status_transition","task":"t0138-docs-sweep-for-vault-marker","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-11T16:09:37.204289+03:00","event":"status_transition","task":"t0131-move-artifacts-yaml-to-project","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-11T16:09:39.398082+03:00","event":"status_transition","task":"t0131-move-artifacts-yaml-to-project","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-11T16:11:01.927032+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0138-docs-sweep-for-vault-marker","duration_ms":106204}
+{"ts":"2026-05-11T16:11:09.602002+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0131-move-artifacts-yaml-to-project","duration_ms":90201}

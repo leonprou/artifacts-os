@@ -21,8 +21,8 @@ skills/            — Skills (including this one)
 commands/          — User-invocable slash commands
 ```
 
-All tasks are single files in `artifacts/tasks/` — e.g.,
-`artifacts/tasks/0010-add-login-page.md`. There are no task
+All tasks are single files in `openstation/tasks/` — e.g.,
+`openstation/tasks/0010-add-login-page.md`. There are no task
 folders or bucket directories.
 
 ## CLI Tool
@@ -83,7 +83,7 @@ worktrees it is provided as a symlink automatically.
 - **Prefer CLI commands** (`openstation show/list/create/status`)
   for discovery and status transitions — they resolve the correct
   root automatically
-- For direct file reads, use `artifacts/tasks/`,
+- For direct file reads, use `openstation/tasks/`,
   `.openstation/docs/`, etc.
 - The `info:` line from `create`/`status` shows the absolute path
   of the modified file, confirming which vault was used
@@ -101,7 +101,7 @@ modes and how `find_root()` resolves the vault.
    body structure, editing guardrails).
 4. Run `openstation list --status ready,in-progress --assignee <your-name>`
    to find assigned tasks. If the CLI is unavailable, fall back to
-   scanning `artifacts/tasks/*.md` for files where
+   scanning `openstation/tasks/*.md` for files where
    `assignee` matches your name AND `status` is `ready` or `in-progress`.
 5. If multiple tasks exist, pick the one with the earliest
    `created` date (prefer `in-progress` over `ready` to resume work).
@@ -113,7 +113,7 @@ modes and how `find_root()` resolves the vault.
 ### 1. Load Context
 
 - Run `openstation show <task-name>` to load the full task spec
-  (or read `artifacts/tasks/<task-name>.md` directly). Note
+  (or read `openstation/tasks/<task-name>.md` directly). Note
   requirements and verification checklist.
 - If the task has a `## Suspended` section, it was previously
   in-progress and paused. Read the branch reference and suspension
@@ -158,33 +158,33 @@ sub-tasks for execution.
 
 ### 4. Store Artifacts
 
-Store new artifacts in the appropriate `artifacts/<category>/`
+Store new artifacts in the appropriate `openstation/<category>/`
 directory; for edited documentation files, keep them at their
 existing path. Record all of them — new or edited — in the task's
 `artifacts` frontmatter list using an Obsidian wikilink:
 
 ```yaml
 artifacts:
-  - "[[artifacts/research/my-research]]"
-  - "[[artifacts/agents/my-agent]]"
+  - "[[openstation/research/my-research]]"
+  - "[[openstation/agents/my-agent]]"
 ```
 
 **Routing table — where each artifact type goes:**
 
 | Artifact type   | Directory               |
 |-----------------|-------------------------|
-| Research output | `artifacts/research/` |
-| Agent spec      | `artifacts/agents/`   |
-| Specification   | `artifacts/specs/`    |
-| Planning notes  | `artifacts/notes/`    |
-| Run logs        | `artifacts/logs/`     |
+| Research output | `openstation/research/` |
+| Agent spec      | `openstation/agents/`   |
+| Specification   | `openstation/specs/`    |
+| Planning notes  | `openstation/notes/`    |
+| Run logs        | `openstation/logs/`     |
 
 **Every produced artifact must appear in the `artifacts` list** —
 this is how verification and promotion find them.
 
 **Artifacts are documentation outputs only** — research notes, agent
 specs, specifications, planning notes, and run logs stored under
-`artifacts/`. Do **not** list source code changes (`src/`, `bin/`,
+`openstation/`. Do **not** list source code changes (`src/`, `bin/`,
 `tests/`, config files) — those are tracked by version control.
 
 Set provenance fields on each artifact's own frontmatter:
@@ -242,7 +242,7 @@ Use `/openstation.progress <task-name> <message>` to append a
 timestamped progress entry. The command handles format, placement,
 and append-only rules. See the command for full details.
 
-- Include the log path (`artifacts/logs/<task-name>.jsonl`) if
+- Include the log path (`openstation/logs/<task-name>.jsonl`) if
   your session is being logged
 - Add your entry before transitioning to `review` or `rejected`
 
@@ -262,21 +262,6 @@ If a task requires decomposition:
 See `docs/storage-query-layer.md` § 5 for the full
 sub-task storage model and `docs/lifecycle.md` § "Sub-Tasks"
 for blocking rules.
-
-### Task + Plan Convention
-
-When a task is backed by a design doc in `docs/plans/`, link to the plan
-from the task's `## Requirements` section rather than duplicating
-requirements inline. Keep the verification checklist in the task file.
-
-```markdown
-## Requirements
-See [`docs/plans/YYYY-MM-DD-<topic>-design.md`](<relative-path>) for full
-scope, approach, and conventions.
-
-## Verification
-- [ ] ...
-```
 
 ### 9. Update Documentation
 

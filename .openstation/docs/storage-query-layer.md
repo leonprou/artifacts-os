@@ -18,11 +18,11 @@ see `docs/lifecycle.md`. For task field schema and naming see
 
 ### 1. Canonical Storage Model
 
-All persistent data lives under `artifacts/`, which is the single
+All persistent data lives under `openstation/`, which is the single
 source of truth. Each artifact type has a dedicated subdirectory:
 
 ```
-artifacts/
+openstation/
 ├── tasks/       — Task files (one per task, never moved)
 ├── agents/      — Agent spec files (canonical location)
 ├── notes/       — Planning notes (roadmap, release plans)
@@ -31,18 +31,18 @@ artifacts/
 └── logs/        — Run logs
 ```
 
-**Immutability rule:** Once a file is created in `artifacts/`, it
-stays at that path permanently. Nothing in `artifacts/` is ever
+**Immutability rule:** Once a file is created in `openstation/`, it
+stays at that path permanently. Nothing in `openstation/` is ever
 moved or renamed — only its contents are updated in place.
 
 All artifact types are single markdown files with YAML
 frontmatter, stored directly in their category directory:
 
 ```
-artifacts/tasks/0010-add-login-page.md
-artifacts/agents/researcher.md
-artifacts/research/obsidian-plugin-api.md
-artifacts/specs/storage-query-layer.md
+openstation/tasks/0010-add-login-page.md
+openstation/agents/researcher.md
+openstation/research/obsidian-plugin-api.md
+openstation/specs/storage-query-layer.md
 ```
 
 ### 1a. Artifact Naming Conventions
@@ -93,11 +93,11 @@ system.
 #### 2a. Agent Discovery Symlinks
 
 Symlinks in `agents/` that point to canonical specs in
-`artifacts/agents/`. They make agents available via
+`openstation/agents/`. They make agents available via
 `claude --agent <name>`:
 
 ```
-agents/researcher.md → ../../artifacts/agents/researcher.md
+agents/researcher.md → ../../openstation/agents/researcher.md
 ```
 
 Discovery symlinks are created by:
@@ -143,8 +143,8 @@ frontmatter field:
 
 ```yaml
 artifacts:
-  - "[[artifacts/agents/project-manager]]"
-  - "[[artifacts/research/obsidian-plugin-api]]"
+  - "[[openstation/agents/project-manager]]"
+  - "[[openstation/research/obsidian-plugin-api]]"
 ```
 
 #### 3d. Artifact Provenance
@@ -172,15 +172,15 @@ names, so both `"[[0047-implement-storage-replacement]]"` and
 ### 4. Artifact Routing
 
 During task execution, agents store artifacts in the appropriate
-`artifacts/<category>/` directory. The routing table:
+`openstation/<category>/` directory. The routing table:
 
 | Artifact Type        | Destination              |
 |----------------------|--------------------------|
-| Task creation        | `artifacts/tasks/`     |
-| Researcher output    | `artifacts/research/`  |
-| Agent spec           | `artifacts/agents/`    |
-| Planning notes       | `artifacts/notes/`     |
-| Other agent output   | `artifacts/specs/`     |
+| Task creation        | `openstation/tasks/`     |
+| Researcher output    | `openstation/research/`  |
+| Agent spec           | `openstation/agents/`    |
+| Planning notes       | `openstation/notes/`     |
+| Other agent output   | `openstation/specs/`     |
 
 Agents also record produced artifacts in the task's frontmatter
 `artifacts` list using canonical paths (§ 3c) and should set
@@ -189,7 +189,7 @@ provenance fields on the artifact itself (§ 3d).
 ### 5. Sub-task Storage
 
 Sub-tasks are full tasks with their own canonical file in
-`artifacts/tasks/`, linked to a parent through frontmatter.
+`openstation/tasks/`, linked to a parent through frontmatter.
 They differ from top-level tasks in two ways:
 
 1. **Parent field.** The sub-task's frontmatter sets
@@ -199,7 +199,7 @@ They differ from top-level tasks in two ways:
 
 #### Creating a sub-task
 
-1. Create canonical file: `artifacts/tasks/MMMM-sub-slug.md`.
+1. Create canonical file: `openstation/tasks/MMMM-sub-slug.md`.
 2. Set `parent: "[[<parent-task-name>]]"` in sub-task frontmatter.
 3. Add `"[[MMMM-sub-slug]]"` to the parent's `subtasks`
    frontmatter field.
@@ -228,7 +228,7 @@ vault uses two directories:
 
 ```
 target-project/
-├── artifacts/                     — User-facing artifacts (source of truth)
+├── openstation/                   — User-facing artifacts (source of truth)
 │   ├── tasks/
 │   ├── agents/
 │   ├── research/
@@ -236,7 +236,7 @@ target-project/
 │   └── logs/
 ├── .openstation/                  — Framework plumbing (hidden)
 │   ├── docs/                    — lifecycle.md, task.spec.md
-│   ├── agents/                  — Discovery symlinks → ../../artifacts/agents/
+│   ├── agents/                  — Discovery symlinks → ../../openstation/agents/
 │   ├── skills/                  — Agent skills (openstation-execute)
 │   ├── commands/                — Slash commands
 │   ├── templates/               — Settings templates
@@ -266,21 +266,21 @@ The installer also:
   `.claude/settings.json` (Claude Code settings, not Open Station settings).
 - Injects a managed `<!-- openstation:start -->` …
   `<!-- openstation:end -->` section into `CLAUDE.md`.
-- Copies example agent specs to `artifacts/agents/` (skippable
+- Copies example agent specs to `openstation/agents/` (skippable
   with `--no-agents`) and creates their discovery symlinks.
 
 ### 7. Design Rationale
 
-**Canonical paths are stable.** Task files in `artifacts/tasks/`
+**Canonical paths are stable.** Task files in `openstation/tasks/`
 never move or rename. Any reference to
-`artifacts/tasks/NNNN-slug.md` remains valid across all lifecycle
+`openstation/tasks/NNNN-slug.md` remains valid across all lifecycle
 stages.
 
-**Flat `artifacts/tasks/` over nested.** All task files are
-siblings under `artifacts/tasks/` rather than nested by status
+**Flat `openstation/tasks/` over nested.** All task files are
+siblings under `openstation/tasks/` rather than nested by status
 or parent. This keeps:
 
-- Task IDs globally unique and easily scannable (`ls artifacts/tasks/`).
+- Task IDs globally unique and easily scannable (`ls openstation/tasks/`).
 - No deep nesting that obscures the task list.
 
 **Symlink elimination.** Only discovery symlinks remain (for
@@ -319,7 +319,7 @@ This layered approach offers:
 - Fast interactive queries via `obsidian search` with
   `[property: value]` syntax and JSON output.
 - Reliable fallback when Obsidian is not running — `grep` across
-  `artifacts/tasks/*.md` achieves the same results.
+  `openstation/tasks/*.md` achieves the same results.
 - No hard dependency on Obsidian — the system is fully functional
   with filesystem queries alone.
 
@@ -345,7 +345,7 @@ openstation list --status ready
 **Filesystem (how it works internally):**
 
 ```bash
-grep -rl 'status: ready' artifacts/tasks/*.md
+grep -rl 'status: ready' openstation/tasks/*.md
 ```
 
 **Obsidian CLI (optional):**
@@ -360,8 +360,8 @@ Read the task's frontmatter `artifacts` field:
 
 ```yaml
 artifacts:
-  - "[[artifacts/agents/project-manager]]"
-  - "[[artifacts/research/obsidian-plugin-api]]"
+  - "[[openstation/agents/project-manager]]"
+  - "[[openstation/research/obsidian-plugin-api]]"
 ```
 
 ### 10. Get Sub-tasks of a Parent
@@ -375,7 +375,7 @@ openstation list 0045           # shows task and its subtask tree
 **Filesystem:**
 
 ```bash
-grep -rl 'parent: 0045-replace-storage-obsidian-cli' artifacts/tasks/*.md
+grep -rl 'parent: 0045-replace-storage-obsidian-cli' openstation/tasks/*.md
 ```
 
 Alternatively, read the parent's `subtasks` frontmatter field
@@ -399,8 +399,8 @@ openstation list --status ready --assignee researcher   # combined
 **Filesystem:**
 
 ```bash
-grep -rl 'assignee: researcher' artifacts/tasks/*.md
-grep -rl 'status: ready' artifacts/tasks/*.md | xargs grep -l 'assignee: researcher'
+grep -rl 'assignee: researcher' openstation/tasks/*.md
+grep -rl 'status: ready' openstation/tasks/*.md | xargs grep -l 'assignee: researcher'
 ```
 
 **Obsidian CLI (optional):**
@@ -423,8 +423,8 @@ Agents are resolved through symlinks in the `agents/` directory:
 ```
 claude --agent researcher
   → .claude/agents/researcher.md          (Claude Code lookup)
-  → ../.artifacts/agents/researcher.md  (install-time symlink)
-  → ../../artifacts/agents/researcher.md (discovery symlink)
+  → ../.openstation/agents/researcher.md  (install-time symlink)
+  → ../../openstation/agents/researcher.md (discovery symlink)
 ```
 
 In the source repo (no `.openstation/` prefix):
@@ -433,7 +433,7 @@ In the source repo (no `.openstation/` prefix):
 claude --agent researcher
   → .claude/agents/researcher.md
   → agents/researcher.md                  (discovery symlink)
-  → ../../artifacts/agents/researcher.md (canonical file)
+  → ../../openstation/agents/researcher.md (canonical file)
 ```
 
 Discovery symlinks are created by:
@@ -449,15 +449,15 @@ with filesystem and Obsidian alternatives.
 
 | Query                        | CLI Command                                              | Filesystem ¹                      | Obsidian ² |
 |------------------------------|----------------------------------------------------------|-----------------------------------|------------|
-| Tasks with status X          | `openstation list --status X`                            | `grep -rl 'status: X' artifacts/tasks/*.md` | `[status: X]` |
+| Tasks with status X          | `openstation list --status X`                            | `grep -rl 'status: X' openstation/tasks/*.md` | `[status: X]` |
 | Tasks assigned to agent A    | `openstation list --assignee A`                          | `grep -rl 'assignee: A' …`       | `[assignee: A]` |
 | Status + assignee            | `openstation list --status X --assignee A`               | pipe grep commands                | `[status: X] [assignee: A]` |
 | Sub-tasks of parent P        | `openstation list P`                                     | `grep -rl 'parent: P' …`         | `[parent: P]` |
-| Single task details          | `openstation show <task>`                                | Read `artifacts/tasks/<task>.md` | — |
+| Single task details          | `openstation show <task>`                                | Read `openstation/tasks/<task>.md` | — |
 | Artifacts for task T         | Read `artifacts` field in task frontmatter               | —                                 | — |
 | Artifact provenance          | Read `task` and `agent` fields on the artifact           | —                                 | — |
-| All known agents             | `openstation agents list`                                | `ls artifacts/agents/`          | — |
-| Next available task ID       | `openstation create` (auto-assigns)                      | `ls artifacts/tasks/ \| sort \| tail -1` | — |
+| All known agents             | `openstation agents list`                                | `ls openstation/agents/`          | — |
+| Next available task ID       | `openstation create` (auto-assigns)                      | `ls openstation/tasks/ \| sort \| tail -1` | — |
 
 ¹ Always available — no dependencies.
 ² Requires Obsidian running. Prefix queries with `obsidian search vault="<name>" query='[kind: task] …' format=json`.

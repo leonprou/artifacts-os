@@ -60,7 +60,7 @@ Only include statuses that have at least one task.
 
 Only if `openstation` is not installed:
 
-1. Scan `artifacts/tasks/*.md` for files with `kind: task`
+1. Scan `openstation/tasks/*.md` for files with `kind: task`
    frontmatter.
 2. Parse YAML frontmatter from each file.
 3. Apply any filters from `$ARGUMENTS`. By default, show only
