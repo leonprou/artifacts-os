@@ -449,7 +449,9 @@ def test_cli_create_signature_unchanged(tmp_path: Path, monkeypatch) -> None:
     kinds_dir.mkdir(parents=True)
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
     schema = {"x-dir": "tasks", "x-prefix": "t", "x-numbered": True}
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    kind_folder = kinds_dir / "task"
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(json.dumps(schema))
     (root / "artifacts" / "tasks").mkdir()
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
@@ -487,7 +489,9 @@ def test_cli_create_empty_body_path_still_works(tmp_path: Path, monkeypatch) -> 
         "x-numbered": True,
         "properties": {"status": {"enum": ["backlog", "ready"]}},
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    kind_folder = kinds_dir / "task"
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(json.dumps(schema))
     (root / "artifacts" / "tasks").mkdir()
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)

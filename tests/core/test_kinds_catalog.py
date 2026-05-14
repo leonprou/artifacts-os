@@ -315,37 +315,21 @@ def test_artifact_md_frontmatter_only_read_at_l1(tmp_path: Path) -> None:
     )
 
 
-def test_legacy_flat_kind_json_still_loads(tmp_path: Path) -> None:
-    """artifacts/kinds/foo.json (flat, no folder) registers foo with has_template=False."""
+def test_flat_kind_json_not_registered_and_warns(tmp_path: Path) -> None:
+    """A stray flat artifacts/kinds/foo.json is NOT registered and emits a migration warning."""
     root, kinds_dir = _make_vault(tmp_path)
-    _write_kind_json(kinds_dir, "legacy")  # flat file, no ARTIFACT.md
+    _write_kind_json(kinds_dir, "legacy")  # flat file, no folder
 
-    with pytest.warns(UserWarning, match="no ARTIFACT.md"):
+    with pytest.warns(UserWarning, match="Migrate to folder form"):
         r = Registry([], root=root)
 
-    kd = r.get("legacy")
-    assert kd.dir == "legacys"
-    assert kd.has_template is False
+    # Flat-form kind must not be registered.
+    with pytest.raises(ValueError, match="Unknown kind"):
+        r.get("legacy")
 
     catalog = KindCatalog(r, root)
     entries = catalog.list_kinds()
-    assert any(e.name == "legacy" and not e.has_template for e in entries)
-
-
-def test_folder_form_wins_on_collision(tmp_path: Path) -> None:
-    """Both flat foo.json and foo/kind.json → folder wins; warning logged."""
-    root, kinds_dir = _make_vault(tmp_path)
-
-    # Flat form: dir=flatdir
-    _write_kind_json(kinds_dir, "foo", {"x-dir": "flatdir", "x-prefix": "f", "x-numbered": True})
-    # Folder form: dir=folderdir
-    _write_folder_kind(kinds_dir, "foo", {"x-dir": "folderdir", "x-prefix": "f", "x-numbered": True})
-
-    with pytest.warns(UserWarning, match="folder form takes precedence"):
-        r = Registry([], root=root)
-
-    kd = r.get("foo")
-    assert kd.dir == "folderdir", "folder form must win"
+    assert not any(e.name == "legacy" for e in entries)
 
 
 # ---------------------------------------------------------------------------

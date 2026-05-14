@@ -44,7 +44,9 @@ def test_kinds_custom_vault_kind_appears(vault, capsys):
     """A kind defined only in artifacts/kinds/ shows up in output."""
     kinds_dir = vault / "artifacts" / "kinds"
     schema = {"x-dir": "changelogs", "x-prefix": "c", "x-numbered": True}
-    (kinds_dir / "changelog.json").write_text(json.dumps(schema))
+    kind_folder = kinds_dir / "changelog"
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(json.dumps(schema))
 
     main(["kinds", "-q"])
     out = capsys.readouterr().out
@@ -146,7 +148,9 @@ def test_cli_json_no_description_is_none(vault, capsys):
     """Kind without ARTIFACT.md has description=None and has_template=False in JSON."""
     kinds_dir = vault / "artifacts" / "kinds"
     schema = {"x-dir": "foos", "x-prefix": "f", "x-numbered": True}
-    (kinds_dir / "foo.json").write_text(json.dumps(schema))
+    kind_folder = kinds_dir / "foo"
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(json.dumps(schema))
 
     main(["kinds", "-j"])
     out = capsys.readouterr().out

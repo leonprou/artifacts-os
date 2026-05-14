@@ -174,7 +174,7 @@ artifacts list "[[t0001]]" "[[t0042]]"
 
 When `--kind <K>` is supplied, `artifacts list` automatically generates a
 typed flag for every property declared in that kind's JSON schema
-(`artifacts/kinds/<K>.json`).  Properties with an `enum` array get
+(`artifacts/kinds/<K>/kind.json`).  Properties with an `enum` array get
 `choices=` enforcement at parse time — a typo is an immediate error rather
 than a silent empty result.
 
@@ -749,7 +749,7 @@ artifacts kinds [<name>] [--meta] [-q | -j | -e]
 ```
 
 Without `<name>`: lists all artifact kinds registered in the active project,
-including any vault-defined kinds loaded from `artifacts/kinds/*.json`.
+including any vault-defined kinds loaded from `artifacts/kinds/<name>/kind.json`.
 
 With `<name>`: prints the full body of `artifacts/kinds/<name>/ARTIFACT.md`
 to stdout (pipe-friendly, no decoration). Use `--meta` to prepend a metadata

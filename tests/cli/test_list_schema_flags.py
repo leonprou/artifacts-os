@@ -99,7 +99,8 @@ def vault(tmp_path: Path, monkeypatch):
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     for name, schema in _ALL_SCHEMAS.items():
-        (kinds_dir / f"{name}.json").write_text(json.dumps(schema))
+        (kinds_dir / name).mkdir(parents=True, exist_ok=True)
+        (kinds_dir / name / "kind.json").write_text(json.dumps(schema))
         kind_dir = schema["x-dir"]
         (root / "artifacts" / kind_dir).mkdir(parents=True, exist_ok=True)
 
@@ -216,7 +217,8 @@ def test_L6_no_properties_schema_static_fallback(tmp_path, monkeypatch, capsys):
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     # Schema with empty properties
-    (kinds_dir / "task.json").write_text(json.dumps({
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps({
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
         "type": "object", "properties": {},
     }))
@@ -238,7 +240,8 @@ def test_L6_no_properties_help_no_crash(tmp_path, monkeypatch, capsys):
     kinds_dir.mkdir(parents=True)
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
-    (kinds_dir / "task.json").write_text(json.dumps({
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps({
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
         "type": "object", "properties": {},
     }))
@@ -272,7 +275,8 @@ def test_L7_reserved_name_skipped(tmp_path, monkeypatch, capsys):
             "status": {"enum": ["backlog", "ready"], "description": "Status."},
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -530,7 +534,8 @@ def test_L20_malformed_schema_json_fallback(tmp_path, monkeypatch, capsys):
     kinds_dir.mkdir(parents=True)
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
-    (kinds_dir / "task.json").write_text("{invalid json!!!")
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text("{invalid json!!!")
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -560,7 +565,8 @@ def test_L22_integer_type_coercion(tmp_path, monkeypatch):
             "weight": {"type": "integer", "description": "Numeric weight."},
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -591,7 +597,8 @@ def test_L23_integer_invalid_value_exits_2(tmp_path, monkeypatch, capsys):
             "weight": {"type": "integer", "description": "Numeric weight."},
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -619,7 +626,8 @@ def test_L24_boolean_type_coercion(tmp_path, monkeypatch):
             "archived": {"type": "boolean", "description": "Archived flag."},
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -653,7 +661,8 @@ def test_L25_boolean_invalid_value_exits_2(tmp_path, monkeypatch, capsys):
             "archived": {"type": "boolean", "description": "Archived flag."},
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -689,7 +698,8 @@ def test_L27_missing_description_fallback(tmp_path, monkeypatch, capsys):
             "custom_field": {"type": "string"},  # no description
         },
     }
-    (kinds_dir / "task.json").write_text(json.dumps(schema))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps(schema))
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)
 
@@ -708,14 +718,16 @@ def test_L28_cross_kind_diverging_description_has_varies_suffix(tmp_path, monkey
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
     (root / "artifacts" / "tasks").mkdir(parents=True)
     (root / "artifacts" / "specs").mkdir(parents=True)
-    (kinds_dir / "task.json").write_text(json.dumps({
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(json.dumps({
         "x-dir": "tasks", "x-prefix": "t", "x-numbered": True,
         "type": "object",
         "properties": {
             "status": {"enum": ["backlog", "ready"], "description": "Task status."},
         },
     }))
-    (kinds_dir / "spec.json").write_text(json.dumps({
+    (kinds_dir / "spec").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "spec" / "kind.json").write_text(json.dumps({
         "x-dir": "specs", "x-prefix": "s", "x-numbered": True,
         "type": "object",
         "properties": {

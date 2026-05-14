@@ -13,15 +13,7 @@ For creating an *instance* of an existing kind, see
 
 ## File Layout
 
-A kind can be defined in two forms:
-
-**Legacy flat form:**
-
-```
-artifacts/kinds/<name>.json
-```
-
-**Folder form (preferred for new kinds):**
+Every kind is declared in folder form:
 
 ```
 artifacts/kinds/<name>/
@@ -29,9 +21,14 @@ artifacts/kinds/<name>/
   ARTIFACT.md    # human/agent-facing prose (selection signal + body template)
 ```
 
-The registry loads both; **folder form takes precedence** when both
-exist (a warning is logged). The filename stem (`<name>`) becomes the
-registered kind name in both cases.
+The folder name (`<name>`) becomes the registered kind name. A
+`kind.json` is required; `ARTIFACT.md` is strongly recommended (omitting
+it produces a registration warning and disables body scaffolding).
+
+> **Stray flat files.** If the registry finds a
+> `artifacts/kinds/<name>.json` file outside any folder, it emits a
+> warning telling you to migrate to folder form and skips the file —
+> the kind will not be registered.
 
 ---
 
@@ -336,8 +333,7 @@ kind from adjacent ones at selection time.
 
 ## What You Get for Free
 
-Once `artifacts/kinds/<name>.json` (or `artifacts/kinds/<name>/kind.json`)
-exists:
+Once `artifacts/kinds/<name>/kind.json` exists:
 
 | Feature | Command / surface |
 |---|---|
@@ -494,11 +490,10 @@ The five shipped schemas cover the most common patterns:
 | [`artifacts/kinds/spec/`](../artifacts/kinds/spec/) | Numbered, status colors, `agent` free-form string property; has `ARTIFACT.md` |
 | [`artifacts/kinds/research/`](../artifacts/kinds/research/) | Numbered, minimal two-status enum; has `ARTIFACT.md` |
 | [`artifacts/kinds/note/`](../artifacts/kinds/note/) | Numbered, free-form `type` property, date column; has `ARTIFACT.md` |
-| [`artifacts/kinds/agent.json`](../artifacts/kinds/agent.json) | **Non-numbered** (`x-numbered: false`), `x-required-fields`; no `ARTIFACT.md` |
+| [`artifacts/kinds/agent/`](../artifacts/kinds/agent/) | **Non-numbered** (`x-numbered: false`), `x-required-fields`; has `ARTIFACT.md` |
 
-All four shipped kinds (`task`, `spec`, `research`, `note`) have an
-`ARTIFACT.md` in folder form. `agent` does not — it is a thin
-registry kind with no body scaffolding needed.
+All five shipped kinds ship in folder form with both `kind.json` and
+`ARTIFACT.md`.
 
 ---
 

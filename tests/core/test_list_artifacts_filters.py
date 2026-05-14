@@ -396,7 +396,9 @@ def cli_vault(tmp_path: Path, monkeypatch):
             "priority": {"type": "string"},
         },
     }
-    (kinds_dir / "task.json").write_text(_json.dumps(schema))
+    kind_folder = kinds_dir / "task"
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(_json.dumps(schema))
     (root / "artifacts" / "tasks").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
     monkeypatch.chdir(root)

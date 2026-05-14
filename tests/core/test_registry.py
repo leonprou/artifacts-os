@@ -8,9 +8,9 @@ from artifacts_os.core.errors import ValidationError
 
 
 def _write_schema(root: Path, name: str, schema: dict) -> None:
-    kinds_dir = root / "artifacts" / "kinds"
-    kinds_dir.mkdir(parents=True, exist_ok=True)
-    (kinds_dir / f"{name}.json").write_text(json.dumps(schema), encoding="utf-8")
+    kind_folder = root / "artifacts" / "kinds" / name
+    kind_folder.mkdir(parents=True, exist_ok=True)
+    (kind_folder / "kind.json").write_text(json.dumps(schema), encoding="utf-8")
 
 
 def test_no_root_no_scan() -> None:
@@ -159,7 +159,7 @@ def test_vault_override_caller_kind_no_error(tmp_path: Path) -> None:
 
 def test_schema_properties_task_kind(tmp_path: Path) -> None:
     """schema_properties returns the set of property names from the kind's JSON schema."""
-    task_json = Path(__file__).parents[2] / "artifacts" / "kinds" / "task.json"
+    task_json = Path(__file__).parents[2] / "artifacts" / "kinds" / "task" / "kind.json"
     schema = json.loads(task_json.read_text(encoding="utf-8"))
     kd = KindDef(name="task", dir="tasks", prefix="t", numbered=True, schema=schema)
     expected = set(schema["properties"].keys())

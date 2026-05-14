@@ -556,7 +556,7 @@ def run(args) -> int:  # no registry — called before vault setup
             schema_obj = {}
         x_dir: str = schema_obj.get("x-dir", f"{kind_name}s")
 
-        _do_write(target / "artifacts" / "kinds" / f"{kind_name}.json", schema_text)
+        _do_write(target / "artifacts" / "kinds" / kind_name / "kind.json", schema_text)
         _do_write(
             target / "artifacts" / "kinds" / kind_name / "ARTIFACT.md", artifact_text
         )

@@ -47,7 +47,9 @@ def _make_vault(tmp_path: Path, artifacts_yaml_content: str) -> Path:
     kinds_dir.mkdir(parents=True)
     (root / "artifacts.yaml").write_text(artifacts_yaml_content)
     for name, schema in _KINDS.items():
-        (kinds_dir / f"{name}.json").write_text(json.dumps(schema))
+        kind_folder = kinds_dir / name
+        kind_folder.mkdir(parents=True, exist_ok=True)
+        (kind_folder / "kind.json").write_text(json.dumps(schema))
         (root / "artifacts" / schema["x-dir"]).mkdir(parents=True, exist_ok=True)
     return root
 

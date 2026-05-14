@@ -69,8 +69,10 @@ def tree_vault(tmp_path, monkeypatch):
     )
 
     import json as _json
-    (kinds_dir / "task.json").write_text(_json.dumps(_TASK_TREE_SCHEMA))
-    (kinds_dir / "note.json").write_text(_json.dumps(_NOTE_SCHEMA))
+    (kinds_dir / "task").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "task" / "kind.json").write_text(_json.dumps(_TASK_TREE_SCHEMA))
+    (kinds_dir / "note").mkdir(parents=True, exist_ok=True)
+    (kinds_dir / "note" / "kind.json").write_text(_json.dumps(_NOTE_SCHEMA))
 
     (root / "artifacts" / "tasks").mkdir(parents=True)
     (root / "artifacts" / "notes").mkdir(parents=True)

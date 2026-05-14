@@ -51,7 +51,9 @@ def vault(tmp_path: Path, monkeypatch):
     (root / "artifacts.yaml").write_text("layout_version: 1\n")
 
     for name, schema in _KINDS.items():
-        (kinds_dir / f"{name}.json").write_text(json.dumps(schema))
+        kind_folder = kinds_dir / name
+        kind_folder.mkdir(parents=True, exist_ok=True)
+        (kind_folder / "kind.json").write_text(json.dumps(schema))
         kind_dir = schema["x-dir"]
         (root / "artifacts" / kind_dir).mkdir(parents=True, exist_ok=True)
 

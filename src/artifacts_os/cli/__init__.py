@@ -139,7 +139,7 @@ def _peek_kind_for_command(
 
     schema: dict | None = None
     if root is not None:
-        schema_path = Path(root) / "artifacts" / "kinds" / f"{kind}.json"
+        schema_path = Path(root) / "artifacts" / "kinds" / kind / "kind.json"
         if schema_path.exists():
             try:
                 with open(schema_path) as fh:
@@ -194,12 +194,16 @@ def _load_all_vault_schemas(root) -> dict[str, dict]:
     kinds_dir = Path(root) / "artifacts" / "kinds"
     if not kinds_dir.is_dir():
         return result
-    for path in sorted(kinds_dir.glob("*.json")):
-        try:
-            with open(path) as fh:
-                result[path.stem] = json.load(fh)
-        except Exception:
-            pass
+    for folder in sorted(kinds_dir.iterdir()):
+        if not folder.is_dir():
+            continue
+        schema_path = folder / "kind.json"
+        if schema_path.is_file():
+            try:
+                with open(schema_path) as fh:
+                    result[folder.name] = json.load(fh)
+            except Exception:
+                pass
     return result
 
 

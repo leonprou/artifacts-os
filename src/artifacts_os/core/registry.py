@@ -120,28 +120,23 @@ class Registry:
         if not kinds_dir.is_dir():
             return []
 
-        # --- Resolve schema paths (flat vs folder form; folder wins) ---
-        # Collect all kind names and their schema paths.
-        schema_paths: dict[str, Path] = {}
-
-        # Flat form: artifacts/kinds/<name>.json
+        # Warn about stray flat-form files so authors know to migrate.
         for flat in sorted(kinds_dir.glob("*.json")):
-            schema_paths[flat.stem] = flat
+            warnings.warn(
+                f"Kind '{flat.stem}': flat schema file '{flat}' is not supported. "
+                f"Migrate to folder form: artifacts/kinds/{flat.stem}/kind.json. "
+                f"The flat file will not be registered as a kind.",
+                stacklevel=2,
+            )
 
-        # Folder form: artifacts/kinds/<name>/kind.json — wins on collision.
+        # Folder form only: artifacts/kinds/<name>/kind.json
+        schema_paths: dict[str, Path] = {}
         for folder in sorted(kinds_dir.iterdir()):
             if not folder.is_dir():
                 continue
             kind_json = folder / "kind.json"
             if kind_json.is_file():
-                name = folder.name
-                if name in schema_paths:
-                    warnings.warn(
-                        f"Kind '{name}': both flat '{schema_paths[name]}' and "
-                        f"folder-form '{kind_json}' exist; folder form takes precedence.",
-                        stacklevel=2,
-                    )
-                schema_paths[name] = kind_json
+                schema_paths[folder.name] = kind_json
 
         # --- Load each kind ---
         out: list[KindDef] = []
@@ -170,10 +165,7 @@ class Registry:
             required_fields = schema.get("x-required-fields")
 
             # --- L1: read ARTIFACT.md frontmatter only ---
-            # Prefer folder-form path if available; fall back to sibling of
-            # the flat schema file.
-            folder_path = kinds_dir / name
-            artifact_md = folder_path / "ARTIFACT.md"
+            artifact_md = kinds_dir / name / "ARTIFACT.md"
             has_template = artifact_md.is_file()
             description: str | None = None
 

@@ -221,16 +221,16 @@ class TestStepSkipping:
         assert "default_views" not in text
         assert "features" not in text
         # default kinds should be installed
-        assert (tmp_path / "artifacts" / "kinds" / "task.json").is_file()
+        assert (tmp_path / "artifacts" / "kinds" / "task" / "kind.json").is_file()
 
     def test_18_3_3_yes_defaults_install_task_note_spec(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         main(["init", "-y"])
         for kind in ("task", "note", "spec"):
-            assert (tmp_path / "artifacts" / "kinds" / f"{kind}.json").is_file()
+            assert (tmp_path / "artifacts" / "kinds" / kind / "kind.json").is_file()
         # research and agent NOT installed by default
-        assert not (tmp_path / "artifacts" / "kinds" / "research.json").is_file()
-        assert not (tmp_path / "artifacts" / "kinds" / "agent.json").is_file()
+        assert not (tmp_path / "artifacts" / "kinds" / "research" / "kind.json").is_file()
+        assert not (tmp_path / "artifacts" / "kinds" / "agent" / "kind.json").is_file()
 
     def test_18_3_4_non_tty_no_flags_exits_2(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -364,7 +364,7 @@ class TestAgentKindCoupling:
         out = capsys.readouterr().out
         assert "agent kind auto-included for selected agents" in out
         # agent kind files should be present
-        assert (tmp_path / "artifacts" / "kinds" / "agent.json").is_file()
+        assert (tmp_path / "artifacts" / "kinds" / "agent" / "kind.json").is_file()
         assert (tmp_path / "artifacts" / "kinds" / "agent" / "ARTIFACT.md").is_file()
 
     def test_18_6_2_no_agents_no_auto_include(self, tmp_path, monkeypatch):
@@ -375,7 +375,7 @@ class TestAgentKindCoupling:
             "--kinds", "task",
             "--agents", "none",
         ])
-        assert not (tmp_path / "artifacts" / "kinds" / "agent.json").is_file()
+        assert not (tmp_path / "artifacts" / "kinds" / "agent" / "kind.json").is_file()
 
     def test_18_6_3_multiple_agents_single_agent_kind(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
@@ -386,7 +386,7 @@ class TestAgentKindCoupling:
             "--agents", "architect,developer",
         ])
         # agent kind installed once
-        agent_json = tmp_path / "artifacts" / "kinds" / "agent.json"
+        agent_json = tmp_path / "artifacts" / "kinds" / "agent" / "kind.json"
         assert agent_json.is_file()
         # verify no duplicate install (just check it parses as JSON)
         schema = json.loads(agent_json.read_text())
@@ -632,7 +632,7 @@ class TestFullVaultStructure:
             "--agents", "none",
         ])
         for kind in ("task", "note", "spec"):
-            assert (tmp_path / "artifacts" / "kinds" / f"{kind}.json").is_file()
+            assert (tmp_path / "artifacts" / "kinds" / kind / "kind.json").is_file()
             assert (tmp_path / "artifacts" / "kinds" / kind / "ARTIFACT.md").is_file()
 
     def test_gitkeep_created_for_each_kind(self, tmp_path, monkeypatch):
@@ -705,7 +705,7 @@ class TestFullVaultStructure:
         ])
         kinds_dir = tmp_path / "artifacts" / "kinds"
         for kind in ("task", "note", "spec", "research", "agent"):
-            schema = json.loads((kinds_dir / f"{kind}.json").read_text())
+            schema = json.loads((kinds_dir / kind / "kind.json").read_text())
             assert "x-dir" in schema
 
     def test_target_directory_argument(self, tmp_path, monkeypatch):
