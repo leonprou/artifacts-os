@@ -87,7 +87,8 @@ def run(args, registry: Registry) -> int:
         columns = views.parse_field_specs("name,status,kind,created")
 
     console = Console()
-    table = views.render_table([artifact], columns, kind_def=kind_def)
+    status_colors = kind_def.meta.get("status_colors") if kind_def is not None else None
+    table = views.render_table([artifact], columns, status_colors=status_colors)
     console.print(table)
 
     if artifact.body.strip():
@@ -127,6 +128,7 @@ def _render_meta(args, artifact: Artifact, registry: Registry) -> int:
         views.parse_field_specs("id,kind,name,status")
 
     console = Console()
-    table = views.render_table([artifact], columns, kind_def=kind_def)
+    status_colors = kind_def.meta.get("status_colors") if kind_def is not None else None
+    table = views.render_table([artifact], columns, status_colors=status_colors)
     console.print(table)
     return 0

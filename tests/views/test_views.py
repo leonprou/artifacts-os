@@ -9,7 +9,9 @@ import pytest
 from rich.table import Table
 from rich.text import Text
 
-from artifacts_os.core.models import ArtifactMeta, KindDef
+from dataclasses import dataclass
+
+from artifacts_os.core.models import ArtifactMeta, ItemMeta, KindDef
 from artifacts_os.views import (
     FieldSpec,
     default_columns,
@@ -150,17 +152,7 @@ class TestDefaultColumns:
 
 
 class TestRenderTable:
-    def _kind_def(self) -> KindDef:
-        return KindDef(
-            name="task",
-            dir="tasks",
-            prefix="t",
-            numbered=True,
-            meta={
-                "columns": ["id", "status", "name"],
-                "status_colors": {"done": "green", "ready": "cyan"},
-            },
-        )
+    _status_colors = {"done": "green", "ready": "cyan"}
 
     def test_returns_rich_table(self):
         cols = parse_field_specs("id,name")
@@ -197,16 +189,15 @@ class TestRenderTable:
         assert table.columns[1]._cells[0] == "fix-bug"
 
     def test_status_color_applied(self):
-        kd = self._kind_def()
         cols = parse_field_specs("id,status")
         items = [make_meta("done-task", {"id": "t0001", "status": "done"})]
-        table = render_table(items, cols, kind_def=kd)
+        table = render_table(items, cols, status_colors=self._status_colors)
         cell = table.columns[1]._cells[0]
         assert isinstance(cell, Text)
         assert str(cell) == "done"
         assert cell.style == "green"
 
-    def test_status_color_not_applied_without_kind_def(self):
+    def test_status_color_not_applied_without_status_colors(self):
         cols = parse_field_specs("id,status")
         items = [make_meta("done-task", {"id": "t0001", "status": "done"})]
         table = render_table(items, cols)
@@ -215,10 +206,9 @@ class TestRenderTable:
         assert cell == "done"
 
     def test_unmatched_status_not_colored(self):
-        kd = self._kind_def()
         cols = parse_field_specs("status")
         items = [make_meta("task", {"status": "in-progress"})]
-        table = render_table(items, cols, kind_def=kd)
+        table = render_table(items, cols, status_colors=self._status_colors)
         cell = table.columns[0]._cells[0]
         # "in-progress" not in status_colors → plain string
         assert isinstance(cell, str)
@@ -234,3 +224,44 @@ class TestRenderTable:
         cols = parse_field_specs("id,name")
         table = render_table([], cols)
         assert table.row_count == 0
+
+
+# ---------------------------------------------------------------------------
+# render_table with generic ItemMeta subclass (non-ArtifactMeta)
+# ---------------------------------------------------------------------------
+
+
+class TestRenderTableGenericItemMeta:
+    """Verify render_table works with any ItemMeta subclass, not just ArtifactMeta."""
+
+    def _make_row(self, **fields) -> ItemMeta:
+        @dataclass
+        class BookRow(ItemMeta):
+            title: str = ""
+            status: str = ""
+            author: str = ""
+
+            def cell(self, key: str, default="") -> object:
+                return getattr(self, key, default)
+
+        return BookRow(**fields)
+
+    def test_renders_custom_item_meta(self):
+        cols = parse_field_specs("title,author")
+        items = [self._make_row(title="My Book", author="Alice")]
+        table = render_table(items, cols)
+        assert isinstance(table, Table)
+        assert table.row_count == 1
+        assert table.columns[0]._cells[0] == "My Book"
+        assert table.columns[1]._cells[0] == "Alice"
+
+    def test_status_colors_applied_to_generic_item(self):
+        cols = parse_field_specs("title,status")
+        items = [self._make_row(title="My Book", status="published")]
+        table = render_table(
+            items, cols, status_colors={"published": "bold green"}
+        )
+        cell = table.columns[1]._cells[0]
+        assert isinstance(cell, Text)
+        assert str(cell) == "published"
+        assert cell.style == "bold green"

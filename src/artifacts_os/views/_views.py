@@ -8,12 +8,12 @@ Spec: s0007-artifacts-os-views-module
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from rich.table import Table
 from rich.text import Text
 
-from artifacts_os.core.models import ArtifactMeta, KindDef
+from artifacts_os.core.models import ItemMeta, KindDef
 
 
 @dataclass
@@ -100,35 +100,36 @@ def default_columns(kind_def: KindDef) -> list[FieldSpec]:
 
 
 def render_table(
-    items: list[ArtifactMeta],
+    items: Sequence[ItemMeta],
     columns: list[FieldSpec],
     *,
-    kind_def: KindDef | None = None,
+    status_colors: Mapping[str, str] | None = None,
 ) -> Table:
     """Build and return a ``rich.Table`` from *items* and *columns*.
 
     - One column per :class:`FieldSpec` using ``label`` as header.
-    - One row per :class:`ArtifactMeta`; each cell formatted via
-      :func:`format_field`.
-    - If *kind_def* is given, ``meta["status_colors"]`` is applied:
-      the ``status`` cell is wrapped in a :class:`rich.text.Text` with
-      the mapped style string.
+    - One row per :class:`ItemMeta`; each cell value from
+      ``item.cell(key, default="")`` formatted via :func:`format_field`.
+    - When *status_colors* is provided, the ``status`` cell is wrapped in a
+      :class:`rich.text.Text` with the mapped style string.
+
+    The caller is responsible for extracting ``status_colors`` from a
+    ``KindDef`` (via ``kind_def.meta.get("status_colors", {})``) and
+    passing it here explicitly.
     """
     table = Table()
     for col in columns:
         table.add_column(col.label)
 
-    status_colors: dict[str, str] = {}
-    if kind_def is not None:
-        status_colors = kind_def.meta.get("status_colors", {})
+    colors: Mapping[str, str] = status_colors or {}
 
     for item in items:
         row: list[Any] = []
         for col in columns:
-            raw = item.frontmatter.get(col.key, "")
+            raw = item.cell(col.key, "")
             cell_str = format_field(raw, col.fmt)
-            if col.key == "status" and cell_str in status_colors:
-                row.append(Text(cell_str, style=status_colors[cell_str]))
+            if col.key == "status" and cell_str in colors:
+                row.append(Text(cell_str, style=colors[cell_str]))
             else:
                 row.append(cell_str)
         table.add_row(*row)

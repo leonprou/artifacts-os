@@ -9,6 +9,22 @@ from typing import Any
 
 
 @dataclass
+class ItemMeta:
+    """Base class for items renderable in a Rich table.
+
+    Subclasses override ``cell`` to read from their own data source.
+    The default implementation reads named attributes via ``getattr``.
+    """
+
+    def cell(self, key: str, default: Any = "") -> Any:
+        """Return the display value for *key*, falling back to *default*.
+
+        Default: reads ``getattr(self, key, default)``.
+        """
+        return getattr(self, key, default)
+
+
+@dataclass
 class KindDef:
     name: str
     dir: str
@@ -30,7 +46,7 @@ class KindDef:
 
 
 @dataclass
-class ArtifactMeta:
+class ArtifactMeta(ItemMeta):
     """Lightweight view populated from frontmatter only (no body read)."""
 
     id: str
@@ -42,6 +58,10 @@ class ArtifactMeta:
     created: str
     path: Path
     frontmatter: dict
+
+    def cell(self, key: str, default: Any = "") -> Any:
+        """Return *key* from frontmatter, falling back to *default*."""
+        return self.frontmatter.get(key, default)
 
 
 @dataclass

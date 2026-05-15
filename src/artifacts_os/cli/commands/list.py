@@ -748,7 +748,8 @@ def run(args, registry: Registry) -> int:
         # (--tail was already applied above when set.)
         if tail_n is None:
             items = _apply_sort(items, sort_str)
-        table = views.render_table(items, columns, kind_def=kind_def)
+        status_colors = kind_def.meta.get("status_colors") if kind_def is not None else None
+        table = views.render_table(items, columns, status_colors=status_colors)
 
     Console().print(table)
     return 0
