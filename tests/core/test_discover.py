@@ -129,3 +129,80 @@ def test_search_multiple(make_vault) -> None:
 def test_search_empty(make_vault) -> None:
     _, registry = make_vault()
     assert search(registry, "nothing-here") == []
+
+
+def test_list_artifacts_skips_malformed_frontmatter(make_vault, capsys) -> None:
+    """A single broken file must not crash the whole vault walk.
+
+    Regression: a bad ``>-`` block scalar in one agent file used to
+    raise ``yaml.scanner.ScannerError`` out of ``list_artifacts``,
+    taking down every CLI command that enumerates the vault.
+    """
+    root, registry = make_vault()
+    good = create(registry, "task", "good")
+    bad_path = root / "artifacts" / "tasks" / "t0099-broken.md"
+    bad_path.write_text(
+        "---\n"
+        "kind: task\n"
+        "id: t0099\n"
+        "name: broken\n"
+        "description: >- inline text after block scalar indicator\n"
+        "---\n"
+        "\n"
+        "# Broken\n"
+    )
+
+    items = list_artifacts(registry, kind="task")
+
+    # Good file still returned; broken file silently skipped.
+    assert [i.path for i in items] == [good.path]
+
+    # Warning surfaced on stderr so operators notice.
+    err = capsys.readouterr().err
+    assert "warning: skipping" in err
+    assert "t0099-broken.md" in err
+
+
+def test_search_skips_malformed_frontmatter(make_vault, capsys) -> None:
+    """`search` shares the same enumeration semantics as list_artifacts."""
+    root, registry = make_vault()
+    create(registry, "task", "alpha one")
+    bad_path = root / "artifacts" / "tasks" / "t0099-alpha-broken.md"
+    bad_path.write_text(
+        "---\n"
+        "kind: task\n"
+        "name: alpha-broken\n"
+        "description: >- inline text after block scalar indicator\n"
+        "---\n"
+    )
+
+    results = search(registry, "alpha", kind="task")
+    # Only the well-formed match comes back; broken file dropped.
+    assert [m.path.stem for m in results] == ["t0001-alpha-one"]
+    assert "warning: skipping" in capsys.readouterr().err
+
+
+def test_resolve_still_strict_for_direct_lookup(make_vault) -> None:
+    """Direct ref lookups must still surface the parse error.
+
+    When a user asks for a specific artifact and it's broken, silent
+    failure would mask the real problem. Only enumeration contexts
+    are resilient; ``resolve`` → ``_meta_from_file`` stay strict.
+    """
+    from artifacts_os.core.discover import _meta_from_file
+
+    root, registry = make_vault()
+    bad_path = root / "artifacts" / "tasks" / "t0099-broken.md"
+    bad_path.write_text(
+        "---\n"
+        "kind: task\n"
+        "name: broken\n"
+        "description: >- inline text after block scalar indicator\n"
+        "---\n"
+    )
+
+    # resolve() finds the file (matching is filename-based, not parse-based)…
+    assert resolve(registry, "t0099-broken") == bad_path
+    # …but reading its frontmatter raises.
+    with pytest.raises(Exception):
+        _meta_from_file(bad_path)

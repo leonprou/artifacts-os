@@ -4,6 +4,7 @@ Spec: s2060-artifacts-os-architecture § discover.py
 """
 
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,15 @@ def _kind_dir(registry: "Registry", kd: KindDef) -> Path:
 
 
 def _meta_from_file(path: Path) -> ArtifactMeta:
+    """Read frontmatter from *path* into ArtifactMeta. Raises on parse errors.
+
+    Strict by design — used for direct ref lookups (``resolve``,
+    ``_ensure_meta``) where the caller is asking about a specific
+    artifact and silent failure would be misleading. Enumeration
+    contexts (``list_artifacts``, ``search``) wrap this with
+    :func:`_meta_from_file_safe` to keep one broken file from
+    poisoning the whole vault walk.
+    """
     text = path.read_text(encoding="utf-8")
     fm, _ = _frontmatter.parse(text)
     name = fm.get("name", path.stem)
@@ -52,6 +62,24 @@ def _meta_from_file(path: Path) -> ArtifactMeta:
         path=path,
         frontmatter=dict(fm),
     )
+
+
+def _meta_from_file_safe(path: Path) -> ArtifactMeta | None:
+    """Like :func:`_meta_from_file` but skip-on-error for enumeration.
+
+    On any parse failure, writes a single-line warning to ``sys.stderr``
+    and returns ``None`` so the caller can drop the file from results.
+    Used by ``list_artifacts`` / ``search`` so a single malformed
+    artifact cannot break every CLI command that walks the vault.
+    """
+    try:
+        return _meta_from_file(path)
+    except Exception as exc:
+        sys.stderr.write(
+            f"warning: skipping {path}: malformed frontmatter "
+            f"({type(exc).__name__}: {exc})\n"
+        )
+        return None
 
 
 def _known_keys_for_kind(registry: "Registry", kind_name: str) -> set[str]:
@@ -155,7 +183,9 @@ def list_artifacts(
         if not subdir.is_dir():
             continue
         for path in sorted(subdir.glob("*.md")):
-            meta = _meta_from_file(path)
+            meta = _meta_from_file_safe(path)
+            if meta is None:
+                continue
             if filters:
                 match = True
                 for k, v in filters.items():
@@ -298,7 +328,8 @@ def search(
                 seen.add(path)
                 all_matches.append(path)
 
-    return [_meta_from_file(p) for p in sorted(all_matches)]
+    metas = (_meta_from_file_safe(p) for p in sorted(all_matches))
+    return [m for m in metas if m is not None]
 
 
 # ---------------------------------------------------------------------------
