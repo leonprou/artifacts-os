@@ -91,3 +91,4 @@
 {"ts":"2026-05-15T22:15:35.318095+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0161-fix-create-fields-relationship-support","duration_ms":34792}
 {"ts":"2026-05-15T22:19:33.999472+03:00","event":"status_transition","task":"t0150-artbook-distribution-model","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-05-15T22:19:39.580674+03:00","event":"status_transition","task":"t0150-artbook-distribution-model","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-15T22:20:13.071952+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0150-artbook-distribution-model","duration_ms":33488}

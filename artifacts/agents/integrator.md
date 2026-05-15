@@ -4,10 +4,7 @@ name: integrator
 alias: ig
 aliases:
   - ig
-description: >-
-  Forward-deployed integration agent — ships the artifacts-os harness
-  into use (internal dogfood today, external adopters later), catalogs
-  friction, and converts the experience into signal for product.
+description: Forward-deployed integration agent — ships the artifacts-os harness into use (internal dogfood today, external adopters later), catalogs friction, and converts the experience into signal for product.
 model: claude-sonnet-4-6
 skills:
   - artifacts-os
