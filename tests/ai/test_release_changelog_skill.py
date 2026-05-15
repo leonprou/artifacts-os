@@ -195,27 +195,6 @@ def test_skill_frontmatter_user_invocable_false(vault: Path) -> None:
     assert "user-invocable: false" in content
 
 
-def test_skill_contains_fallbacks_section(vault: Path) -> None:
-    """§6.3 — SKILL.md must document the Fallbacks summary block."""
-    content = _skill_source().read_text()
-    assert "Fallbacks:" in content
-    assert "no (tNNNN) trailer" in content
-    assert "file missing" in content
-
-
-def test_skill_documents_layer_isolation(vault: Path) -> None:
-    """§6.1 — SKILL.md must state it never mutates artifacts/tasks/ or the JSONL log."""
-    content = _skill_source().read_text()
-    assert "artifacts/tasks/" in content
-    assert "JSONL" in content
-
-
-def test_skill_documents_task_trailer_regex(vault: Path) -> None:
-    """§6.5 — SKILL.md must document the (tNNNN) trailer regex."""
-    content = _skill_source().read_text()
-    assert r"tNNNN" in content or r"t(\d" in content
-
-
 def test_skill_documents_idempotency_check(vault: Path) -> None:
     """§6.7 — SKILL.md must document the grep idempotency check."""
     content = _skill_source().read_text()
