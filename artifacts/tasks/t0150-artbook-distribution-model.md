@@ -5,7 +5,7 @@ id: t0150
 kind: task
 name: artbook-distribution-model
 owner: user
-status: in-progress
+status: done
 type: feature
 subtasks:
   - "[[t0151-spec-the-artbook-model]]"
@@ -13,6 +13,7 @@ subtasks:
   - "[[t0153-artbook-module-manifest-fetch-placement]]"
   - "[[t0154-artifacts-book-cli-command-list]]"
   - "[[t0155-publish-artifacts-os-as-its]]"
+completed: 2026-05-15
 ---
 
 # Artbook Distribution Model
