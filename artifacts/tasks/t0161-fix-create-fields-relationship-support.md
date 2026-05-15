@@ -5,7 +5,7 @@ id: t0161
 kind: task
 name: fix-create-fields-relationship-support
 owner: user
-status: ready
+status: review
 type: implementation
 ---
 
@@ -69,3 +69,21 @@ Surfaced during filing of:
 
 Related (separate body-handling bugs already in queue):
 - [[t0147]] / [[t0148]] — `openstation create --body-file` silent failures
+## Findings
+
+Implemented both gaps. No architectural surprises.
+
+**Array wikilink fields** (`_parse_fields`):
+- Added `_SCALAR_WIKILINK_FIELDS = {"parent"}` and `_ARRAY_WIKILINK_FIELDS = {"depends_on", "subtasks", "artifacts"}`.
+- Added `_array_wikilink_fields_from_schema` — detects additional wikilink array fields from the kind schema's `items.pattern` at runtime.
+- `_parse_fields` now accepts `schema=` kwarg. Array wikilink fields always produce a list (single value → one-element list) with each element wrapped as `[[…]]`. Scalar wikilink fields keep the existing wrap-in-place behavior.
+- Chosen syntax: comma-separated — `--fields depends_on=t0001,t0002` — already partially implemented and documented in `--help`.
+
+**Parent backlink** (`_backlink_parent` + `run`):
+- `run()` resolves parent *before* writing the child. Missing parent → `error:` + exit 1, no orphan.
+- After child is created, `_backlink_parent` atomically appends `[[child-stem]]` to parent's `subtasks` (tmp → `os.replace`). Idempotent.
+- Both `--parent REF` and `--fields parent=REF` trigger the backlink.
+
+**Tests**: 8 new tests cover array set, backlink via both flag paths, missing parent, idempotency, multiple children, pre-wrapped refs. 3 existing tests updated to create the parent first (required by the new validation rule). 46/46 pass.
+
+**Docs**: `--fields` help text updated in `register()`; `artifacts-os` skill `### Create` section updated with comma-separated array syntax and parent-backlink behaviour.
