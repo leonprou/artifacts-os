@@ -94,14 +94,23 @@ artifacts create "<title>" [--kind KIND] [--body TEXT] [--fields KEY=VALUE …]
 - For numbered kinds (e.g. `task`, `spec`) the ID is auto-assigned.
 - For non-numbered kinds (e.g. `agent`) the title becomes the slug.
 - `--fields` accepts multiple `KEY=VALUE` pairs after a single flag.
+- **Comma-separated values produce a list** (e.g. `tags=a,b,c`).
+- **Wikilink array fields** (`depends_on`, `subtasks`, `artifacts`)
+  accept comma-separated refs and are auto-wrapped as `[[…]]`
+  (e.g. `depends_on=t0001,t0002` → `["[[t0001]]", "[[t0002]]"]`).
+- **Parent backlink:** setting `parent=REF` (via `--parent` or
+  `--fields parent=…`) auto-appends the new artifact's wikilink
+  to the parent's `subtasks` array. The parent must already
+  exist — otherwise the command fails before any write.
 
 ```bash
 artifacts create "Fix login bug"                                  # → t0043
 artifacts create "researcher" --kind agent                        # → researcher
 artifacts create "Deploy pipeline" \
   --kind task \
-  --fields status=ready assignee=developer \
+  --fields status=ready assignee=developer depends_on=t0001,t0002 \
   --body "## Steps\n- Step 1\n- Step 2"
+artifacts create "Child task" --parent t0043                      # back-links into t0043.subtasks
 ```
 
 ### Update status — `artifacts status`

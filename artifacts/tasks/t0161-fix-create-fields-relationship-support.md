@@ -5,8 +5,9 @@ id: t0161
 kind: task
 name: fix-create-fields-relationship-support
 owner: user
-status: review
+status: verified
 type: implementation
+started: 2026-05-15
 ---
 
 # Fix Create Fields Relationship Support
@@ -52,13 +53,31 @@ Both push the operator (or PM agent) toward direct file edits, which violates th
 
 ## Verification
 
-- [ ] `artifacts create "…" --kind task --fields depends_on=…` populates `depends_on` as a wikilink array (chosen syntax documented in `--help`).
-- [ ] Creating a child with `--fields parent="[[parent-ref]]"` results in the parent's `subtasks` array containing the new child's wikilink.
-- [ ] Creating a child whose parent does not exist fails with a clear error before any write happens.
-- [ ] Re-creating an existing child link is idempotent — parent's `subtasks` array unchanged.
-- [ ] `artifacts create --help` documents the array-field syntax.
-- [ ] The `artifacts-os` skill `### Create` section is updated to match.
-- [ ] Tests cover all four cases (array set, parent backlink, missing parent, idempotency).
+- [x] `artifacts create "…" --kind task --fields depends_on=…` populates `depends_on` as a wikilink array (chosen syntax documented in `--help`).
+- [x] Creating a child with `--fields parent="[[parent-ref]]"` results in the parent's `subtasks` array containing the new child's wikilink.
+- [x] Creating a child whose parent does not exist fails with a clear error before any write happens.
+- [x] Re-creating an existing child link is idempotent — parent's `subtasks` array unchanged.
+- [x] `artifacts create --help` documents the array-field syntax.
+- [x] The `artifacts-os` skill `### Create` section is updated to match.
+- [x] Tests cover all four cases (array set, parent backlink, missing parent, idempotency).
+
+## Verification Report
+
+*Verified: 2026-05-15*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | `--fields depends_on=…` populates wikilink array | PASS | `_parse_fields` (create.py:217-256) handles array wikilink fields; tests `test_fields_wikilink_comma_list`, `test_fields_array_wikilink_single_value`, `test_fields_subtasks_comma_list`, `test_fields_artifacts_comma_list`, `test_fields_array_wikilink_already_wrapped` pass |
+| 2 | `--fields parent=…` triggers parent subtasks backlink | PASS | `_backlink_parent` + `run()` (create.py:271-291, 395-426); test `test_parent_backlink_via_fields_flag` confirms |
+| 3 | Missing parent fails before write | PASS | `run()` resolves parent before child create at create.py:395-406; test `test_parent_missing_fails_before_write` asserts no child written on exit code 1 |
+| 4 | Re-creating existing child link is idempotent | PASS | `_backlink_parent` early-returns when child link already in subtasks (create.py:282-283); test `test_parent_backlink_idempotent` confirms count==1 |
+| 5 | `--help` documents array-field syntax | PASS | `--fields` help text (create.py:196-204) explicitly documents wikilink array fields + comma-separated refs + parent backlink — confirmed via live `artifacts create --help` |
+| 6 | `artifacts-os` skill `### Create` section updated | PASS | `src/artifacts_os/ai/claude/skills/artifacts-os/SKILL.md` `### Create` section (lines 93-104) now documents comma-separated lists, wikilink array fields with auto-wrap, and parent-backlink semantics. `.openstation/skills/artifacts-os/SKILL.md` is a symlink to the same file |
+| 7 | Tests cover all four cases | PASS | `tests/cli/test_create.py` contains 8 new tests including array set, backlink via both `--parent` and `--fields`, missing parent, idempotency, multiple children, pre-wrapped refs; 46/46 pass |
+
+### Summary
+
+7 passed, 0 failed. All verification criteria met.
 
 ## References
 
