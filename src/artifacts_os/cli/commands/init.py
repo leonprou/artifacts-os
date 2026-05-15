@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import tempfile
 from importlib.resources import files
 from pathlib import Path
 
@@ -251,6 +252,179 @@ def _print_fail(rel: str, reason: str) -> None:
     print(f"  ✗ {rel}: {reason}", file=sys.stderr)
 
 
+# ─── Distro step ───────────────────────────────────────────────────────────
+
+
+def _distro_item_names(entries: list, recurse: bool) -> list[str]:
+    """Return canonical item names from *entries* for display and selection.
+
+    Flat / allowlist books → stems.  Recurse books → unit folder names.
+    Preserves encounter order and deduplicates.
+    """
+    seen: dict[str, None] = {}
+    for _abs, rel in entries:
+        if recurse:
+            key = rel.parts[0] if rel.parts else ""
+        else:
+            key = rel.stem
+        if key:
+            seen[key] = None
+    return list(seen)
+
+
+def _run_distro_step(
+    distro_url: str,
+    books_flag: str | None,
+    target: Path,
+    *,
+    yes: bool,
+    dry_run: bool,
+    is_tty: bool,
+) -> bool:
+    """Execute Step 4: clone the distro and pull selected books.
+
+    Returns True if any error occurred (clone failure or per-book failure).
+    The vault files (artifacts.yaml, kinds, agents) have already been written
+    by the time this function is called (req 7).
+    """
+    import artifacts_os.artbook as artbook
+    from artifacts_os.artbook import FetchError, ManifestError
+    from artifacts_os.artbook.errors import ArtbookError
+    from artifacts_os.artbook.placement import (
+        _select_files,
+        destination_for,
+        filter_entries_by_items,
+    )
+
+    print()
+
+    # Req 12: dry-run — report intended action without cloning or writing.
+    if dry_run:
+        flag_info = f" (books: {books_flag})" if books_flag else " (all books)"
+        print(f"  [would] pull from distro: {distro_url}{flag_info}")
+        return False
+
+    print("Fetching distro manifest…")
+    try:
+        with tempfile.TemporaryDirectory(prefix="artbook-init-") as td:
+            clone_root = Path(td) / "clone"
+            try:
+                manifest, _ = artbook.read_manifest(distro_url, clone_into=clone_root)
+            except FetchError as exc:
+                print(
+                    f"error: git clone failed (exit {exc.returncode}): "
+                    f"{exc.stderr.strip()}",
+                    file=sys.stderr,
+                )
+                return True
+            except ManifestError as exc:
+                print(f"error: distro manifest invalid: {exc}", file=sys.stderr)
+                return True
+
+            all_book_names = [b.name for b in manifest.books]
+
+            # ── Determine which books to pull ─────────────────────────
+            if books_flag is not None:
+                # --books flag supplied — skip book-selection prompt (req 2)
+                lower_flag = books_flag.strip().lower()
+                if lower_flag == "all":
+                    selected_book_names = list(all_book_names)
+                else:
+                    tokens = [t.strip() for t in books_flag.split(",") if t.strip()]
+                    invalid = [t for t in tokens if t not in all_book_names]
+                    if invalid:
+                        avail = ", ".join(all_book_names)
+                        print(
+                            f"error: unknown book(s) in --books: {', '.join(invalid)}; "
+                            f"available: {avail}",
+                            file=sys.stderr,
+                        )
+                        return True
+                    selected_book_names = tokens
+            elif yes:
+                # Req 4: -y + distro → all books, all items
+                selected_book_names = list(all_book_names)
+            else:
+                # Interactive book selection (req 3)
+                print()
+                print("Available books:")
+                for b in manifest.books:
+                    desc = f" — {b.description}" if b.description else ""
+                    print(f"  {b.name:<20} → {b.dest}{desc}")
+                selected_book_names = _prompt_multi_step(
+                    "Step 4 of 4: Distro books",
+                    all_book_names,
+                    all_book_names,
+                )
+
+            if not selected_book_names:
+                print("  No books selected — skipping distro pull.")
+                return False
+
+            # ── Pull each selected book ───────────────────────────────
+            had_error = False
+            for book_name in selected_book_names:
+                book = next(b for b in manifest.books if b.name == book_name)
+                src_dir = clone_root / book.src
+
+                try:
+                    all_entries = _select_files(src_dir, book)
+                except (ManifestError, ArtbookError) as exc:
+                    print(
+                        f"  error: book '{book_name}': {exc}", file=sys.stderr
+                    )
+                    had_error = True
+                    continue
+
+                preselected = None
+                if not yes and is_tty:
+                    # Interactive item selection (req 3 — per-book item subset)
+                    item_names = _distro_item_names(all_entries, book.recurse)
+                    if item_names:
+                        print()
+                        print(f"  Book '{book_name}' items:")
+                        for item in item_names:
+                            print(f"    • {item}")
+                        selected_items = _prompt_multi_step(
+                            f"  Items from '{book_name}'",
+                            item_names,
+                            item_names,
+                        )
+                        if set(selected_items) != set(item_names):
+                            filtered, _unmatched, _ = filter_entries_by_items(
+                                all_entries,
+                                selected_items,
+                                recurse=book.recurse,
+                            )
+                            preselected = filtered
+
+                try:
+                    report = artbook.pull_book(
+                        book,
+                        clone_root,
+                        target,
+                        distro_url=distro_url,
+                        distro_sha="",
+                        preselected=preselected,
+                    )
+                    n = len(report.written)
+                    print(
+                        f"  ✓ {book_name}: {n} file{'s' if n != 1 else ''} written"
+                    )
+                except (ManifestError, ArtbookError) as exc:
+                    # Req 11: continue with remaining books on per-book failure
+                    print(
+                        f"  error: book '{book_name}': {exc}", file=sys.stderr
+                    )
+                    had_error = True
+
+            return had_error
+
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: distro step failed unexpectedly: {exc}", file=sys.stderr)
+        return True
+
+
 # ─── Flag validation ───────────────────────────────────────────────────────
 
 
@@ -371,6 +545,24 @@ def register(subparsers) -> None:
         action="store_true",
         help="also create 'openstation -> artifacts' symlink",
     )
+    p.add_argument(
+        "--distro",
+        default=None,
+        metavar="URL",
+        help=(
+            "git-clonable distro URL; activates Step 4 (distro book pull) after "
+            "vault files are written. Use -y to pull all books/items non-interactively."
+        ),
+    )
+    p.add_argument(
+        "--books",
+        default=None,
+        metavar="CSV",
+        help=(
+            "comma-separated book names to pull from distro (skips book-selection prompt). "
+            "Use 'all' for every book. Requires --distro."
+        ),
+    )
     p.set_defaults(func=run, _pre_registry=True)
 
 
@@ -401,6 +593,13 @@ def run(args) -> int:  # no registry — called before vault setup
         print(f"error: could not load bundled templates: {exc}", file=sys.stderr)
         return 2
 
+    # ── Validate --books requires --distro ────────────────────────
+    distro_url: str | None = getattr(args, "distro", None)
+    books_flag: str | None = getattr(args, "books", None)
+    if books_flag is not None and not distro_url:
+        print("error: --books requires --distro", file=sys.stderr)
+        return 2
+
     # ── Validate --kinds / --agents flag values (before any I/O) ──
     flag_kinds: list[str] | None = None
     flag_agents: list[str] | None = None
@@ -427,10 +626,17 @@ def run(args) -> int:  # no registry — called before vault setup
 
     # ── Non-TTY guard (D3) ─────────────────────────────────────
     is_tty = sys.stdin.isatty()
+    # Distro step is fully flagged when: no distro given, --books supplied, or dry-run
+    distro_fully_flagged = (
+        not distro_url
+        or books_flag is not None
+        or getattr(args, "dry_run", False)
+    )
     all_flags = (
         args.template is not None
         and args.kinds is not None
         and args.agents is not None
+        and distro_fully_flagged
     )
     if not is_tty and not args.yes and not all_flags:
         print(
@@ -504,6 +710,12 @@ def run(args) -> int:  # no registry — called before vault setup
     settings_content = _interpolate(
         settings_content, project_name, project_alias, today_iso
     )
+
+    # Req 6: inject artbook.distro_url before writing artifacts.yaml
+    if distro_url:
+        settings_content = settings_content.rstrip("\n") + (
+            f"\n\nartbook:\n  distro_url: {distro_url}\n"
+        )
 
     # ── Write loop ─────────────────────────────────────────────
     print("Writing files...")
@@ -594,6 +806,20 @@ def run(args) -> int:  # no registry — called before vault setup
                     failed += 1
                     failures.append((rel_sym, str(exc)))
 
+    # ── Step 4: Distro (req 3–12) ──────────────────────────────
+    # Vault files are written first (req 7); then clone + pull.
+    # When -y and no --distro: skip silently (req 5).
+    distro_had_error = False
+    if distro_url:
+        distro_had_error = _run_distro_step(
+            distro_url,
+            books_flag,
+            target,
+            yes=args.yes,
+            dry_run=args.dry_run,
+            is_tty=is_tty,
+        )
+
     # ── Final output ───────────────────────────────────────────
     print()
     if args.dry_run:
@@ -601,12 +827,15 @@ def run(args) -> int:  # no registry — called before vault setup
         return 0
 
     print(f"Initialised artifacts-os project: {target}")
-    if failed > 0:
+    if failed > 0 or distro_had_error:
         print(f"  {written} files written, {failed} failed.")
-        print()
-        print("Failures:")
-        for path, reason in failures:
-            print(f"  ✗ {path}: {reason}")
+        if distro_had_error:
+            print("  Distro pull completed with errors (see above).")
+        if failures:
+            print()
+            print("Failures:")
+            for path, reason in failures:
+                print(f"  ✗ {path}: {reason}")
         return 1
 
     return 0

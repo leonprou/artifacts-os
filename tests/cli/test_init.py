@@ -733,3 +733,261 @@ class TestFullVaultStructure:
         main(["list", "-q"])
         out = capsys.readouterr().out
         assert out == ""  # empty vault
+
+
+# ─── §18.11 Distro integration (--distro / --books) ────────────────────────
+
+
+def _git(args: list, cwd: Path) -> None:
+    import subprocess
+    subprocess.run(args, cwd=cwd, check=True, capture_output=True)
+
+
+def _make_distro_repo(root: Path) -> Path:
+    """Create a minimal distro git repo with one 'agents' and one 'cmds' book."""
+    import yaml
+
+    root.mkdir(parents=True, exist_ok=True)
+    _git(["git", "init", "--initial-branch", "main"], root)
+    _git(["git", "config", "user.email", "test@test.com"], root)
+    _git(["git", "config", "user.name", "Test"], root)
+
+    # agents book (flat walker)
+    agents_dir = root / "agents"
+    agents_dir.mkdir()
+    (agents_dir / "architect.md").write_text("# Architect\nbody.", encoding="utf-8")
+    (agents_dir / "developer.md").write_text("# Developer\nbody.", encoding="utf-8")
+
+    # cmds book (flat walker)
+    cmds_dir = root / "cmds"
+    cmds_dir.mkdir()
+    (cmds_dir / "foo.md").write_text("# Foo command\nbody.", encoding="utf-8")
+
+    artbook = {
+        "version": 1,
+        "distro": {"name": "test-distro", "description": "Test distro."},
+        "books": [
+            {
+                "name": "agents",
+                "src": "agents/",
+                "dest": ".claude/agents/",
+                "description": "Agent specs.",
+            },
+            {
+                "name": "cmds",
+                "src": "cmds/",
+                "dest": ".claude/commands/",
+                "description": "Slash commands.",
+            },
+        ],
+    }
+    (root / "artbook.yaml").write_text(yaml.dump(artbook), encoding="utf-8")
+    _git(["git", "add", "."], root)
+    _git(["git", "commit", "-m", "init"], root)
+    return root
+
+
+class TestDistroIntegration:
+    """§18.11 — --distro / --books flag behaviour."""
+
+    def test_18_11_yes_no_distro_skips_silently(self, tmp_path, monkeypatch, capsys):
+        """Req 5: -y with no --distro — no network call, exit 0."""
+        monkeypatch.chdir(tmp_path)
+        main(["init", "--template", "minimal", "--kinds", "none", "--agents", "none", "-y"])
+        out = capsys.readouterr().out
+        # No distro-step messages should appear
+        assert "Fetching distro manifest" not in out
+        assert "[would] pull from distro" not in out
+
+    def test_18_11_books_without_distro_exits_2(self, tmp_path, monkeypatch, capsys):
+        """--books requires --distro; exit 2 with error message."""
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "init",
+                "--template", "minimal", "--kinds", "none", "--agents", "none",
+                "--books", "agents",
+            ])
+        assert exc.value.code == 2
+        assert "--books requires --distro" in capsys.readouterr().err
+
+    def test_18_11_distro_url_injected_in_yaml(self, tmp_path, monkeypatch):
+        """Req 6: artbook.distro_url written into artifacts.yaml."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        main([
+            "init",
+            "--template", "minimal", "--kinds", "none", "--agents", "none",
+            "--distro", str(distro),
+            "--books", "agents", "-y",
+        ])
+        import yaml as _yaml
+        data = _yaml.safe_load((vault / "artifacts.yaml").read_text())
+        assert data.get("artbook", {}).get("distro_url") == str(distro)
+
+    def test_18_11_pull_all_books_y(self, tmp_path, monkeypatch):
+        """Req 4: --distro + -y pulls all books, all items."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        main([
+            "init",
+            "--template", "minimal", "--kinds", "none", "--agents", "none",
+            "--distro", str(distro),
+            "-y",
+        ])
+        assert (vault / ".claude" / "agents" / "architect.md").is_file()
+        assert (vault / ".claude" / "agents" / "developer.md").is_file()
+        assert (vault / ".claude" / "commands" / "foo.md").is_file()
+
+    def test_18_11_pull_specific_book(self, tmp_path, monkeypatch):
+        """Req 2: --books agents -y pulls only agents book."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        main([
+            "init",
+            "--template", "minimal", "--kinds", "none", "--agents", "none",
+            "--distro", str(distro),
+            "--books", "agents",
+            "-y",
+        ])
+        assert (vault / ".claude" / "agents" / "architect.md").is_file()
+        # cmds book NOT pulled
+        assert not (vault / ".claude" / "commands" / "foo.md").is_file()
+
+    def test_18_11_vault_written_before_distro_pull(self, tmp_path, monkeypatch):
+        """Req 7: artifacts.yaml exists before distro clone attempted."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        main([
+            "init",
+            "--template", "minimal", "--kinds", "none", "--agents", "none",
+            "--distro", str(distro),
+            "--books", "agents",
+            "-y",
+        ])
+        # Vault must be initialised regardless
+        assert (vault / "artifacts.yaml").is_file()
+
+    def test_18_11_clone_failure_vault_kept_nonzero_exit(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Req 10: clone fail → vault files kept, error printed, exit 1."""
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "init",
+                "--template", "minimal", "--kinds", "none", "--agents", "none",
+                "--distro", "https://invalid.example.com/no-such-repo.git",
+                "-y",
+            ])
+        assert exc.value.code == 1
+        # Vault files still present
+        assert (vault / "artifacts.yaml").is_file()
+        err = capsys.readouterr().err
+        assert "error" in err.lower()
+
+    def test_18_11_dry_run_no_clone_no_write(self, tmp_path, monkeypatch, capsys):
+        """Req 12: --dry-run prints planned pull without cloning or writing."""
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        # Pass an invalid URL — if cloning happened this would fail
+        main([
+            "init",
+            "--template", "minimal", "--kinds", "none", "--agents", "none",
+            "--distro", "https://invalid.example.com/no-such-repo.git",
+            "--books", "agents",
+            "-y", "--dry-run",
+        ])
+        out = capsys.readouterr().out
+        assert "[would]" in out
+        assert "invalid.example.com" in out
+        # No files written
+        assert not (vault / "artifacts.yaml").is_file()
+
+    def test_18_11_per_book_failure_continues_nonzero(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Req 11: per-book pull failure → continue other books, exit 1."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+
+        # Monkey-patch pull_book to fail on 'agents' but succeed otherwise
+        import artifacts_os.artbook as artbook_module
+
+        original_pull = artbook_module.pull_book
+
+        def patched_pull(book, clone_root, vault_root, **kw):
+            if book.name == "agents":
+                from artifacts_os.artbook.errors import ArtbookError
+                raise ArtbookError("simulated failure for agents")
+            return original_pull(book, clone_root, vault_root, **kw)
+
+        monkeypatch.setattr(artbook_module, "pull_book", patched_pull)
+
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "init",
+                "--template", "minimal", "--kinds", "none", "--agents", "none",
+                "--distro", str(distro),
+                "-y",
+            ])
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "agents" in err  # error reported for agents book
+        # cmds book should have been pulled despite agents failure
+        assert (vault / ".claude" / "commands" / "foo.md").is_file()
+
+    def test_18_11_unknown_book_in_books_flag(self, tmp_path, monkeypatch, capsys):
+        """--books with unknown book name → error after clone, no pull, exit 1."""
+        distro = _make_distro_repo(tmp_path / "distro")
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.chdir(vault)
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "init",
+                "--template", "minimal", "--kinds", "none", "--agents", "none",
+                "--distro", str(distro),
+                "--books", "nonexistent-book",
+                "-y",
+            ])
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "nonexistent-book" in err
+
+
+# ─── §18.12 Documentation content checks ─────────────────────────────────
+
+
+class TestDocContent:
+    """Verify documentation files contain required consumer-facing content."""
+
+    def test_18_12_artbook_md_has_consumer_quickstart(self):
+        """docs/artbook.md must contain --distro quickstart section."""
+        docs_dir = Path(__file__).parents[2] / "docs" / "artbook.md"
+        text = docs_dir.read_text(encoding="utf-8")
+        assert "--distro" in text
+        assert "Consumer Quickstart" in text
+
+    def test_18_12_cli_readme_documents_distro_and_books(self):
+        """cli/README.md init section must document --distro and --books."""
+        readme = (
+            Path(__file__).parents[2]
+            / "src" / "artifacts_os" / "cli" / "README.md"
+        )
+        text = readme.read_text(encoding="utf-8")
+        assert "--distro" in text
+        assert "--books" in text

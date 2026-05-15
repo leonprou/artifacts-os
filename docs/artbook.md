@@ -281,3 +281,62 @@ books:
 A consumer pulling all four books gets a fully wired Claude Code
 setup (`.claude/agents/`, `.claude/commands/`, `.claude/skills/`)
 plus the standard artifact kind definitions (`artifacts/kinds/`).
+
+---
+
+## Consumer Quickstart — `artifacts init --distro`
+
+The fastest way to bootstrap a new project and pull books from a
+distro in one step is `artifacts init --distro <url>`.
+
+### Non-interactive — pull everything
+
+```bash
+# Initialise with defaults and pull all books, all items
+artifacts init --distro https://github.com/my-org/artbook-defaults -y
+```
+
+`-y` accepts all default selections (settings tier, kinds, agents)
+and pulls **every book and every item** from the distro without
+prompting.
+
+### Non-interactive — pull specific books
+
+```bash
+# Pull only the 'agents' and 'skills' books
+artifacts init --distro https://github.com/my-org/artbook-defaults \
+    --books agents,skills -y
+```
+
+### Interactive
+
+Without `-y`, `init` walks the normal three-step selection flow and
+then adds **Step 4: Distro** — a multi-select prompt for books,
+followed by a per-book item subset prompt.
+
+```bash
+artifacts init --distro https://github.com/my-org/artbook-defaults
+# Step 1: pick settings tier
+# Step 2: pick kinds
+# Step 3: pick agents
+# Step 4: pick books from distro, then items per book
+```
+
+### What gets written
+
+1. `artifacts.yaml` — with `artbook.distro_url` set to `<url>`
+2. Kind schemas and ARTIFACT templates under `artifacts/kinds/`
+3. Agent specs under `artifacts/agents/` (if selected)
+4. Book content placed according to each book's `dest` field
+
+The vault files are written **before** the distro clone so that
+`pull_book` destination resolution is always valid.
+
+### Dry-run
+
+```bash
+artifacts init --distro https://github.com/my-org/artbook-defaults -y --dry-run
+```
+
+Prints what vault files would be written and reports the planned
+distro pull **without** cloning or writing anything.

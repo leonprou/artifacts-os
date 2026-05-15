@@ -653,16 +653,18 @@ artifacts verify t0042 -j
 ```
 artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
                [--force] [-y] [--dry-run] [--openstation-compat]
+               [--distro URL] [--books CSV]
 ```
 
 Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
-Walks a three-step selection flow (settings tier → kinds → agents), then writes
-`artifacts.yaml`, per-kind storage directories, per-kind JSON schemas
-under `artifacts/kinds/`, and optionally installs agent specs.
+Walks a selection flow (settings tier → kinds → agents, and optionally distro
+books), then writes `artifacts.yaml`, per-kind storage directories, per-kind
+JSON schemas under `artifacts/kinds/`, and optionally installs agent specs.
 
 All steps can be driven by flags for non-interactive use. On a TTY, un-flagged
 steps prompt interactively. Pass `-y` to accept defaults for every un-flagged
-step. Refuses to run in non-TTY mode unless `-y` or all three flags are supplied.
+step. Refuses to run in non-TTY mode unless `-y` or all applicable flags are
+supplied.
 
 | Flag | Description |
 |------|-------------|
@@ -674,13 +676,25 @@ step. Refuses to run in non-TTY mode unless `-y` or all three flags are supplied
 | `-y` / `--yes` | Accept defaults at every un-flagged step (enables non-interactive mode). |
 | `--dry-run` | Print planned writes without writing anything. |
 | `--openstation-compat` | Also create the legacy `openstation → artifacts` symlink. |
+| `--distro URL` | Git-clonable distro URL. Activates **Step 4: Distro** after vault files are written. Also injects `artbook.distro_url` into `artifacts.yaml`. |
+| `--books CSV` | Comma-separated book names to pull from the distro. `all` selects every book. Skips the book-selection prompt. Requires `--distro`. |
 
 **Bundled catalogue:**
 
 - **Kinds** (5): `task` ✓, `note` ✓, `spec` ✓ (defaults), `research`, `agent`
-- **Agents** (5): `architect`, `author`, `developer`, `researcher`, `technical-writer`
+- **Agents** (9): `architect`, `author`, `developer`, `devrel`, `product-manager`, `project-manager`, `researcher`, `security-engineer`, `technical-writer`
 
 Selecting any agent auto-includes the `agent` kind (D10).
+
+**Distro step behaviour:**
+
+- `--distro` + `-y` → pulls **all books, all items** with no prompts.
+- `--distro` + `-y` omitted + TTY → interactive book-selection prompt, then per-book item-subset prompt (default: all items).
+- `--distro` + `--books agents,skills` → skips book prompt; still prompts for items per book when on a TTY and `-y` is not set.
+- `-y` with no `--distro` → distro step skipped silently.
+- `--dry-run` → prints `[would] pull from distro: <url>` without cloning or writing.
+
+Vault files (`artifacts.yaml`, kinds, agents) are written **before** the distro clone so destination resolution is always valid.
 
 **Examples:**
 
@@ -699,9 +713,19 @@ artifacts init --force -y
 
 # Dry-run to preview what would be written
 artifacts init --template standard --kinds all --agents none --dry-run
+
+# Bootstrap and pull all books from a distro (non-interactive)
+artifacts init --distro https://github.com/my-org/artbook-defaults -y
+
+# Bootstrap and pull only the 'agents' book from a distro
+artifacts init --distro https://github.com/my-org/artbook-defaults --books agents -y
+
+# Interactive distro setup — prompts for books and items
+artifacts init --distro https://github.com/my-org/artbook-defaults
 ```
 
-See [docs/init-flow.md](../../docs/init-flow.md) for the full three-step flow.
+See [docs/init-flow.md](../../docs/init-flow.md) for the full selection flow.
+See [docs/artbook.md](../../docs/artbook.md) for distro authoring and consumer quickstart.
 
 ---
 
