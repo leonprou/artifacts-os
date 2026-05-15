@@ -89,7 +89,7 @@ views:
 
   # ===== SPEC views =====
 
-  spec:
+  specs:
     columns: id,name,status,created:date
     filters: { kind: spec }
     sort: -created
@@ -113,10 +113,10 @@ views:
 
   # ===== NOTE views =====
 
-  note:
+  notes:
     columns: id,name,type,created:date
     filters: { kind: note }
-    sort: -created
+    sort: id
 
   note-planning:
     columns: id,name,created:date
@@ -138,10 +138,10 @@ views:
 
 default_views:
   task: active
-  spec: spec
+  spec: specs
   research: research
   agent: agents
-  note: note
+  note: notes
 
 cli:
   defaults:

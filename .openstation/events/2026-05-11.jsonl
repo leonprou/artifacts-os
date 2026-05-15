@@ -7,3 +7,11 @@
 {"ts":"2026-05-11T16:09:39.398082+03:00","event":"status_transition","task":"t0131-move-artifacts-yaml-to-project","old_status":"verified","new_status":"done","forced":false}
 {"ts":"2026-05-11T16:11:01.927032+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0138-docs-sweep-for-vault-marker","duration_ms":106204}
 {"ts":"2026-05-11T16:11:09.602002+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0131-move-artifacts-yaml-to-project","duration_ms":90201}
+{"ts":"2026-05-11T23:37:34.622162+03:00","event":"status_transition","task":"t0142-drop-legacy-flat-kind-schema","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-11T23:37:37.795449+03:00","event":"run_started","task":"t0142-drop-legacy-flat-kind-schema","agent":"developer","run_id":"r0157","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-11T23:38:04.942093+03:00","event":"status_transition","task":"t0142-drop-legacy-flat-kind-schema","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-11T23:50:07.293913+03:00","event":"status_transition","task":"t0142-drop-legacy-flat-kind-schema","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-11T23:50:20.322454+03:00","event":"run_complete","task":"t0142-drop-legacy-flat-kind-schema","agent":"developer","run_id":"r0157","run_status":"complete","cost":"3.36","turns":82}
+{"ts":"2026-05-11T23:55:03.623962+03:00","event":"run_started","task":"t0142-drop-legacy-flat-kind-schema","agent":"project-manager","run_id":"r0158","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-11T23:58:19.166671+03:00","event":"status_transition","task":"t0142-drop-legacy-flat-kind-schema","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-11T23:58:32.458608+03:00","event":"run_complete","task":"t0142-drop-legacy-flat-kind-schema","agent":"","run_id":"r0158","run_status":"complete","cost":"1.24","turns":26}

@@ -5,7 +5,7 @@ id: t0041
 kind: task
 name: ai-claude-commands-support
 owner: user
-status: in-progress
+status: backlog
 subtasks:
   - '[[t0043-author-browse-and-inspect-claude]]'
   - "[[t0044-cli-ai-install-module]]"
