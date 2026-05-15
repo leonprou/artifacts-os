@@ -896,6 +896,132 @@ If `<view_name>` is not defined, the command exits `2` with
 
 ---
 
+### `book` — Browse and pull books from a configured distro
+
+> **Namespaced exception to flat verbs.** `book` is the one command that
+> uses a resource namespace (`book list`, `book show`, `book pull`) rather
+> than a top-level flat verb. This matches the natural sentence structure
+> of distro operations and follows the precedent set in spec
+> s0029-artbook-mvp-distribution-model §5.1.
+
+```
+artifacts book list                [--json]
+artifacts book show <name>         [--json]
+artifacts book pull <name>         [--json] [--dry-run]
+```
+
+Configure the distro URL once in `artifacts.yaml`:
+
+```yaml
+artbook:
+  distro_url: https://github.com/your-org/artbook-defaults
+```
+
+> **Creating a distro?** See [`docs/artbook.md`](../../docs/artbook.md)
+> for the author guide — `artbook.yaml` schema, walker modes, and
+> destination patterns.
+
+#### `book list` — list available books
+
+Reads the distro manifest and prints one row per book. When
+`artbook.yaml` is present at the vault root, it is read directly
+without cloning (local-manifest auto-detect). Otherwise the distro
+URL is cloned.
+
+```
+Distro: artifacts-os — Default agents shipped by artifacts-os.
+URL:    https://github.com/example/artifacts-os @ a1b2c3d
+
+Name      Source              Destination        Description
+agents    artifacts/agents/   .claude/agents/    Default agent specs.
+skills    src/ai/skills/      .claude/skills/    (recurse) Claude skills.
+
+2 books.
+```
+
+`--json` emits a single JSON object:
+
+```json
+{
+  "distro": {"name": "…", "description": "…", "url": "…", "sha": "…"},
+  "books": [{"name": "agents", "src": "artifacts/agents/", "dest": ".claude/agents/", …}]
+}
+```
+
+#### `book show <name>` — inspect a book
+
+Shows book metadata and the list of files a pull would land.
+Supports local-manifest auto-detect (no clone required).
+
+```
+Book:        agents
+Source:      artifacts/agents/
+Destination: .claude/agents/
+Description: Default agent specs.
+
+Distro:      artifacts-os
+URL:         (local)
+
+Contents (2 files):
+  architect.md
+  developer.md
+```
+
+Recurse-mode books group contents by unit:
+
+```
+Book:        skills
+Source:      src/ai/skills/
+Destination: .claude/skills/
+Mode:        recurse (folder-of-folders)
+
+Contents (2 units, 2 files):
+
+  artifacts-os/
+    SKILL.md
+
+  release-changelog/
+    SKILL.md
+```
+
+#### `book pull <name>` — pull a book into the vault
+
+Clones the distro and copies the book's files into `dest`,
+overwriting existing files. Requires `artbook.distro_url` — there
+is no local-manifest path for `pull`.
+
+```
+Pulling book 'agents' from artifacts-os @ a1b2c3d…
+
+Action     Destination
+write      .claude/agents/architect.md
+overwrite  .claude/agents/developer.md
+
+Summary: 2 written (1 overwritten, 1 new).
+```
+
+`--dry-run` plans the writes but does not execute them; every action
+line is prefixed with `[would]` and the summary with `[dry-run]`.
+
+`--json` emits one JSONL record per file followed by a summary line:
+
+```jsonl
+{"action": "write", "destination": ".claude/agents/architect.md", "overwritten": false, "was_symlink": false}
+{"summary": {"written": 2, "overwritten": 0, "new": 2}, "distro": {…}, "book": "agents"}
+```
+
+#### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Runtime error (clone failed / unknown book / write failed) |
+| 2 | Usage error (bad flag, missing argument) |
+| 3 | Vault not initialised (`artifacts.yaml` not found) |
+| 4 | `artbook.distro_url` missing or empty in `artifacts.yaml` (`pull` only) |
+
+---
+
 ## Project Configuration (`cli` section)
 
 The `cli` top-level key in `artifacts.yaml` lets you set

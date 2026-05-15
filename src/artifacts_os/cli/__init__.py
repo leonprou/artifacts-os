@@ -35,6 +35,7 @@ from artifacts_os.cli.commands import kinds as _kinds_cmd
 from artifacts_os.cli.commands import views as _views_cmd
 from artifacts_os.cli.commands import ai as _ai_cmd
 from artifacts_os.cli.commands import events as _events_cmd
+from artifacts_os.cli.commands import book as _book_cmd
 from artifacts_os.cli.settings import CliSettings
 
 
@@ -246,6 +247,7 @@ def _build_parser(
     _views_cmd.register(subparsers)
     _ai_cmd.register(subparsers)
     _events_cmd.register(subparsers)
+    _book_cmd.register(subparsers)
 
     return parser
 
