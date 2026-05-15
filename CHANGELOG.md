@@ -1,5 +1,60 @@
 # Changelog
 
+## v0.4.0
+
+Fourth release of **artifacts-os**. Headline feature: a new **artbook**
+module that distributes opinionated bundles of agents, skills, kinds,
+and templates into a vault — turning artifacts-os into a portable
+harness. Also: `artifacts book` CLI, `--distro/--books` flags on
+`init`, array wikilink field support in `create`, and the legacy
+flat-kind schema removed.
+
+### Architecture
+
+- **Artbook module (s0029)** — new `src/artifacts_os/artbook/` package
+  for declarative artifact bundles. A book manifest (`artbook.yaml`)
+  describes a distro and its books; `artifacts book pull` fetches and
+  places them into a target vault. Supports local-path and registry
+  sources, item-level filtering, and recursive folder books (t0151,
+  t0152, t0153, t0157, t0158, t0160, t0150).
+- **Drop legacy flat kind schema (t0142)** — kinds now live
+  exclusively under `artifacts/kinds/<kind>/kind.json` (with optional
+  `ARTIFACT.md` body template). The old flat
+  `artifacts/kinds/<kind>.json` shape is no longer accepted by the
+  registry; migrate by moving each file into its own directory.
+
+### Artbook
+
+- **`artifacts book` CLI** — `list`, `show`, and `pull` operations
+  over an artbook manifest. `pull` accepts item-level filters and
+  walks recursive folder books (t0154, t0160, t0162).
+- **v2 manifest schema** — `version: 1` manifest with typed `books`
+  entries (D24, D25). See [`docs/artbook.md`](docs/artbook.md).
+
+### CLI
+
+- **`artifacts init --distro` / `--books`** — bootstrap a vault with
+  one or more artbooks pulled inline at init time (t0163).
+- **Array wikilink fields in `create` (t0161)** — `create` now parses
+  list-valued wikilink fields (e.g. `subtasks: "[[t0001]], [[t0002]]"`)
+  and writes parent-subtask backlinks automatically.
+
+### Core
+
+- **ItemMeta base class (t0152)** — core models refactored around a
+  shared `ItemMeta` parent, generalizing `render_table` across views
+  and unblocking artbook item rendering.
+
+### Fix
+
+- **Harden discover against malformed frontmatter** — `discover` no
+  longer crashes on artifacts with unparseable frontmatter; affected
+  files are skipped with a warning.
+
+### Install
+
+- **Version bump** — `pyproject.toml` to `0.4.0`.
+
 ## v0.3.0
 
 Third release of **artifacts-os**. Headline features: a new artifact
