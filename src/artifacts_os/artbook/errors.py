@@ -30,9 +30,5 @@ class UnknownBookError(ArtbookError):
     """Raised by find_book when the requested name is not in the manifest."""
 
 
-class UnknownBookTypeError(ArtbookError):
-    """Raised by destination_for when book.type has no placement handler."""
-
-
 class DistroNotConfiguredError(ArtbookError):
     """artbook.distro_url is missing or empty in artifacts.yaml."""

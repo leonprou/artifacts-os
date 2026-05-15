@@ -1,4 +1,4 @@
-"""Tests for artbook.placement — destination_for, copy_book, atomic write."""
+"""Tests for artbook.placement — destination_for, copy_book, atomic write (v2 schema)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from artifacts_os.artbook.errors import ArtbookError, ManifestError, UnknownBookTypeError
+from artifacts_os.artbook.errors import ArtbookError, ManifestError
 from artifacts_os.artbook.manifest import Book
 from artifacts_os.artbook.placement import (
     WrittenFile,
@@ -18,20 +18,20 @@ from artifacts_os.artbook.placement import (
 
 
 # ---------------------------------------------------------------------------
-# destination_for
+# destination_for (D25 — one-liner: vault_root / book.dest)
 # ---------------------------------------------------------------------------
 
 
 def test_destination_for_agents(tmp_path: Path) -> None:
-    book = Book(name="agents", type="agents", path="agents/")
-    dest = destination_for(book, tmp_path)
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
+    dest = destination_for(tmp_path, book)
     assert dest == tmp_path / ".claude" / "agents"
 
 
-def test_destination_for_unknown_type(tmp_path: Path) -> None:
-    book = Book(name="widgets", type="widgets", path="widgets/")
-    with pytest.raises(UnknownBookTypeError, match="unknown book type 'widgets'"):
-        destination_for(book, tmp_path)
+def test_destination_for_custom_dest(tmp_path: Path) -> None:
+    book = Book(name="skills", src="skills/", dest=".claude/skills/")
+    dest = destination_for(tmp_path, book)
+    assert dest == tmp_path / ".claude" / "skills"
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ def test_select_files_d20_walker(tmp_path: Path) -> None:
     (agents_dir / ".gitkeep").write_text("")
     (agents_dir / "notes.txt").write_text("not md")
 
-    book = Book(name="agents", type="agents", path="agents/")
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
     selected = _select_files(agents_dir, book)
     names = [f.name for f in selected]
     assert names == ["architect.md", "developer.md"]
@@ -61,7 +61,7 @@ def test_select_files_d20_case_insensitive_readme(tmp_path: Path) -> None:
     agents_dir = tmp_path / "agents"
     agents_dir.mkdir()
     (agents_dir / "readme.MD").write_text("ignore")
-    book = Book(name="agents", type="agents", path="agents/")
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
     selected = _select_files(agents_dir, book)
     assert selected == []
 
@@ -72,7 +72,7 @@ def test_select_files_allowlist_happy(tmp_path: Path) -> None:
     (agents_dir / "architect.md").write_text("# Architect")
     (agents_dir / "developer.md").write_text("# Developer")
 
-    book = Book(name="agents", type="agents", path="agents/", files=("architect.md",))
+    book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("architect.md",))
     selected = _select_files(agents_dir, book)
     assert len(selected) == 1
     assert selected[0].name == "architect.md"
@@ -83,7 +83,7 @@ def test_select_files_allowlist_missing_file(tmp_path: Path) -> None:
     agents_dir.mkdir()
     (agents_dir / "architect.md").write_text("# Architect")
 
-    book = Book(name="agents", type="agents", path="agents/", files=("missing.md",))
+    book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("missing.md",))
     with pytest.raises(ManifestError, match="files entry 'missing.md' not found"):
         _select_files(agents_dir, book)
 
@@ -160,7 +160,7 @@ def test_atomic_write_destination_is_directory_raises(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# copy_book — integration
+# copy_book — integration (v2: src/dest fields, vault_root guard)
 # ---------------------------------------------------------------------------
 
 
@@ -170,10 +170,12 @@ def test_copy_book_creates_dest_directory(tmp_path: Path) -> None:
     agents_dir.mkdir(parents=True)
     (agents_dir / "dev.md").write_text("# Dev")
 
-    book = Book(name="agents", type="agents", path="agents/")
-    dest = tmp_path / "vault" / ".claude" / "agents"  # does not exist yet
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
+    dest = destination_for(vault, book)  # vault / ".claude/agents/"
 
-    written = list(copy_book(clone_root, book, dest))
+    written = list(copy_book(clone_root, book, dest, vault_root=vault))
     assert dest.is_dir()
     assert len(written) == 1
     assert (dest / "dev.md").read_text() == "# Dev"
@@ -186,9 +188,11 @@ def test_copy_book_d20_excludes_readme(tmp_path: Path) -> None:
     (agents_dir / "architect.md").write_text("# Arch")
     (agents_dir / "README.md").write_text("readme")
 
-    book = Book(name="agents", type="agents", path="agents/")
-    dest = tmp_path / "dest"
-    written = list(copy_book(clone_root, book, dest))
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
+    dest = destination_for(vault, book)
+    written = list(copy_book(clone_root, book, dest, vault_root=vault))
 
     names = [w.destination.name for w in written]
     assert "architect.md" in names
@@ -202,27 +206,48 @@ def test_copy_book_allowlist_only_listed_files(tmp_path: Path) -> None:
     (agents_dir / "architect.md").write_text("# Arch")
     (agents_dir / "developer.md").write_text("# Dev")
 
-    book = Book(name="agents", type="agents", path="agents/", files=("architect.md",))
-    dest = tmp_path / "dest"
-    written = list(copy_book(clone_root, book, dest))
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("architect.md",))
+    dest = destination_for(vault, book)
+    written = list(copy_book(clone_root, book, dest, vault_root=vault))
     assert len(written) == 1
     assert written[0].destination.name == "architect.md"
     assert not (dest / "developer.md").exists()
 
 
-def test_copy_book_unknown_type_raises(tmp_path: Path) -> None:
-    clone_root = tmp_path / "clone"
-    book = Book(name="widgets", type="widgets", path="widgets/")
-    with pytest.raises(UnknownBookTypeError):
-        list(copy_book(clone_root, book, tmp_path / "dest"))
-
-
-def test_copy_book_path_not_directory_raises(tmp_path: Path) -> None:
+def test_copy_book_src_not_directory_raises(tmp_path: Path) -> None:
     clone_root = tmp_path / "clone"
     clone_root.mkdir()
-    # book.path is a file, not a directory
+    # book.src is a file, not a directory
     (clone_root / "agents").write_text("not a dir")
 
-    book = Book(name="agents", type="agents", path="agents")
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    book = Book(name="agents", src="agents", dest=".claude/agents/")
+    dest = destination_for(vault, book)
     with pytest.raises(ManifestError, match="not a directory"):
-        list(copy_book(clone_root, book, tmp_path / "dest"))
+        list(copy_book(clone_root, book, dest, vault_root=vault))
+
+
+# ---------------------------------------------------------------------------
+# vault-escape guard at write time (D25 defense-in-depth)
+# ---------------------------------------------------------------------------
+
+
+def test_copy_book_dest_escapes_vault_raises(tmp_path: Path) -> None:
+    """Write-time guard: if dest resolves outside vault_root, raise ArtbookError."""
+    clone_root = tmp_path / "clone"
+    agents_dir = clone_root / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "dev.md").write_text("content")
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+
+    # Craft a dest that is outside the vault_root
+    outside_dest = tmp_path / "outside"
+    book = Book(name="agents", src="agents/", dest=".claude/agents/")
+
+    with pytest.raises(ArtbookError, match="escapes vault"):
+        list(copy_book(clone_root, book, outside_dest, vault_root=vault))

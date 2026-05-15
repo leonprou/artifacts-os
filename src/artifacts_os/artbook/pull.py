@@ -59,8 +59,8 @@ def pull_book(
 
     Returns a PullReport with the list of written files.
     """
-    dest = destination_for(book, vault_root)
-    written = tuple(copy_book(clone_root, book, dest))
+    dest = destination_for(vault_root, book)
+    written = tuple(copy_book(clone_root, book, dest, vault_root=vault_root))
     return PullReport(
         book=book,
         written=written,

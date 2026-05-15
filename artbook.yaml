@@ -1,0 +1,33 @@
+# artbook.yaml — artifacts-os as its own artbook distro.
+#
+# This file makes the artifacts-os repository itself publishable as an
+# artbook distro (Layout B from spec s0029 §3.1 — "project repo doubling
+# as its own distro"). Consumers point `artbook.distro_url` at this
+# repo's git remote and `artifacts book pull agents` pulls the agent
+# specs below into their `.claude/agents/`.
+#
+# References:
+#   - s0029-artbook-mvp-distribution-model §3 (schema), §3.1 Layout B, D24, D25
+#   - t0155-publish-artifacts-os-as-its (this delivery)
+#   - t0158-implement-artbook-v2-schema (v2 schema migration)
+#
+# Notes:
+#   - `files:` is intentionally omitted — the D20 walker ships every
+#     `*.md` under `artifacts/agents/` except `README.md` and dotfiles
+#     (non-recursive). Curated directory; no allowlist needed.
+#   - `artifacts/agents/` is the canonical source per CLAUDE.md
+#     ("Store all project artifacts under `artifacts/`"). Parallel
+#     copies under `openstation/agents/`, `.openstation/agents/`, and
+#     `.claude/agents/` are out of this distro's view (s0029 §7.2.1).
+
+version: 1
+
+distro:
+  name: artifacts-os
+  description: Default agents shipped by artifacts-os for consumers of the library.
+
+books:
+  - name: agents
+    src: artifacts/agents/
+    dest: .claude/agents/
+    description: Default agent specs (architect, developer, researcher, etc.).

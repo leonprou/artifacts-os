@@ -1,4 +1,4 @@
-"""Tests for artbook.pull — find_book, pull_book, and end-to-end scenarios."""
+"""Tests for artbook.pull — find_book, pull_book, and end-to-end scenarios (v2 schema)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from artifacts_os.artbook.errors import UnknownBookError, UnknownBookTypeError
+from artifacts_os.artbook.errors import UnknownBookError
 from artifacts_os.artbook.manifest import Book, Manifest
 from artifacts_os.artbook.pull import PullReport, find_book, pull_book
 
@@ -18,7 +18,7 @@ from artifacts_os.artbook.pull import PullReport, find_book, pull_book
 
 def _make_manifest(*book_names: str) -> Manifest:
     books = tuple(
-        Book(name=n, type="agents", path=f"{n}/") for n in book_names
+        Book(name=n, src=f"{n}/", dest=f".claude/{n}/") for n in book_names
     )
     return Manifest(version=1, name="test-distro", description=None, books=books)
 
@@ -139,7 +139,7 @@ def test_pull_book_allowlist(tmp_path: Path, vault_root: Path) -> None:
     (agents_dir / "architect.md").write_text("# Arch")
     (agents_dir / "developer.md").write_text("# Dev")
 
-    book = Book(name="agents", type="agents", path="agents/", files=("architect.md",))
+    book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("architect.md",))
     report = pull_book(book, clone_root, vault_root)
 
     written_names = {w.destination.name for w in report.written}
@@ -157,18 +157,6 @@ def test_pull_book_allowlist_missing_file_raises(
     agents_dir.mkdir(parents=True)
     (agents_dir / "architect.md").write_text("# Arch")
 
-    book = Book(name="agents", type="agents", path="agents/", files=("ghost.md",))
+    book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("ghost.md",))
     with pytest.raises(ManifestError, match="'ghost.md' not found"):
-        pull_book(book, clone_root, vault_root)
-
-
-# ---------------------------------------------------------------------------
-# pull_book — unknown book type
-# ---------------------------------------------------------------------------
-
-
-def test_pull_book_unknown_type_raises(tmp_path: Path, vault_root: Path) -> None:
-    clone_root = tmp_path / "clone"
-    book = Book(name="kinds", type="kinds", path="kinds/")
-    with pytest.raises(UnknownBookTypeError, match="unknown book type 'kinds'"):
         pull_book(book, clone_root, vault_root)

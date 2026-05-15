@@ -48,7 +48,7 @@ def make_distro_repo(
 
 @pytest.fixture
 def distro_repo(tmp_path: Path) -> Path:
-    """A minimal distro repo with one 'agents' book (directory mode, D20)."""
+    """A minimal distro repo with one 'agents' book (directory mode, D20, v2 schema)."""
     root = tmp_path / "distro"
     return make_distro_repo(
         root,
@@ -58,8 +58,8 @@ def distro_repo(tmp_path: Path) -> Path:
             "books": [
                 {
                     "name": "agents",
-                    "type": "agents",
-                    "path": "agents/",
+                    "src": "agents/",
+                    "dest": ".claude/agents/",
                     "description": "Test agents.",
                 }
             ],
@@ -74,7 +74,7 @@ def distro_repo(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def distro_repo_allowlist(tmp_path: Path) -> Path:
-    """A distro repo with an explicit files allowlist (D18)."""
+    """A distro repo with an explicit files allowlist (D18, v2 schema)."""
     root = tmp_path / "distro-allowlist"
     return make_distro_repo(
         root,
@@ -84,8 +84,8 @@ def distro_repo_allowlist(tmp_path: Path) -> Path:
             "books": [
                 {
                     "name": "agents",
-                    "type": "agents",
-                    "path": "agents/",
+                    "src": "agents/",
+                    "dest": ".claude/agents/",
                     "files": ["architect.md"],
                 }
             ],

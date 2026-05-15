@@ -2,7 +2,7 @@
 
 Parses ``artbook.yaml`` from a distro repo into typed dataclasses.
 
-Spec: s0029-artbook-mvp-distribution-model §3, §4.3
+Spec: s0029-artbook-mvp-distribution-model §3, §4.3, D24, D25
 """
 
 from __future__ import annotations
@@ -21,14 +21,16 @@ _REQUIRED_VERSION = 1
 
 @dataclass(frozen=True)
 class Book:
-    """One book entry from the distro manifest.
+    """One book entry from the distro manifest (v2 schema: D24, D25).
 
     ``files`` is an explicit allowlist (D18); ``None`` means use the D20 walker.
+    ``src`` is the path relative to the distro root.
+    ``dest`` is the vault-relative destination directory (D25).
     """
 
     name: str
-    type: str
-    path: str
+    src: str
+    dest: str
     description: str | None = None
     files: tuple[str, ...] | None = None
 
@@ -48,25 +50,49 @@ def _parse_book(raw: Any, index: int) -> Book:
     if not isinstance(raw, dict):
         raise ManifestError(f"books[{index}] must be a mapping, got {type(raw).__name__}")
 
-    for field in ("name", "type", "path"):
+    # D24 — reject v1 `type:` field
+    if "type" in raw:
+        raise ManifestError(
+            f"books[{index}] contains v1 schema field 'type' — removed in v2; "
+            "remove `type:` from your manifest"
+        )
+
+    # Reject v1 `path:` field renamed to `src:` in v2
+    if "path" in raw:
+        raise ManifestError(
+            f"books[{index}] contains v1 schema field 'path' — renamed to `src:` in v2; "
+            "replace `path:` with `src:` in your manifest"
+        )
+
+    for field in ("name", "src", "dest"):
         if field not in raw:
             raise ManifestError(f"books[{index}] missing required field '{field}'")
         if not isinstance(raw[field], str) or not raw[field].strip():
             raise ManifestError(f"books[{index}].{field} must be a non-empty string")
 
     name: str = raw["name"]
-    book_type: str = raw["type"]
-    path: str = raw["path"]
+    src: str = raw["src"]
+    dest: str = raw["dest"]
     description: str | None = raw.get("description") or None
 
-    # Reject path traversal and absolute paths (D3.3 field semantics)
-    if path.startswith("/"):
+    # Reject path traversal and absolute paths on src (distro-relative)
+    if src.startswith("/"):
         raise ManifestError(
-            f"book '{name}' path '{path}' is absolute; paths must be relative to the distro root"
+            f"book '{name}' src '{src}' is absolute; src must be relative to the distro root"
         )
-    if ".." in Path(path).parts:
+    if ".." in Path(src).parts:
         raise ManifestError(
-            f"book '{name}' path '{path}' contains '..'; path traversal is not allowed"
+            f"book '{name}' src '{src}' contains '..'; path traversal is not allowed"
+        )
+
+    # D25 — vault-escape guard on dest at parse time
+    if dest.startswith("/"):
+        raise ManifestError(
+            f"book '{name}' dest '{dest}' is absolute; dest must be relative to the vault root"
+        )
+    if ".." in Path(dest).parts:
+        raise ManifestError(
+            f"book '{name}' dest '{dest}' contains '..'; path traversal is not allowed"
         )
 
     # Parse optional files allowlist (D18)
@@ -81,11 +107,11 @@ def _parse_book(raw: Any, index: int) -> Book:
             if "/" in entry or "\\" in entry:
                 raise ManifestError(
                     f"book '{name}' files entry '{entry}' contains a path separator; "
-                    "files entries are flat filenames relative to book.path"
+                    "files entries are flat filenames relative to book.src"
                 )
         files = tuple(raw_files)
 
-    return Book(name=name, type=book_type, path=path, description=description, files=files)
+    return Book(name=name, src=src, dest=dest, description=description, files=files)
 
 
 def parse_manifest(data: Any) -> Manifest:

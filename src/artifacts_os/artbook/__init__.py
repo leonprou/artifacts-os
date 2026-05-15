@@ -1,6 +1,6 @@
 """artbook — distro manifest, fetch, placement, and pull for artifacts-os.
 
-Public API (spec: s0029-artbook-mvp-distribution-model §4.4):
+Public API (spec: s0029-artbook-mvp-distribution-model §4.4, D24, D25):
 
 Dataclasses
 -----------
@@ -11,7 +11,7 @@ Functions
 read_manifest(distro_url, clone_into=None) -> (Manifest, Path)
 find_book(manifest, name) -> Book
 pull_book(book, clone_root, vault_root, distro_url="", distro_sha="") -> PullReport
-destination_for(book, vault_root) -> Path
+destination_for(vault_root, book) -> Path
 
 Settings
 --------
@@ -20,7 +20,7 @@ ArtbookSettings
 Exceptions
 ----------
 ArtbookError, ManifestError, FetchError,
-UnknownBookError, UnknownBookTypeError, DistroNotConfiguredError
+UnknownBookError, DistroNotConfiguredError
 """
 
 from artifacts_os.artbook.errors import (
@@ -29,7 +29,6 @@ from artifacts_os.artbook.errors import (
     FetchError,
     ManifestError,
     UnknownBookError,
-    UnknownBookTypeError,
 )
 from artifacts_os.artbook.fetch import read_manifest
 from artifacts_os.artbook.manifest import Book, Manifest
@@ -55,6 +54,5 @@ __all__ = [
     "ManifestError",
     "FetchError",
     "UnknownBookError",
-    "UnknownBookTypeError",
     "DistroNotConfiguredError",
 ]
