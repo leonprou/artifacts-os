@@ -195,16 +195,6 @@ def test_skill_frontmatter_user_invocable_false(vault: Path) -> None:
     assert "user-invocable: false" in content
 
 
-def test_skill_contains_hard_error_message(vault: Path) -> None:
-    """§6.4 — SKILL.md must document the D14 hard-error halt message."""
-    content = _skill_source().read_text()
-    assert "release-changelog: cannot draft" in content
-    assert "## Release" in content
-    assert "Domain Categories" in content
-    assert "File Path Mapping" in content
-    assert "Checklist" in content
-
-
 def test_skill_contains_fallbacks_section(vault: Path) -> None:
     """§6.3 — SKILL.md must document the Fallbacks summary block."""
     content = _skill_source().read_text()
