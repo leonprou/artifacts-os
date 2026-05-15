@@ -193,6 +193,55 @@ set `distro_url` to the repo's own remote URL.
 
 ---
 
+## Item selection (consumer pull)
+
+`artifacts book pull <name>` pulls every item in a book by default.
+Pass one or more `ITEM` names after the book name to pull only a
+matching subset — no manifest change or new book entry required.
+
+```bash
+# Pull the whole book (default behaviour — unchanged)
+artifacts book pull agents
+
+# Pull only architect.md and developer.md from a flat book
+artifacts book pull agents architect developer
+
+# Extension-qualified form also works
+artifacts book pull agents architect.md developer.md
+
+# Pull only the artifacts-os unit from a recurse book
+artifacts book pull skills artifacts-os
+
+# Pull two units from a kinds book
+artifacts book pull kinds task note
+```
+
+### Matching rules
+
+| Walker mode | Item matches |
+|-------------|-------------|
+| Flat (D20) or allowlist (D18) | Filename **stem** (`architect`) or full filename (`architect.md`). Case-sensitive. |
+| Recurse (D26) | **Unit folder name** — the direct subdirectory of `src/` whose subtree should be included (`artifacts-os`, `task`). All files within the unit are included. |
+
+### Error handling
+
+If any supplied item name is not found in the book, the command
+exits 1 **before writing any files** and lists the available items:
+
+```
+error: items not found in book 'agents': ghost
+       Available items: architect, developer
+       Run `artifacts book show agents` to see all items.
+```
+
+This guarantee means a partially-misspelled item list never leaves
+the destination in a half-updated state.
+
+`--dry-run` and `--json` both honour the item filter, so you can
+preview or script filtered pulls the same way as full pulls.
+
+---
+
 ## Example — artifacts-os distro
 
 `artifacts-os` publishes itself as a distro at the repo root.

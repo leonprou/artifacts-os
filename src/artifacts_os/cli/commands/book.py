@@ -47,7 +47,7 @@ from artifacts_os.artbook import (
 from artifacts_os.artbook.errors import ArtbookError
 from artifacts_os.artbook.fetch import get_short_sha
 from artifacts_os.artbook.manifest import load_manifest
-from artifacts_os.artbook.placement import _select_files, destination_for
+from artifacts_os.artbook.placement import _select_files, destination_for, filter_entries_by_items
 from artifacts_os.core import find_vault_root
 from artifacts_os.core.models import ItemMeta
 from artifacts_os.views._views import FieldSpec
@@ -429,16 +429,25 @@ def _run_show(args, root: Path, raw: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _plan_writes(book, clone_root: Path, vault_root: Path) -> list[WriteActionRow]:
+def _plan_writes(
+    book,
+    clone_root: Path,
+    vault_root: Path,
+    *,
+    preselected: list | None = None,
+) -> list[WriteActionRow]:
     """Return planned writes without executing them (used for --dry-run).
 
     ``WriteActionRow.action`` stores the base action (``"write"`` or
     ``"overwrite"``); the ``[would]`` prefix is added at display time.
+
+    *preselected* — when provided, use these ``(abs_src, rel)`` entries
+    directly instead of calling ``_select_files`` (pass after item filtering).
     """
     dest_dir = destination_for(vault_root, book)
 
     src_dir = clone_root / book.src
-    src_entries = _select_files(src_dir, book)
+    src_entries = preselected if preselected is not None else _select_files(src_dir, book)
 
     rows: list[WriteActionRow] = []
     for _src_file, rel in src_entries:
@@ -478,6 +487,7 @@ def _run_pull(args, root: Path, raw: dict) -> int:
 
     book_name: str = args.name
     dry_run: bool = args.dry_run
+    items: list[str] = args.items or []
 
     try:
         with tempfile.TemporaryDirectory(prefix="artbook-pull-") as td:
@@ -495,9 +505,34 @@ def _run_pull(args, root: Path, raw: dict) -> int:
                 )
                 return 1
 
+            # --- Item-level filtering (req 2–5) ---
+            # Compute all entries first so we can validate item names before writing.
+            preselected = None
+            if items:
+                src_dir = clone_root / book.src
+                try:
+                    all_entries = _select_files(src_dir, book)
+                except (ManifestError, ArtbookError) as exc:
+                    _err(str(exc))
+                    return 1
+                filtered, unmatched, available_items = filter_entries_by_items(
+                    all_entries, items, recurse=book.recurse
+                )
+                if unmatched:
+                    avail_str = ", ".join(available_items) if available_items else "(none)"
+                    n = len(unmatched)
+                    _err(
+                        f"item{'s' if n > 1 else ''} not found in book '{book_name}': "
+                        + ", ".join(unmatched),
+                        f"Available items: {avail_str}\n"
+                        f"       Run `artifacts book show {book_name}` to see all items.",
+                    )
+                    return 1
+                preselected = filtered
+
             if dry_run:
                 try:
-                    rows = _plan_writes(book, clone_root, root)
+                    rows = _plan_writes(book, clone_root, root, preselected=preselected)
                 except (ManifestError, ArtbookError) as exc:
                     _err(str(exc))
                     return 1
@@ -507,6 +542,7 @@ def _run_pull(args, root: Path, raw: dict) -> int:
                         book, clone_root, root,
                         distro_url=arts.distro_url,
                         distro_sha=sha,
+                        preselected=preselected,
                     )
                 except (ManifestError, ArtbookError) as exc:
                     _err(str(exc))
@@ -667,6 +703,18 @@ def register(subparsers) -> None:
         help="pull a book into the vault",
     )
     pull_p.add_argument("name", help="book name")
+    pull_p.add_argument(
+        "items",
+        nargs="*",
+        metavar="ITEM",
+        help=(
+            "optional item filter — pull only matching items. "
+            "For flat books: filename stem (architect) or full filename (architect.md). "
+            "For recurse books: unit folder name (artifacts-os). "
+            "If omitted, all items are pulled. "
+            "Any unrecognised item aborts before writing."
+        ),
+    )
     pull_p.add_argument(
         "--json", "-j",
         action="store_true",

@@ -54,13 +54,19 @@ def pull_book(
     vault_root: Path,
     distro_url: str = "",
     distro_sha: str = "",
+    *,
+    preselected: list[tuple[Path, Path]] | None = None,
 ) -> PullReport:
     """Copy *book*'s content from *clone_root* into the consumer vault.
+
+    *preselected* — when provided, only these ``(abs_src, rel)`` entries
+    are written.  Pass the result of ``filter_entries_by_items`` to limit
+    the pull to a consumer-specified subset of items.
 
     Returns a PullReport with the list of written files.
     """
     dest = destination_for(vault_root, book)
-    written = tuple(copy_book(clone_root, book, dest, vault_root=vault_root))
+    written = tuple(copy_book(clone_root, book, dest, vault_root=vault_root, preselected=preselected))
     return PullReport(
         book=book,
         written=written,

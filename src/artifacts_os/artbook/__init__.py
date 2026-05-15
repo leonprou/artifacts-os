@@ -12,6 +12,7 @@ read_manifest(distro_url, clone_into=None) -> (Manifest, Path)
 find_book(manifest, name) -> Book
 pull_book(book, clone_root, vault_root, distro_url="", distro_sha="") -> PullReport
 destination_for(vault_root, book) -> Path
+filter_entries_by_items(entries, items, *, recurse) -> (filtered, unmatched, available)
 
 Settings
 --------
@@ -32,7 +33,7 @@ from artifacts_os.artbook.errors import (
 )
 from artifacts_os.artbook.fetch import read_manifest
 from artifacts_os.artbook.manifest import Book, Manifest
-from artifacts_os.artbook.placement import WrittenFile, destination_for
+from artifacts_os.artbook.placement import WrittenFile, destination_for, filter_entries_by_items
 from artifacts_os.artbook.pull import PullReport, find_book, pull_book
 from artifacts_os.artbook.settings import ArtbookSettings
 
@@ -47,6 +48,7 @@ __all__ = [
     "find_book",
     "pull_book",
     "destination_for",
+    "filter_entries_by_items",
     # Settings
     "ArtbookSettings",
     # Exceptions

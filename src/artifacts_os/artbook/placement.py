@@ -57,6 +57,68 @@ def destination_for(vault_root: Path, book: Book) -> Path:
 # ---------------------------------------------------------------------------
 
 
+def filter_entries_by_items(
+    entries: list[tuple[Path, Path]],
+    items: list[str],
+    *,
+    recurse: bool,
+) -> tuple[list[tuple[Path, Path]], list[str], list[str]]:
+    """Filter *(abs_src, rel)* entries by consumer-specified item names.
+
+    For flat / allowlist books (*recurse=False*): each item matches by
+    filename stem (``architect``) or full filename (``architect.md``).
+
+    For recurse books (*recurse=True*): each item matches by unit folder
+    name — the first path component of the relative path (``artifacts-os``).
+
+    Returns:
+        filtered   — matching ``(abs_src, rel)`` entries in original order
+        unmatched  — sorted list of item names that did not match anything
+        available  — sorted list of available item identifiers (stems for
+                     flat, unit names for recurse) — suitable for error messages
+    """
+    if not items:
+        # No filter requested — return everything; no need to compute available.
+        return list(entries), [], []
+
+    if recurse:
+        unit_to_entries: dict[str, list[tuple[Path, Path]]] = {}
+        for abs_src, rel in entries:
+            unit = rel.parts[0] if rel.parts else ""
+            if unit:
+                unit_to_entries.setdefault(unit, []).append((abs_src, rel))
+        available = sorted(unit_to_entries)
+        item_set = set(items)
+        matched_units = item_set & set(unit_to_entries)
+        unmatched = sorted(item_set - matched_units)
+        # Preserve original order from *entries*
+        matched_rels = {rel for unit in matched_units for _src, rel in unit_to_entries[unit]}
+        filtered = [(src, rel) for src, rel in entries if rel in matched_rels]
+    else:
+        # Build name → entry and stem → entry look-ups
+        by_name: dict[str, tuple[Path, Path]] = {}
+        by_stem: dict[str, tuple[Path, Path]] = {}
+        for abs_src, rel in entries:
+            by_name[rel.name] = (abs_src, rel)
+            by_stem[rel.stem] = (abs_src, rel)
+
+        available = sorted(by_stem)  # stems are the canonical display names
+
+        matched_names: set[str] = set()  # rel.name values that matched
+        unmatched_list: list[str] = []
+        for item in items:
+            if item in by_name:
+                matched_names.add(by_name[item][1].name)
+            elif item in by_stem:
+                matched_names.add(by_stem[item][1].name)
+            else:
+                unmatched_list.append(item)
+        unmatched = sorted(unmatched_list)
+        filtered = [(src, rel) for src, rel in entries if rel.name in matched_names]
+
+    return filtered, unmatched, available
+
+
 def _select_files(src_dir: Path, book: Book) -> list[tuple[Path, Path]]:
     """Return [(absolute_source, relative_to_dest), ...] for *book*.
 
@@ -154,10 +216,19 @@ def _atomic_write(src: Path, dst: Path) -> WrittenFile:
     )
 
 
-def _copy_book(clone_root: Path, book: Book, dest: Path, vault_root: Path) -> Iterable[WrittenFile]:
+def _copy_book(
+    clone_root: Path,
+    book: Book,
+    dest: Path,
+    vault_root: Path,
+    *,
+    preselected: list[tuple[Path, Path]] | None = None,
+) -> Iterable[WrittenFile]:
     """Copy the book's files from *clone_root* into *dest*.
 
     Honours the ``files`` allowlist (D18) when set; otherwise uses the D20 walker.
+    When *preselected* is given it is used directly instead of calling
+    ``_select_files`` — pass this to apply item-level filtering before writing.
     Creates *dest* if it does not exist.
 
     Yields a WrittenFile for each file copied.
@@ -181,7 +252,7 @@ def _copy_book(clone_root: Path, book: Book, dest: Path, vault_root: Path) -> It
 
     dest.mkdir(parents=True, exist_ok=True)
 
-    for src_file, rel in _select_files(src_dir, book):
+    for src_file, rel in (preselected if preselected is not None else _select_files(src_dir, book)):
         dest_file = dest / rel
         # D26 — recurse may create nested destination dirs; ensure they exist
         # before write. No-op for flat/allowlist modes (rel is a flat filename).
@@ -199,13 +270,21 @@ def _copy_book(clone_root: Path, book: Book, dest: Path, vault_root: Path) -> It
 # Public alias kept for callers that pass (clone_root, book, dest) — the vault_root
 # parameter is required for the write-time escape guard.
 def copy_book(
-    clone_root: Path, book: Book, dest: Path, vault_root: Path | None = None
+    clone_root: Path,
+    book: Book,
+    dest: Path,
+    vault_root: Path | None = None,
+    *,
+    preselected: list[tuple[Path, Path]] | None = None,
 ) -> Iterable[WrittenFile]:
     """Copy the book's files from *clone_root* into *dest*.
 
     *vault_root* is required for the write-time vault-escape guard (D25).
     When omitted, *dest* itself is used as the vault root sentinel (caller
     guarantees the path is safe — used only in tests that pre-validate dest).
+
+    *preselected* — when provided, skip ``_select_files`` and use these
+    ``(abs_src, rel)`` entries directly (e.g. after ``filter_entries_by_items``).
     """
     effective_vault_root = vault_root if vault_root is not None else dest.parent
-    return _copy_book(clone_root, book, dest, effective_vault_root)
+    return _copy_book(clone_root, book, dest, effective_vault_root, preselected=preselected)

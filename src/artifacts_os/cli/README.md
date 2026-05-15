@@ -905,9 +905,9 @@ If `<view_name>` is not defined, the command exits `2` with
 > s0029-artbook-mvp-distribution-model §5.1.
 
 ```
-artifacts book list                [--json]
-artifacts book show <name>         [--json]
-artifacts book pull <name>         [--json] [--dry-run]
+artifacts book list                        [--json]
+artifacts book show <name>                 [--json]
+artifacts book pull <name> [ITEM …]        [--json] [--dry-run]
 ```
 
 Configure the distro URL once in `artifacts.yaml`:
@@ -984,7 +984,7 @@ Contents (2 units, 2 files):
     SKILL.md
 ```
 
-#### `book pull <name>` — pull a book into the vault
+#### `book pull <name> [ITEM …]` — pull a book into the vault
 
 Clones the distro and copies the book's files into `dest`,
 overwriting existing files. Requires `artbook.distro_url` — there
@@ -1000,6 +1000,34 @@ overwrite  .claude/agents/developer.md
 Summary: 2 written (1 overwritten, 1 new).
 ```
 
+**Item selection** — pass one or more `ITEM` names after the book
+name to pull only a matching subset.
+
+| Walker mode | Item matches |
+|-------------|-------------|
+| Flat (default) / allowlist | Filename **stem** (`architect`) or full filename (`architect.md`) |
+| Recurse (`recurse: true`) | **Unit folder name** — e.g. `artifacts-os`, `task`; all files within the unit are included |
+
+```bash
+# Pull only architect.md (flat book)
+artifacts book pull agents architect
+
+# Extension-qualified form works the same
+artifacts book pull agents architect.md
+
+# Pull two units from a recurse book
+artifacts book pull skills artifacts-os release-changelog
+```
+
+If any item name is not found in the book, the command exits 1
+**before writing any files** and lists available items:
+
+```
+error: items not found in book 'agents': ghost
+       Available items: architect, developer
+       Run `artifacts book show agents` to see all items.
+```
+
 `--dry-run` plans the writes but does not execute them; every action
 line is prefixed with `[would]` and the summary with `[dry-run]`.
 
@@ -1009,6 +1037,9 @@ line is prefixed with `[would]` and the summary with `[dry-run]`.
 {"action": "write", "destination": ".claude/agents/architect.md", "overwritten": false, "was_symlink": false}
 {"summary": {"written": 2, "overwritten": 0, "new": 2}, "distro": {…}, "book": "agents"}
 ```
+
+Both `--dry-run` and `--json` respect item filters when `ITEM …` is
+supplied.
 
 #### Exit codes
 
