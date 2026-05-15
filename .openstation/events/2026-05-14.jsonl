@@ -1,0 +1,8 @@
+{"ts":"2026-05-14T19:37:00.793745+03:00","event":"status_transition","task":"t0142-drop-legacy-flat-kind-schema","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-14T19:37:36.296989+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0142-drop-legacy-flat-kind-schema","duration_ms":35499}
+{"ts":"2026-05-14T19:39:06.079388+03:00","event":"status_transition","task":"t0041-ai-claude-commands-support","old_status":"in-progress","new_status":"backlog","forced":false}
+{"ts":"2026-05-14T21:25:49.772448+03:00","event":"task_created","task":"t0144-distributable-opinionated-harness-for-artifacts","status":"backlog","assignee":"","parent":""}
+{"ts":"2026-05-14T21:25:55.274312+03:00","event":"task_created","task":"t0145-spec-the-distributable-harness-model","status":"ready","assignee":"architect","parent":"t0144-distributable-opinionated-harness-for-artifacts"}
+{"ts":"2026-05-14T21:25:57.931194+03:00","event":"task_created","task":"t0146-research-harness-footprints-and-current","status":"ready","assignee":"researcher","parent":"t0144-distributable-opinionated-harness-for-artifacts"}
+{"ts":"2026-05-14T21:33:44.939944+03:00","event":"status_transition","task":"t0145-spec-the-distributable-harness-model","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-14T22:24:49.536840+03:00","event":"status_transition","task":"t0145-spec-the-distributable-harness-model","old_status":"in-progress","new_status":"review","forced":false}
