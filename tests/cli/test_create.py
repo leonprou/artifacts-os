@@ -134,19 +134,33 @@ def test_type_flag(vault, capsys):
 
 
 # ---------------------------------------------------------------------------
-# --parent (wikilink auto-wrapping)
+# --parent (wikilink auto-wrapping + parent must exist)
 # ---------------------------------------------------------------------------
 
 def test_parent_bare_ref_wrapped(vault, capsys):
-    main(["create", "Child task", "--parent", "t0001"])
+    main(["create", "Parent task"])  # creates t0001-parent-task
+    capsys.readouterr()
+    main(["create", "Child task", "--parent", "t0001-parent-task"])
     out = capsys.readouterr().out.strip()
-    assert _meta(vault, out)["parent"] == "[[t0001]]"
+    assert _meta(vault, out)["parent"] == "[[t0001-parent-task]]"
 
 
 def test_parent_already_wrapped_unchanged(vault, capsys):
-    main(["create", "Child task", "--parent", "[[t0001]]"])
+    main(["create", "Parent task"])  # creates t0001-parent-task
+    capsys.readouterr()
+    main(["create", "Child task", "--parent", "[[t0001-parent-task]]"])
     out = capsys.readouterr().out.strip()
-    assert _meta(vault, out)["parent"] == "[[t0001]]"
+    assert _meta(vault, out)["parent"] == "[[t0001-parent-task]]"
+
+
+def test_parent_missing_fails_before_write(vault, capsys):
+    """Creating a child whose parent does not exist fails without writing."""
+    with pytest.raises(SystemExit) as exc:
+        main(["create", "Orphan task", "--parent", "t9999-does-not-exist"])
+    assert exc.value.code == 1
+    assert "error:" in capsys.readouterr().err
+    # No child artifact should have been written.
+    assert not list((vault / "artifacts" / "tasks").glob("*.md"))
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +202,10 @@ def test_fields_wikilink_comma_list(vault, capsys):
 
 
 def test_fields_wikilink_single(vault, capsys):
-    main(["create", "Task", "--fields", "parent=t0099"])
-    out = capsys.readouterr().out.strip()
-    assert _meta(vault, out)["parent"] == "[[t0099]]"
+    """--fields parent=ref wraps the value as [[ref]] (visible in dry-run; no parent lookup)."""
+    main(["create", "Task", "--dry-run", "--fields", "parent=t0099"])
+    out = capsys.readouterr().out
+    assert "[[t0099]]" in out
 
 
 def test_fields_bad_spec_exits_1(vault, capsys):
@@ -198,6 +213,97 @@ def test_fields_bad_spec_exits_1(vault, capsys):
         main(["create", "Task", "--fields", "no-equals-sign"])
     assert exc.value.code == 1
     assert "error:" in capsys.readouterr().err
+
+
+def test_fields_array_wikilink_single_value(vault, capsys):
+    """A single depends_on value produces a one-element wikilink list."""
+    main(["create", "Task", "--fields", "depends_on=t0001-foo"])
+    out = capsys.readouterr().out.strip()
+    assert _meta(vault, out)["depends_on"] == ["[[t0001-foo]]"]
+
+
+def test_fields_subtasks_comma_list(vault, capsys):
+    """subtasks= comma list produces a wikilink list."""
+    main(["create", "Task", "--fields", "subtasks=t0002-a,t0003-b"])
+    out = capsys.readouterr().out.strip()
+    assert _meta(vault, out)["subtasks"] == ["[[t0002-a]]", "[[t0003-b]]"]
+
+
+def test_fields_artifacts_comma_list(vault, capsys):
+    """artifacts= comma list produces a wikilink list."""
+    main(["create", "Task", "--fields", "artifacts=s0001-spec,s0002-doc"])
+    out = capsys.readouterr().out.strip()
+    assert _meta(vault, out)["artifacts"] == ["[[s0001-spec]]", "[[s0002-doc]]"]
+
+
+def test_fields_array_wikilink_already_wrapped(vault, capsys):
+    """Pre-wrapped refs in a comma list are not double-wrapped."""
+    main(["create", "Task", "--fields", "depends_on=[[t0010-x]],[[t0011-y]]"])
+    out = capsys.readouterr().out.strip()
+    assert _meta(vault, out)["depends_on"] == ["[[t0010-x]]", "[[t0011-y]]"]
+
+
+# ---------------------------------------------------------------------------
+# Parent backlink — subtasks auto-populated
+# ---------------------------------------------------------------------------
+
+def test_parent_backlink_added_to_subtasks(vault, capsys):
+    """Creating a child with --parent appends child wikilink to parent's subtasks."""
+    main(["create", "Parent task"])
+    parent_stem = capsys.readouterr().out.strip()
+
+    main(["create", "Child task", "--parent", parent_stem])
+    child_stem = capsys.readouterr().out.strip()
+
+    parent_meta = _meta(vault, parent_stem)
+    assert f"[[{child_stem}]]" in parent_meta.get("subtasks", [])
+
+
+def test_parent_backlink_via_fields_flag(vault, capsys):
+    """--fields parent=ref also triggers the parent subtasks backlink."""
+    main(["create", "Parent task"])
+    parent_stem = capsys.readouterr().out.strip()
+
+    main(["create", "Child task", "--fields", f"parent={parent_stem}"])
+    child_stem = capsys.readouterr().out.strip()
+
+    parent_meta = _meta(vault, parent_stem)
+    assert f"[[{child_stem}]]" in parent_meta.get("subtasks", [])
+
+
+def test_parent_backlink_idempotent(vault, capsys):
+    """Re-creating the same child link does not duplicate it in subtasks."""
+    main(["create", "Parent task"])
+    parent_stem = capsys.readouterr().out.strip()
+
+    main(["create", "Child task", "--parent", parent_stem])
+    child_stem = capsys.readouterr().out.strip()
+
+    # Manually pre-insert the child link (simulates a stale re-run scenario).
+    # Then create a second child also referencing the same parent.
+    main(["create", "Another child", "--parent", parent_stem])
+    capsys.readouterr()
+
+    parent_meta = _meta(vault, parent_stem)
+    child_link = f"[[{child_stem}]]"
+    assert parent_meta.get("subtasks", []).count(child_link) == 1
+
+
+def test_parent_backlink_multiple_children(vault, capsys):
+    """Multiple children each append their own wikilink to parent's subtasks."""
+    main(["create", "Parent task"])
+    parent_stem = capsys.readouterr().out.strip()
+
+    main(["create", "Child A", "--parent", parent_stem])
+    child_a = capsys.readouterr().out.strip()
+
+    main(["create", "Child B", "--parent", parent_stem])
+    child_b = capsys.readouterr().out.strip()
+
+    parent_meta = _meta(vault, parent_stem)
+    subtasks = parent_meta.get("subtasks", [])
+    assert f"[[{child_a}]]" in subtasks
+    assert f"[[{child_b}]]" in subtasks
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,19 @@ _KINDS = {
             "owner": {"type": "string"},
             "type": {"type": "string"},
             "priority": {"type": "string"},
+            "parent": {"type": "string", "pattern": r"^\[\[.+\]\]$"},
+            "subtasks": {
+                "type": "array",
+                "items": {"type": "string", "pattern": r"^\[\[.+\]\]$"},
+            },
+            "depends_on": {
+                "type": "array",
+                "items": {"type": "string", "pattern": r"^\[\[.+\]\]$"},
+            },
+            "artifacts": {
+                "type": "array",
+                "items": {"type": "string", "pattern": r"^\[\[.+\]\]$"},
+            },
         },
     },
     "agent": {

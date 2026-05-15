@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import date
 from pathlib import Path
 
-from artifacts_os.core import create, Registry, ValidationError
+from artifacts_os.core import create, Registry, ValidationError, NotFoundError
 from artifacts_os.core import frontmatter as _frontmatter
+from artifacts_os.core.discover import resolve as _resolve, unwrap_wikilink as _unwrap_wikilink
 
 
-# Fields whose values are stored as wikilinks in frontmatter.
-_WIKILINK_FIELDS = frozenset({"parent", "depends_on"})
+# Scalar wikilink fields — value stored as a single "[[ref]]" string.
+_SCALAR_WIKILINK_FIELDS = frozenset({"parent"})
+# Array wikilink fields — value stored as a list of "[[ref]]" strings.
+_ARRAY_WIKILINK_FIELDS = frozenset({"depends_on", "subtasks", "artifacts"})
+# Combined — kept for convenience / back-compat.
+_WIKILINK_FIELDS = _SCALAR_WIKILINK_FIELDS | _ARRAY_WIKILINK_FIELDS
 
 # Schema property names that already have dedicated convenience flags.
 # Augment (Variant B) skips these to avoid double-registration.
@@ -30,6 +36,25 @@ def _wrap_wikilink(value: str) -> str:
     if value.startswith("[[") and value.endswith("]]"):
         return value
     return f"[[{value}]]"
+
+
+def _array_wikilink_fields_from_schema(schema: dict | None) -> frozenset[str]:
+    """Return the set of array wikilink fields, augmented by schema detection.
+
+    Starts from the hardcoded ``_ARRAY_WIKILINK_FIELDS`` baseline and adds
+    any schema ``properties`` whose ``items.pattern`` contains ``[[``
+    (i.e. wikilink array fields declared in the kind schema).
+    """
+    if not schema:
+        return _ARRAY_WIKILINK_FIELDS
+    detected: set[str] = set()
+    for field, prop in schema.get("properties", {}).items():
+        if prop.get("type") != "array" and "items" not in prop:
+            continue
+        items_pattern = prop.get("items", {}).get("pattern", "")
+        if r"\[\[" in items_pattern or "[[" in items_pattern:
+            detected.add(field)
+    return _ARRAY_WIKILINK_FIELDS | frozenset(detected)
 
 
 def _field_in_schema(field: str, schema: dict) -> bool:
@@ -168,8 +193,15 @@ def register(subparsers, kind: str | None = None, schema: dict | None = None) ->
         "-f",
         nargs="*",
         metavar="KEY=VALUE",
-        help="extra frontmatter fields (e.g. status=ready priority=high); "
-             "comma-separated values produce a list (e.g. tags=a,b,c)",
+        help=(
+            "extra frontmatter fields (e.g. status=ready priority=high); "
+            "comma-separated values produce a list (e.g. tags=a,b,c); "
+            "wikilink array fields (depends_on, subtasks, artifacts) accept "
+            "comma-separated refs auto-wrapped as [[…]] "
+            "(e.g. depends_on=t0001,t0002); "
+            "setting parent=REF also appends this artifact to the parent's "
+            "subtasks array — parent must already exist"
+        ),
     )
 
     # Dry run — always shown
@@ -182,14 +214,24 @@ def register(subparsers, kind: str | None = None, schema: dict | None = None) ->
     p.set_defaults(func=run, _kind_specific_fields=kind_fields)
 
 
-def _parse_fields(field_args: list[str] | None) -> dict:
+def _parse_fields(field_args: list[str] | None, *, schema: dict | None = None) -> dict:
     """Parse ``KEY=VALUE`` strings into a dict.
 
-    Comma-separated values are split into lists.  Fields in
-    ``_WIKILINK_FIELDS`` have each element auto-wrapped as ``[[…]]``.
+    Array wikilink fields (``depends_on``, ``subtasks``, ``artifacts``, and
+    any schema-detected equivalents) always produce a list with each element
+    wrapped as ``[[…]]``.  A comma-separated value like ``t0001,t0002``
+    becomes ``["[[t0001]]", "[[t0002]]"]``.
+
+    Scalar wikilink fields (``parent``) produce a single wrapped string.
+
+    Other fields with a comma-separated value produce a plain list.
+    Other fields with a scalar value are stored as-is.
     """
     if not field_args:
         return {}
+
+    array_wikilink = _array_wikilink_fields_from_schema(schema)
+
     fields: dict = {}
     for item in field_args:
         if "=" not in item:
@@ -197,13 +239,18 @@ def _parse_fields(field_args: list[str] | None) -> dict:
         key, _, raw = item.partition("=")
         key = key.strip()
         raw = raw.strip()
-        if "," in raw:
+
+        if key in array_wikilink:
+            # Always a list; wrap each element as [[…]].
+            parts = [v.strip() for v in raw.split(",") if v.strip()] if "," in raw else [raw]
+            fields[key] = [_wrap_wikilink(p) for p in parts]
+        elif "," in raw:
             parts = [v.strip() for v in raw.split(",") if v.strip()]
-            if key in _WIKILINK_FIELDS:
+            if key in _SCALAR_WIKILINK_FIELDS:
                 parts = [_wrap_wikilink(p) for p in parts]
             fields[key] = parts
         else:
-            if key in _WIKILINK_FIELDS:
+            if key in _SCALAR_WIKILINK_FIELDS:
                 raw = _wrap_wikilink(raw)
             fields[key] = raw
     return fields
@@ -221,13 +268,36 @@ def _read_body(args) -> str:
     return args.body or ""
 
 
-def _build_fields(args) -> dict:
+def _backlink_parent(parent_path: Path, child_stem: str) -> None:
+    """Append ``[[child_stem]]`` to the parent's ``subtasks`` list.
+
+    The write is atomic (tmp → replace).  Idempotent: if the wikilink is
+    already present the file is left untouched.
+    """
+    child_link = f"[[{child_stem}]]"
+    text = parent_path.read_text(encoding="utf-8")
+    meta, body = _frontmatter.parse(text)
+
+    subtasks: list = list(meta.get("subtasks") or [])
+    if child_link in subtasks:
+        return  # already present — no-op
+
+    subtasks.append(child_link)
+    new_meta = {**meta, "subtasks": subtasks}
+    new_text = _frontmatter.dump(new_meta, body)
+
+    tmp = parent_path.with_suffix(parent_path.suffix + ".tmp")
+    tmp.write_text(new_text, encoding="utf-8")
+    os.replace(tmp, parent_path)
+
+
+def _build_fields(args, *, schema: dict | None = None) -> dict:
     """Merge ``--fields``, convenience flags, and kind-specific flags into a dict.
 
     Convenience flags take precedence over ``--fields`` for the same key.
     Kind-specific flags (Variant B) also take precedence over ``--fields``.
     """
-    fields = _parse_fields(args.fields)
+    fields = _parse_fields(args.fields, schema=schema)
 
     # Convenience flags (may be absent from namespace if filtered out).
     if getattr(args, "assignee", None) is not None:
@@ -291,8 +361,14 @@ def run(args, registry: Registry) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
+    # Fetch kind schema for field-type inference (best-effort; errors surface later).
     try:
-        fields = _build_fields(args)
+        schema: dict | None = registry.get(kind).schema
+    except Exception:
+        schema = None
+
+    try:
+        fields = _build_fields(args, schema=schema)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -314,6 +390,21 @@ def run(args, registry: Registry) -> int:
         effective_title = args.title
         slug = slugify(effective_title)
 
+    # Parent backlink: resolve parent BEFORE writing the child so a missing
+    # parent fails cleanly with no orphaned artifact on disk.
+    parent_ref = fields.get("parent")
+    parent_path: Path | None = None
+    if parent_ref and not args.dry_run:
+        parent_inner = _unwrap_wikilink(parent_ref)
+        try:
+            parent_path = _resolve(registry, parent_inner)
+        except NotFoundError:
+            print(
+                f"error: parent {parent_ref!r} not found — create it first",
+                file=sys.stderr,
+            )
+            return 1
+
     if args.dry_run:
         _print_dry_run(kind, slug, fields, body)
         return 0
@@ -329,6 +420,10 @@ def run(args, registry: Registry) -> int:
     except ValidationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    # Back-link child into parent's subtasks array.
+    if parent_path is not None:
+        _backlink_parent(parent_path, artifact.path.stem)
 
     # Print the file stem — callers use it as a ref.
     print(artifact.path.stem)
