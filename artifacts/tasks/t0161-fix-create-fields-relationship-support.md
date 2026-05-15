@@ -5,9 +5,10 @@ id: t0161
 kind: task
 name: fix-create-fields-relationship-support
 owner: user
-status: verified
+status: done
 type: implementation
 started: 2026-05-15
+completed: 2026-05-15
 ---
 
 # Fix Create Fields Relationship Support

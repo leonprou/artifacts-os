@@ -87,3 +87,4 @@
 {"ts":"2026-05-15T22:08:48.540620+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0155-publish-artifacts-os-as-its","duration_ms":48719}
 {"ts":"2026-05-15T22:13:31.049683+03:00","event":"status_transition","task":"t0161-fix-create-fields-relationship-support","old_status":"in-progress","new_status":"review","forced":false}
 {"ts":"2026-05-15T22:13:31.355865+03:00","event":"status_transition","task":"t0161-fix-create-fields-relationship-support","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-15T22:15:00.522935+03:00","event":"status_transition","task":"t0161-fix-create-fields-relationship-support","old_status":"verified","new_status":"done","forced":false}
