@@ -494,6 +494,42 @@ print(hooks_cfg.hooks)  # list of hook config dicts
 
 ---
 
+## Artbook Section
+
+The `artbook:` key configures the artbook distribution feature, which
+lets consumers pull agent defaults (and future book types) from a remote
+git repository with one command.
+
+```yaml
+artbook:
+  distro_url: https://github.com/example/artbook-defaults
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `distro_url` | string | `null` | URL of the distro git repository. Required for `artifacts book` commands. |
+
+When `distro_url` is absent or empty, `ArtbookSettings.distro_url` returns
+`None`. The CLI raises `DistroNotConfiguredError` (exit 4) in that case.
+
+`ArtbookSettings.from_base` parses this section:
+
+```python
+from artifacts_os.artbook import ArtbookSettings
+from artifacts_os.core import load_settings
+
+base = load_settings(root / "artifacts.yaml")
+arts = ArtbookSettings.from_base(base)
+print(arts.distro_url)  # "https://github.com/example/artbook-defaults" or None
+```
+
+Unlike `EventsSettings` (which extends `Settings`), `ArtbookSettings` is a
+standalone frozen dataclass. It reads its section from `base.raw` without
+inheriting `Settings`' fields, so it composes cleanly alongside other
+settings extensions.
+
+---
+
 ## Schema Versioning
 
 `artifacts.yaml` must begin with `layout_version: 1`. Any other value (or
