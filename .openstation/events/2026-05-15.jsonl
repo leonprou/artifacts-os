@@ -77,3 +77,10 @@
 {"ts":"2026-05-15T22:01:34.633176+03:00","event":"run_complete","task":"t0163-artifacts-init-artbook-distro-integration","agent":"","run_id":"r0174","run_status":"complete","cost":"1.05","turns":16}
 {"ts":"2026-05-15T22:02:44.039840+03:00","event":"run_started","task":"t0161-fix-create-fields-relationship-support","agent":"project-manager","run_id":"r0175","mode":"verify","context_only":false,"detached":true}
 {"ts":"2026-05-15T22:02:53.268153+03:00","event":"status_transition","task":"t0163-artifacts-init-artbook-distro-integration","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-05-15T22:03:40.090870+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0163-artifacts-init-artbook-distro-integration","duration_ms":46818}
+{"ts":"2026-05-15T22:07:13.436485+03:00","event":"status_transition","task":"t0161-fix-create-fields-relationship-support","old_status":"review","new_status":"in-progress","forced":false}
+{"ts":"2026-05-15T22:07:27.430790+03:00","event":"run_complete","task":"t0161-fix-create-fields-relationship-support","agent":"","run_id":"r0175","run_status":"complete","cost":"1.31","turns":27}
+{"ts":"2026-05-15T22:07:38.932251+03:00","event":"status_transition","task":"t0155-publish-artifacts-os-as-its","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-15T22:07:44.193386+03:00","event":"status_transition","task":"t0155-publish-artifacts-os-as-its","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-15T22:07:54.709543+03:00","event":"status_transition","task":"t0155-publish-artifacts-os-as-its","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-15T22:07:59.816765+03:00","event":"status_transition","task":"t0155-publish-artifacts-os-as-its","old_status":"verified","new_status":"done","forced":false}

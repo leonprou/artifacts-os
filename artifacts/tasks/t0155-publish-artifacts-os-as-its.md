@@ -3,11 +3,13 @@ kind: task
 id: t0155
 name: publish-artifacts-os-as-its
 type: implementation
-status: ready
+status: done
 assignee: architect
 owner: user
 parent: "[[t0150-artbook-distribution-model]]"
 created: 2026-05-15
+started: 2026-05-15
+completed: 2026-05-15
 ---
 
 # Publish Artifacts-Os As Its Own Artbook Distro (Artbook.Yaml At Repo Root)
@@ -139,6 +141,29 @@ illustrative `artifacts-os-defaults` used in s0029 examples. The
 fanned out from one project (e.g. `artifacts-os-defaults`,
 `artifacts-os-extras`); since this repo is *itself* the distro
 under Layout B, the bare project name is clearer.
+
+### Post-delivery drift (recorded at close-out)
+
+The manifest delivered here has since been grown by sibling tasks
+under the same epic; the current `artbook.yaml` is the source of
+truth, not the v1/single-book wording in this task's Scope:
+
+- **Schema migration** — [[t0158-implement-artbook-v2-schema]]
+  (done) migrated the manifest from v1 (`type:` + `path:`) to v2
+  (`name:` + `src:` + `dest:`) per spec decisions **D24** and
+  **D25**. Verification item #3's "one book entry with `type:
+  agents`" wording is stale — the current entry is
+  `name: agents`, `src: artifacts/agents/`,
+  `dest: .claude/agents/`.
+- **Additional books** — [[t0160-artbook-recurse-folder-walker]]
+  added `commands`, `skills`, and `kinds` books to the same
+  manifest. The "MVP ships agents only" scope cut held for t0155
+  itself; subsequent tasks lifted it.
+- **Agent count** — `artifacts/agents/` now contains **11**
+  files; the alphabetical list above is one behind (an
+  `integrator.md` agent was added later under the parent epic).
+  The D20 walker picks it up automatically — no manifest churn,
+  as designed.
 
 ## References
 
