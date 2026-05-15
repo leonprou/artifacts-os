@@ -31,3 +31,29 @@ books:
     src: artifacts/agents/
     dest: .claude/agents/
     description: Default agent specs (architect, developer, researcher, etc.).
+
+  - name: commands
+    src: src/artifacts_os/ai/claude/commands/
+    dest: .claude/commands/
+    description: Slash commands for artifacts CLI (artifacts.create, artifacts.list, artifacts.show).
+
+  # Tier 2 — skills (D26 recurse mode: folder-of-folders).
+  # Each direct subdirectory of `src/` is a skill unit; the walker descends
+  # the full subtree and ships it intact to `dest/<unit>/...`.
+  # Adding a new skill = drop a new folder, no manifest churn.
+  # See s0029 §3.2, §7.3, D26 and n0014 §Phase 2.
+  - name: skills
+    src: src/artifacts_os/ai/claude/skills/
+    dest: .claude/skills/
+    description: Skills that teach Claude how to use artifacts-os.
+    recurse: true
+
+  # Tier 3 — kinds (vault structure, not .claude/).
+  # D26 recurse walker picks up both ARTIFACT.md and kind.json per unit —
+  # no file-type override needed (recurse mode is not *.md-only).
+  # dest lands in artifacts/kinds/ (vault root), not .claude/.
+  - name: kinds
+    src: artifacts/kinds/
+    dest: artifacts/kinds/
+    description: Standard artifact kinds (task, note, spec, research, agent).
+    recurse: true

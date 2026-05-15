@@ -266,3 +266,110 @@ def test_load_manifest_rejects_v1_artbook_yaml(tmp_path: Path) -> None:
     (tmp_path / "artbook.yaml").write_text(yaml.dump(v1_data))
     with pytest.raises(ManifestError, match="removed in v2"):
         load_manifest(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# parse_manifest — recurse flag (D26)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_book_recurse_default_false() -> None:
+    """D26: `recurse` defaults to False when absent."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [{"name": "agents", "src": "agents/", "dest": ".claude/agents/"}],
+    }
+    m = parse_manifest(data)
+    assert m.books[0].recurse is False
+
+
+def test_parse_book_recurse_true() -> None:
+    """D26: `recurse: true` parses to Book.recurse=True."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "skills",
+                "src": "skills/",
+                "dest": ".claude/skills/",
+                "recurse": True,
+            }
+        ],
+    }
+    m = parse_manifest(data)
+    assert m.books[0].recurse is True
+
+
+def test_parse_book_recurse_false_explicit() -> None:
+    """D26: `recurse: false` is accepted and equivalent to default."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "agents",
+                "src": "agents/",
+                "dest": ".claude/agents/",
+                "recurse": False,
+            }
+        ],
+    }
+    m = parse_manifest(data)
+    assert m.books[0].recurse is False
+
+
+def test_parse_book_recurse_rejects_int() -> None:
+    """D26: non-bool `recurse` (int) is rejected with a clear error."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "skills",
+                "src": "skills/",
+                "dest": ".claude/skills/",
+                "recurse": 1,
+            }
+        ],
+    }
+    with pytest.raises(ManifestError, match="recurse must be a boolean"):
+        parse_manifest(data)
+
+
+def test_parse_book_recurse_rejects_string() -> None:
+    """D26: non-bool `recurse` (string) is rejected with a clear error."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "skills",
+                "src": "skills/",
+                "dest": ".claude/skills/",
+                "recurse": "true",
+            }
+        ],
+    }
+    with pytest.raises(ManifestError, match="recurse must be a boolean"):
+        parse_manifest(data)
+
+
+def test_parse_book_recurse_and_files_mutually_exclusive() -> None:
+    """D26: setting both `recurse: true` and `files:` is rejected."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "skills",
+                "src": "skills/",
+                "dest": ".claude/skills/",
+                "recurse": True,
+                "files": ["SKILL.md"],
+            }
+        ],
+    }
+    with pytest.raises(ManifestError, match="mutually exclusive"):
+        parse_manifest(data)

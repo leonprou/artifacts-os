@@ -140,15 +140,20 @@ def _book_header(manifest, distro_url: str, sha: str) -> str:
 
 def _render_book_list(manifest, distro_url: str, sha: str) -> None:
     """Render the book list table to the console (shared by local and remote paths)."""
-    rows = [
-        BookRow(
-            name=b.name,
-            src=b.src,
-            dest=b.dest,
-            description=b.description or "",
+    rows = []
+    for b in manifest.books:
+        desc = b.description or ""
+        # D26 — annotate recurse-mode books in the Description column.
+        if getattr(b, "recurse", False):
+            desc = f"(recurse) {desc}".rstrip()
+        rows.append(
+            BookRow(
+                name=b.name,
+                src=b.src,
+                dest=b.dest,
+                description=desc,
+            )
         )
-        for b in manifest.books
-    ]
     columns = [
         FieldSpec(key="name", fmt=None, label="Name"),
         FieldSpec(key="src", fmt=None, label="Source"),
@@ -255,11 +260,13 @@ def _render_book_show(
     dest_rel = dest.relative_to(root)
 
     try:
-        src_files = _select_files(src_dir, book)
+        src_entries = _select_files(src_dir, book)
     except (ManifestError, ArtbookError) as exc:
         _err(str(exc))
         return 1
-    filenames = [f.name for f in src_files]
+    # D26 — entries are now (abs_path, rel_path) tuples. Flat / allowlist
+    # modes keep rel as a flat filename; recurse mode produces nested rels.
+    rel_paths: list[Path] = [rel for _abs, rel in src_entries]
 
     if json_out:
         distro_info: dict = {"name": manifest.name}
@@ -270,10 +277,26 @@ def _render_book_show(
             distro_info["url"] = None
             distro_info["sha"] = None
             distro_info["local"] = True
+
+        if book.recurse:
+            # D26 — group contents by unit (first path component)
+            units: dict[str, list[str]] = {}
+            for rel in rel_paths:
+                parts = rel.parts
+                unit = parts[0] if parts else ""
+                inner = str(Path(*parts[1:])) if len(parts) > 1 else ""
+                if unit:
+                    units.setdefault(unit, []).append(inner)
+            contents_payload: list = [
+                {"unit": u, "files": files} for u, files in units.items()
+            ]
+        else:
+            contents_payload = [str(rel) for rel in rel_paths]
+
         print(json.dumps({
             "book": dataclasses.asdict(book),
             "distro": distro_info,
-            "contents": filenames,
+            "contents": contents_payload,
         }, ensure_ascii=False))
         return 0
 
@@ -281,6 +304,8 @@ def _render_book_show(
     _CONSOLE.print(f"[bold]Book:[/bold]        {book.name}")
     _CONSOLE.print(f"[bold]Source:[/bold]      {book.src}")
     _CONSOLE.print(f"[bold]Destination:[/bold] {dest_rel}/")
+    if book.recurse:
+        _CONSOLE.print("[bold]Mode:[/bold]        recurse (folder-of-folders)")
     _CONSOLE.print(f"[bold]Description:[/bold] {desc}")
     _CONSOLE.print()
     _CONSOLE.print(f"[bold]Distro:[/bold]      {manifest.name}")
@@ -289,10 +314,38 @@ def _render_book_show(
     else:
         _CONSOLE.print("[bold]URL:[/bold]         (local)")
     _CONSOLE.print()
-    n = len(filenames)
-    _CONSOLE.print(f"Contents ({n} file{'s' if n != 1 else ''}):")
-    for name in filenames:
-        _CONSOLE.print(f"  {name}")
+
+    if book.recurse:
+        # D26 — grouped unit/file rendering
+        units_grouped: dict[str, list[str]] = {}
+        for rel in rel_paths:
+            parts = rel.parts
+            if not parts:
+                continue
+            unit = parts[0]
+            inner = str(Path(*parts[1:])) if len(parts) > 1 else parts[0]
+            # If rel is just the unit name (a file at unit root), inner == filename
+            if len(parts) > 1:
+                units_grouped.setdefault(unit, []).append(inner)
+            else:
+                # Loose file directly under src — shouldn't happen in recurse mode
+                # because the walker ignores them, but defensively include.
+                units_grouped.setdefault(unit, []).append("")
+        n_units = len(units_grouped)
+        n_files = sum(len(v) for v in units_grouped.values())
+        _CONSOLE.print(
+            f"Contents ({n_units} unit{'s' if n_units != 1 else ''}, "
+            f"{n_files} file{'s' if n_files != 1 else ''}):"
+        )
+        for unit, files in units_grouped.items():
+            _CONSOLE.print(f"\n  {unit}/")
+            for f in files:
+                _CONSOLE.print(f"    {f}")
+    else:
+        n = len(rel_paths)
+        _CONSOLE.print(f"Contents ({n} file{'s' if n != 1 else ''}):")
+        for rel in rel_paths:
+            _CONSOLE.print(f"  {rel}")
     return 0
 
 
@@ -385,11 +438,11 @@ def _plan_writes(book, clone_root: Path, vault_root: Path) -> list[WriteActionRo
     dest_dir = destination_for(vault_root, book)
 
     src_dir = clone_root / book.src
-    src_files = _select_files(src_dir, book)
+    src_entries = _select_files(src_dir, book)
 
     rows: list[WriteActionRow] = []
-    for src_file in src_files:
-        dst = dest_dir / src_file.name
+    for _src_file, rel in src_entries:
+        dst = dest_dir / rel
         was_symlink = dst.is_symlink()
         overwritten = dst.exists() or was_symlink
         rows.append(WriteActionRow(

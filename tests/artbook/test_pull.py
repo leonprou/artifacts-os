@@ -160,3 +160,94 @@ def test_pull_book_allowlist_missing_file_raises(
     book = Book(name="agents", src="agents/", dest=".claude/agents/", files=("ghost.md",))
     with pytest.raises(ManifestError, match="'ghost.md' not found"):
         pull_book(book, clone_root, vault_root)
+
+
+# ---------------------------------------------------------------------------
+# pull_book — D26 recurse mode end-to-end
+# ---------------------------------------------------------------------------
+
+
+def test_pull_book_recurse_writes_nested_files(
+    tmp_path: Path, vault_root: Path
+) -> None:
+    """D26 end-to-end: pull a recurse book → nested files at vault/<dest>/<unit>/..."""
+    clone_root = tmp_path / "clone"
+    skills = clone_root / "skills"
+
+    # Unit 1
+    aos = skills / "artifacts-os"
+    aos.mkdir(parents=True)
+    (aos / "SKILL.md").write_text("# Skill: artifacts-os")
+    (aos / "__init__.py").write_text("")
+    (aos / "nested").mkdir()
+    (aos / "nested" / "helper.md").write_text("# Helper")
+
+    # Unit 2
+    rc = skills / "release-changelog"
+    rc.mkdir()
+    (rc / "SKILL.md").write_text("# Skill: release-changelog")
+    (rc / "__init__.py").write_text("")
+
+    # Excluded artefacts
+    (skills / "__pycache__").mkdir()
+    (skills / "__pycache__" / "foo.pyc").write_text("compiled")
+    (aos / "extra.pyc").write_text("compiled")
+
+    book = Book(
+        name="skills",
+        src="skills/",
+        dest=".claude/skills/",
+        recurse=True,
+    )
+    report = pull_book(book, clone_root, vault_root)
+
+    dest = vault_root / ".claude" / "skills"
+    assert dest.is_dir()
+
+    # Verify on-disk layout
+    assert (dest / "artifacts-os" / "SKILL.md").read_text() == "# Skill: artifacts-os"
+    assert (dest / "artifacts-os" / "__init__.py").is_file()
+    assert (dest / "artifacts-os" / "nested" / "helper.md").read_text() == "# Helper"
+    assert (dest / "release-changelog" / "SKILL.md").is_file()
+    assert (dest / "release-changelog" / "__init__.py").is_file()
+
+    # __pycache__ and *.pyc must be absent
+    assert not (dest / "__pycache__").exists()
+    assert not (dest / "artifacts-os" / "extra.pyc").exists()
+
+    # Report contains all written files
+    written_rels = {
+        str(w.destination.relative_to(dest)) for w in report.written
+    }
+    assert "artifacts-os/SKILL.md" in written_rels
+    assert "artifacts-os/nested/helper.md" in written_rels
+    assert "release-changelog/SKILL.md" in written_rels
+
+
+def test_pull_book_recurse_overwrite_semantics(
+    tmp_path: Path, vault_root: Path
+) -> None:
+    """D26: second pull overwrites prior nested files, marks them overwritten."""
+    clone_root = tmp_path / "clone"
+    skills = clone_root / "skills"
+    aos = skills / "artifacts-os"
+    aos.mkdir(parents=True)
+    (aos / "SKILL.md").write_text("v2")
+
+    book = Book(
+        name="skills",
+        src="skills/",
+        dest=".claude/skills/",
+        recurse=True,
+    )
+
+    # Pre-populate destination with an older copy
+    dest = vault_root / ".claude" / "skills" / "artifacts-os"
+    dest.mkdir(parents=True)
+    (dest / "SKILL.md").write_text("v1")
+
+    report = pull_book(book, clone_root, vault_root)
+    overwritten = [w for w in report.written if w.destination.name == "SKILL.md"]
+    assert len(overwritten) == 1
+    assert overwritten[0].overwritten is True
+    assert (dest / "SKILL.md").read_text() == "v2"

@@ -17,6 +17,10 @@ from artifacts_os.artbook.manifest import Book
 # D20 — excluded filenames (case-insensitive set)
 _EXCLUDE_NAMES: frozenset[str] = frozenset({"readme.md"})
 
+# D26 — recurse mode exclusions
+_RECURSE_EXCLUDE_DIRS: frozenset[str] = frozenset({"__pycache__"})
+_RECURSE_EXCLUDE_SUFFIXES: frozenset[str] = frozenset({".pyc", ".pyo"})
+
 
 # ---------------------------------------------------------------------------
 # Dataclasses (§4.3)
@@ -53,11 +57,17 @@ def destination_for(vault_root: Path, book: Book) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _select_files(src_dir: Path, book: Book) -> list[Path]:
-    """Return the source files to ship for *book*, per D18 (allowlist) or D20 (walker)."""
+def _select_files(src_dir: Path, book: Book) -> list[tuple[Path, Path]]:
+    """Return [(absolute_source, relative_to_dest), ...] for *book*.
+
+    Three modes:
+      - D18 allowlist (``book.files`` set)             → flat, explicit
+      - D20 flat walker (default, ``recurse=False``)   → *.md only, top-level only
+      - D26 recurse walker (``recurse=True``)          → folder-of-folders
+    """
     if book.files is not None:
         # D18 — explicit allowlist; every name must exist under src_dir.
-        out: list[Path] = []
+        out: list[tuple[Path, Path]] = []
         for name in book.files:
             # Path-separator check is already done in manifest parsing, but be defensive.
             if "/" in name or "\\" in name:
@@ -70,10 +80,37 @@ def _select_files(src_dir: Path, book: Book) -> list[Path]:
                 raise ManifestError(
                     f"book '{book.name}' files entry '{name}' not found at {candidate}"
                 )
-            out.append(candidate)
+            out.append((candidate, Path(name)))
         return out
 
-    # D20 — walker: *.md, exclude README.md (case-insensitive) and dotfiles, non-recursive.
+    if book.recurse:
+        # D26 — folder-of-folders. For each subdirectory of src_dir, walk
+        # the entire subtree and yield (abs_file, relative_path_from_src_dir).
+        # Loose files at src_dir's root are silently ignored.
+        out = []
+        for unit in sorted(src_dir.iterdir()):
+            if not unit.is_dir():
+                continue
+            if unit.name.startswith(".") or unit.name in _RECURSE_EXCLUDE_DIRS:
+                continue
+            for src_file in sorted(unit.rglob("*")):
+                if not src_file.is_file():
+                    continue
+                rel = src_file.relative_to(src_dir)
+                # Skip anything under an excluded directory at any depth, including dotdirs.
+                if any(
+                    part.startswith(".") or part in _RECURSE_EXCLUDE_DIRS
+                    for part in rel.parts[:-1]
+                ):
+                    continue
+                if src_file.name.startswith("."):
+                    continue
+                if src_file.suffix.lower() in _RECURSE_EXCLUDE_SUFFIXES:
+                    continue
+                out.append((src_file, rel))
+        return out
+
+    # D20 — flat walker: *.md, exclude README.md (case-insensitive) and dotfiles.
     out = []
     for src_file in sorted(src_dir.iterdir()):
         if not src_file.is_file():
@@ -84,7 +121,7 @@ def _select_files(src_dir: Path, book: Book) -> list[Path]:
             continue
         if src_file.name.lower() in _EXCLUDE_NAMES:
             continue
-        out.append(src_file)
+        out.append((src_file, Path(src_file.name)))
     return out
 
 
@@ -144,8 +181,18 @@ def _copy_book(clone_root: Path, book: Book, dest: Path, vault_root: Path) -> It
 
     dest.mkdir(parents=True, exist_ok=True)
 
-    for src_file in _select_files(src_dir, book):
-        dest_file = dest / src_file.name
+    for src_file, rel in _select_files(src_dir, book):
+        dest_file = dest / rel
+        # D26 — recurse may create nested destination dirs; ensure they exist
+        # before write. No-op for flat/allowlist modes (rel is a flat filename).
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+        # D25 write-time defense-in-depth: re-check each per-file dest is inside vault.
+        resolved_file = dest_file.resolve()
+        if not resolved_file.is_relative_to(resolved_vault):
+            raise ArtbookError(
+                f"book '{book.name}' file '{rel}' resolves to '{resolved_file}', "
+                f"outside vault root '{resolved_vault}'; refusing to write"
+            )
         yield _atomic_write(src_file, dest_file)
 
 

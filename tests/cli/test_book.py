@@ -515,3 +515,109 @@ def test_book_pull_ignores_local_manifest(vault_with_local_manifest: Path, capsy
     assert code == 4
     err = capsys.readouterr().err
     assert "distro_url" in err
+
+
+# ---------------------------------------------------------------------------
+# D26 — recurse (folder-of-folders) CLI rendering
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def vault_with_recurse_book(vault: Path, monkeypatch) -> Path:
+    """A vault with a local artbook.yaml featuring a recurse skills book."""
+    local_artbook = {
+        "version": 1,
+        "distro": {"name": "recurse-distro"},
+        "books": [
+            {
+                "name": "skills",
+                "src": "skills/",
+                "dest": ".claude/skills/",
+                "description": "Skills book.",
+                "recurse": True,
+            }
+        ],
+    }
+    (vault / "artbook.yaml").write_text(yaml.dump(local_artbook), encoding="utf-8")
+
+    skills = vault / "skills"
+    # Unit 1
+    aos = skills / "artifacts-os"
+    aos.mkdir(parents=True)
+    (aos / "SKILL.md").write_text("# Skill: artifacts-os", encoding="utf-8")
+    (aos / "__init__.py").write_text("", encoding="utf-8")
+    # Unit 2
+    rc = skills / "release-changelog"
+    rc.mkdir(parents=True)
+    (rc / "SKILL.md").write_text("# Skill: release-changelog", encoding="utf-8")
+    (rc / "__init__.py").write_text("", encoding="utf-8")
+    # __pycache__ must not surface
+    (skills / "__pycache__").mkdir()
+    (skills / "__pycache__" / "foo.cpython.pyc").write_text("compiled", encoding="utf-8")
+
+    monkeypatch.chdir(vault)
+    return vault
+
+
+def test_book_list_recurse_marker_in_table(vault_with_recurse_book: Path, capsys):
+    """`book list` annotates recurse books with `(recurse)` in the Description column."""
+    code = _run(["book", "list"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "skills" in out
+    assert "(recurse)" in out
+
+
+def test_book_list_json_includes_recurse_flag(vault_with_recurse_book: Path, capsys):
+    """`book list --json` exposes `recurse` on each book object."""
+    code = _run(["book", "list", "--json"])
+    assert code == 0
+    data = json.loads(capsys.readouterr().out)
+    assert len(data["books"]) == 1
+    book = data["books"][0]
+    assert book["name"] == "skills"
+    assert book["recurse"] is True
+
+
+def test_book_show_recurse_grouped_output(vault_with_recurse_book: Path, capsys):
+    """`book show skills` groups Contents by unit and shows the Mode line."""
+    code = _run(["book", "show", "skills"])
+    assert code == 0
+    out = capsys.readouterr().out
+    # Mode line announces recurse mode
+    assert "Mode:" in out
+    assert "recurse" in out
+    # Unit headers appear with trailing slash
+    assert "artifacts-os/" in out
+    assert "release-changelog/" in out
+    # Files appear under their unit
+    assert "SKILL.md" in out
+    assert "__init__.py" in out
+    # __pycache__ must not leak
+    assert "__pycache__" not in out
+    # Header counts (2 units, 4 files)
+    assert "2 units" in out
+    assert "4 files" in out
+
+
+def test_book_show_recurse_json_shape(vault_with_recurse_book: Path, capsys):
+    """`book show skills --json` returns contents as a list of unit objects."""
+    code = _run(["book", "show", "skills", "--json"])
+    assert code == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["book"]["recurse"] is True
+    contents = data["contents"]
+    assert isinstance(contents, list)
+    # Each entry is a {unit, files} object
+    units = {entry["unit"]: entry["files"] for entry in contents}
+    assert "artifacts-os" in units
+    assert "release-changelog" in units
+    assert "SKILL.md" in units["artifacts-os"]
+    assert "__init__.py" in units["artifacts-os"]
+    assert "SKILL.md" in units["release-changelog"]
+    # __pycache__ must not surface anywhere
+    for unit, files in units.items():
+        assert "__pycache__" not in unit
+        for f in files:
+            assert "__pycache__" not in f
+            assert not f.endswith(".pyc")

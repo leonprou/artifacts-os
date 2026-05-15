@@ -21,11 +21,14 @@ _REQUIRED_VERSION = 1
 
 @dataclass(frozen=True)
 class Book:
-    """One book entry from the distro manifest (v2 schema: D24, D25).
+    """One book entry from the distro manifest (v2 schema: D24, D25, D26).
 
     ``files`` is an explicit allowlist (D18); ``None`` means use the D20 walker.
     ``src`` is the path relative to the distro root.
     ``dest`` is the vault-relative destination directory (D25).
+    ``recurse`` (D26) — when ``True``, the walker treats each direct
+    subdirectory of ``src`` as a unit and ships its full subtree to
+    ``dest/<unit>/...``. Mutually exclusive with ``files``.
     """
 
     name: str
@@ -33,6 +36,7 @@ class Book:
     dest: str
     description: str | None = None
     files: tuple[str, ...] | None = None
+    recurse: bool = False
 
 
 @dataclass(frozen=True)
@@ -111,7 +115,32 @@ def _parse_book(raw: Any, index: int) -> Book:
                 )
         files = tuple(raw_files)
 
-    return Book(name=name, src=src, dest=dest, description=description, files=files)
+    # D26 — parse optional recurse flag (default False); reject non-bool values.
+    recurse: bool = False
+    if "recurse" in raw:
+        raw_recurse = raw["recurse"]
+        if not isinstance(raw_recurse, bool):
+            raise ManifestError(
+                f"book '{name}' recurse must be a boolean (true/false); "
+                f"got {type(raw_recurse).__name__}"
+            )
+        recurse = raw_recurse
+
+    # D26 — `recurse: true` and `files: [...]` are mutually exclusive.
+    if recurse and files is not None:
+        raise ManifestError(
+            f"book '{name}' cannot set both `recurse: true` and `files:`; "
+            "they are mutually exclusive (D26). Choose one."
+        )
+
+    return Book(
+        name=name,
+        src=src,
+        dest=dest,
+        description=description,
+        files=files,
+        recurse=recurse,
+    )
 
 
 def parse_manifest(data: Any) -> Manifest:
