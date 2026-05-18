@@ -498,19 +498,46 @@ print(hooks_cfg.hooks)  # list of hook config dicts
 
 The `artbook:` key configures the artbook distribution feature, which
 lets consumers pull agent defaults (and future book types) from a remote
-git repository with one command.
+git repository with one command, and controls the post-pull promotion
+mechanism that surfaces canonical content at tool-specific paths.
 
 ```yaml
 artbook:
   distro_url: https://github.com/example/artbook-defaults
+  promotion: enabled       # 'enabled' (default) | 'disabled'
+  promote_mode: symlink    # absent (default) | 'symlink' | 'copy'
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `distro_url` | string | `null` | URL of the distro git repository. Required for `artifacts book` commands. |
+| `promotion` | string | `"enabled"` | Enable or disable post-pull promotion globally. Set to `"disabled"` to skip the promotion step on every `book pull` and `init`. Invalid values raise `SettingsError`. |
+| `promote_mode` | string | `null` | Override the default symlink mode for all books in this vault. `"symlink"` (default when absent, with automatic copy fallback on unsupported filesystems) or `"copy"` (always copy). Invalid values raise `SettingsError`. |
 
 When `distro_url` is absent or empty, `ArtbookSettings.distro_url` returns
 `None`. The CLI raises `DistroNotConfiguredError` (exit 4) in that case.
+
+### Promotion keys
+
+`promotion: disabled` is a **persistent** per-vault opt-out — every
+`book pull` and `init` book step skips the promotion post-step.
+The canonical write under `artifacts/…` still happens.
+
+`promote_mode` overrides the default promotion mode for all books in
+the vault. The per-book `promote.mode` in the distro manifest takes
+precedence over this setting; this setting takes precedence over the
+`symlink` default.
+
+Precedence (highest wins):
+1. Per-book `promote.mode` in the distro manifest.
+2. `artbook.promote_mode` in `artifacts.yaml` (this setting).
+3. Default `symlink` (with automatic copy fallback).
+
+`--no-promote` on the CLI is a per-invocation override that disables
+the promotion step for that call regardless of this setting. See
+[docs/artbook.md § Consumer behaviour](artbook.md#consumer-behaviour)
+for the full flag/setting reference and the `artifacts book promote`
+verb.
 
 `ArtbookSettings.from_base` parses this section:
 
@@ -520,7 +547,9 @@ from artifacts_os.core import load_settings
 
 base = load_settings(root / "artifacts.yaml")
 arts = ArtbookSettings.from_base(base)
-print(arts.distro_url)  # "https://github.com/example/artbook-defaults" or None
+print(arts.distro_url)    # "https://github.com/example/artbook-defaults" or None
+print(arts.promotion)     # "enabled" or "disabled"
+print(arts.promote_mode)  # None, "symlink", or "copy"
 ```
 
 Unlike `EventsSettings` (which extends `Settings`), `ArtbookSettings` is a

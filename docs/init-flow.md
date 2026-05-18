@@ -1,20 +1,21 @@
-# `artifacts init` — Three-Step Init Flow
+# `artifacts init` — Two-Stage Init Flow
 
 The `artifacts init` command bootstraps a new artifacts-os vault through
-three independent selection steps: settings tier, kinds, and agents. Each
-step can be driven by a flag (to skip it) or an interactive prompt (on a
-TTY). See spec `s0021-artifacts-init-flow` for the full rationale.
+a two-stage selection flow: a settings tier step, followed by one multi-select
+prompt per book in a configured distro. See spec `s0030-books-driven-init-flow`
+for the full rationale.
 
 ## Synopsis
 
 ```
-artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
+artifacts init [DIRECTORY] [--template TIER]
+               [--distro URL] [--book NAME[:ITEMS]] ...
                [--force] [-y] [--dry-run] [--openstation-compat]
 ```
 
-## The Three Steps
+## The Two Stages
 
-### Step 1 — Settings tier
+### Stage 1 — Settings tier (always runs)
 
 Chooses one of two settings tiers, written as `artifacts.yaml`.
 
@@ -25,63 +26,170 @@ Chooses one of two settings tiers, written as `artifacts.yaml`.
 
 Tiers are **strictly additive** — `standard` is a superset of `minimal`.
 
-### Step 2 — Kinds
+### Stage 2..N — Book loop (only when distro configured)
 
-Multi-select from the bundled catalogue. Installed files per kind:
-
-```
-artifacts/kinds/<name>.json          # JSON schema
-artifacts/kinds/<name>/ARTIFACT.md   # body template
-artifacts/<x-dir>/.gitkeep           # storage directory sentinel
-```
-
-| Kind | Default | Storage dir |
-|------|---------|-------------|
-| `task` | ✓ | `artifacts/tasks/` |
-| `note` | ✓ | `artifacts/notes/` |
-| `spec` | ✓ | `artifacts/specs/` |
-| `research` | — | `artifacts/research/` |
-| `agent` | — (auto-included with agents) | `artifacts/agents/` |
-
-### Step 3 — Agents
-
-Multi-select from the bundled catalogue. Installed files per agent:
+When `--distro` or `$ARTIFACTS_DISTRO_URL` is set, each book declared in
+the distro manifest gets a single multi-select prompt (or is pulled
+non-interactively with `-y`/`--book`). Books are looped in manifest
+declaration order.
 
 ```
-artifacts/agents/<name>.md
+Book 'agents' (9 items) — comma-separated numbers, '*' for all, '-' for none:
+  1) architect        [default]
+  2) author           [default]
+  ...
+
+Choice [*]:
 ```
 
-Default: none. Available: `architect`, `author`, `developer`, `researcher`,
-`technical-writer`.
+### No-distro fallback (D2)
 
-**Agent-kind coupling (D10):** selecting any agent automatically adds the
-`agent` kind to the Step 2 selection (even if Step 2 was driven by a flag
-that omitted it). The summary line notes `(agent kind auto-included for
-selected agents)`.
+When no `--distro` and no `$ARTIFACTS_DISTRO_URL`:
+
+1. Stage 1 runs (settings tier → writes `artifacts.yaml`).
+2. The bundled `artifacts-os` skill is written to
+   `artifacts/skills/artifacts-os/SKILL.md` (canonical), then
+   promoted via symlink to `.claude/skills/artifacts-os/SKILL.md`.
+   The promotion is recorded in `artifacts/.artbook/state.json`
+   under a synthetic book entry `artifacts-os-skill`.
+3. Init exits.
+
+No kinds, no agents. The vault is intentionally minimal — the user
+grows it later by configuring `artbook.distro_url` and running
+`artifacts book pull`, or by re-running `artifacts init --distro <url> --force`.
+
+## Transcripts
+
+### Transcript A — No-distro interactive (D2 fallback)
+
+```
+$ art init
+
+Settings tier (1 of 1):
+  1) minimal      — header + lifecycle views (active / ready / done)
+  2) standard     — adds per-type slices, default_views, cross-kind 'recent'
+
+Choice [2]: ⏎
+
+Selected:
+  template : standard
+
+Writing files...
+  ✓ artifacts.yaml
+  ✓ artifacts/skills/artifacts-os/SKILL.md
+  ✓ .claude/skills/artifacts-os/SKILL.md (→ ../../artifacts/skills/artifacts-os/SKILL.md)
+
+Initialised artifacts-os project: /path/to/proj
+```
+
+One selection step. The bundled skill is written to the canonical
+location under `artifacts/skills/` and promoted via symlink into
+`.claude/skills/`. The promotion is tracked in
+`artifacts/.artbook/state.json`.
+
+### Transcript B — Distro-configured interactive (D1 + book loop)
+
+```
+$ art init --distro https://github.com/leonprou/artifacts-os
+
+Settings tier (1 of N):
+  1) minimal      — header + lifecycle views (active / ready / done)
+  2) standard     — adds per-type slices, default_views, cross-kind 'recent'
+
+Choice [2]: ⏎
+
+Selected:
+  template : standard
+  distro   : https://github.com/leonprou/artifacts-os
+
+Writing files...
+  ✓ artifacts.yaml
+
+Fetching distro manifest…
+
+Book 'agents' (9 items) — comma-separated numbers, '*' for all, '-' for none:
+  1) architect        [default]
+  2) author           [default]
+  ...
+
+Choice [*]: 1,3,9 ⏎
+  ✓ agents: 3 files written
+
+Book 'skills' (2 items) — comma-separated numbers, '*' for all, '-' for none:
+  1) artifacts-os         [default]
+  2) release-changelog    [default]
+
+Choice [*]: ⏎
+  ✓ skills: 2 files written
+
+Initialised artifacts-os project: /path/to/proj
+```
+
+The bundled `.claude/skills/artifacts-os/SKILL.md` is **not** installed
+from the bundle — when a distro is configured, the distro is authoritative
+for all skill content (Q4).
+
+### Transcript C — Non-interactive (bare -y and fully-flagged distro)
+
+#### C.1 Bare `-y` — D6 fallback
+
+```
+$ art init -y
+
+Selected:
+  template : standard
+
+Writing files...
+  ✓ artifacts.yaml
+  ✓ artifacts/skills/artifacts-os/SKILL.md
+  ✓ .claude/skills/artifacts-os/SKILL.md (→ ../../artifacts/skills/artifacts-os/SKILL.md)
+
+Initialised artifacts-os project: /path/to/proj
+```
+
+#### C.2 Fully-flagged distro
+
+```
+$ art init --distro https://github.com/leonprou/artifacts-os -y \
+       --book agents:architect,developer \
+       --book skills:artifacts-os
+
+Selected:
+  template : standard
+  distro   : https://github.com/leonprou/artifacts-os
+  books    : agents (2 items), skills (1 item)
+
+Writing files...
+  ✓ artifacts.yaml
+
+Fetching distro manifest…
+  ✓ agents: 2 files written
+  ✓ skills: 1 file written
+
+Initialised artifacts-os project: /path/to/proj
+```
 
 ## Prompt Format
 
-Single-choice (Step 1):
+Single-choice (Stage 1):
 
 ```
-Settings tier (1 of 3):
+Settings tier (1 of 1):
   1) minimal      — header + lifecycle views (active / ready / done)
   2) standard     — adds per-type slices, default_views, cross-kind 'recent'
 
 Choice [2]: <enter>
 ```
 
-Multi-select (Steps 2 and 3):
+Multi-select (per-book prompt):
 
 ```
-Kinds (2 of 3) — comma-separated numbers, '*' for all, '-' for none:
-  1) task      [default]
-  2) note      [default]
-  3) spec      [default]
-  4) research
-  5) agent
+Book 'agents' (9 items) — comma-separated numbers, '*' for all, '-' for none:
+  1) architect    [default]
+  2) author       [default]
+  ...
 
-Choice [1,2,3]: <enter>
+Choice [*]: <enter>
 ```
 
 Input formats accepted:
@@ -89,17 +197,18 @@ Input formats accepted:
 - `*` → all
 - `-` → none
 - `1,3,5` → items by number
-- `task,spec` → items by name
-- `1,spec` → mixed numbers and names
+- `architect,developer` → items by name
+- `1,developer` → mixed numbers and names
 
 ## Non-TTY Behaviour
 
-| stdin TTY? | All three flags? | `-y`? | Result |
-|-----------|-----------------|-------|--------|
-| yes | any | any | Prompt for un-flagged steps |
-| no | yes | any | Run non-interactively |
-| no | no | yes | Use defaults for un-flagged steps |
-| no | no | no | **Exit 2** with error |
+| stdin TTY? | `--template` set? | Distro? | `--book` / `-y`? | Result |
+|-----------|------------------|---------|------------------|--------|
+| yes | any | any | any | Prompt for un-flagged steps |
+| no | yes | no | any | Run non-interactively |
+| no | yes | yes | yes (`-y` or `--book`) | Run non-interactively |
+| no | any | any | (insufficient) | **Exit 2** with error |
+| no | any | any | `-y` | Use defaults for all steps |
 
 ## Variable Interpolation
 
@@ -123,29 +232,40 @@ Every write target is checked individually:
 The top-level guard (`artifacts.yaml` already exists) triggers
 exit 2 unless `--force` is supplied.
 
+## Error Handling
+
+| Failure mode | Behaviour | Exit code |
+|---|---|---|
+| Manifest invalid (`ManifestError`) | Fail before any book pulls. | 2 |
+| `git clone` failure (`FetchError`) — CLI `--distro` | Fail before any book pulls. | 2 |
+| `git clone` failure — env `$ARTIFACTS_DISTRO_URL` | Fail with error, vault preserved. | 1 |
+| `--book` references unknown book or item | Fail before any book pulls. | 2 |
+| Per-book failure | Log error, skip book, continue loop. | 1 (at end) |
+
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | All writes succeeded (or `--dry-run`). |
-| 1 | At least one file failed to write; others succeeded. |
-| 2 | Usage error: bad flag, already-initialised without `--force`, non-TTY without `-y`/all-flags, missing bundled template. |
+| 1 | At least one file or book failed; others succeeded. |
+| 2 | Usage error: bad flag, already-initialised without `--force`, non-TTY without `-y`/flags, manifest/clone failure with explicit `--distro`. |
 | 3 | Target directory does not exist and parent is not writable. |
 
-## Bundled Templates
+## Bundled Resources
 
-Templates live under `src/artifacts_os/templates/` and are read via
-`importlib.resources.files("artifacts_os.templates")`. They ship inside
-the wheel — no network fetch, no external install cache required.
+Settings templates live under `src/artifacts_os/templates/settings/` and
+are read via `importlib.resources.files("artifacts_os.templates")`.
+
+The bundled skill lives at `src/artifacts_os/ai/claude/skills/artifacts-os/`
+and is read via `importlib.resources.files("artifacts_os.ai.claude.skills")`.
+
+Both ship inside the wheel — no network fetch required.
 
 ```
-src/artifacts_os/templates/
-├── settings/minimal.yaml
-├── settings/standard.yaml
-├── kinds/{task,note,spec,research,agent}/kind.json
-├── kinds/{task,note,spec,research,agent}/ARTIFACT.md
-└── agents/{architect,author,developer,researcher,technical-writer}.md
+src/artifacts_os/
+├── templates/settings/
+│   ├── minimal.yaml
+│   └── standard.yaml
+└── ai/claude/skills/artifacts-os/
+    └── SKILL.md
 ```
-
-Adding a kind or agent template is a pure file addition — no registration
-list needs updating.

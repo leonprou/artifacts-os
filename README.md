@@ -50,7 +50,7 @@ print(task.body)
 
 ### Init
 
-Bootstrap a new artifacts-os project with the three-step guided flow:
+Bootstrap a new artifacts-os project with the two-stage guided flow:
 
 ```bash
 # Interactive (prompts for tier, kinds, agents on a TTY)
@@ -64,9 +64,20 @@ artifacts init --template standard --kinds task,note,spec --agents architect,dev
 
 # Preview without writing
 artifacts init --template minimal --kinds all --agents all --dry-run
+
+# Bootstrap from a distro — pulls books and creates tool-shaped views automatically
+artifacts init --distro https://github.com/my-org/artbook-defaults -y
 ```
 
-See [docs/init-flow.md](docs/init-flow.md) for the complete three-step flow,
+Distros that declare `promote:` in their books ship with automatic
+promotion — pulled files land under `artifacts/` (canonical) and
+are also surfaced at tool-specific paths (e.g., `.claude/agents/`)
+via symlinks, so both `artifacts list` and the consuming tool see
+the same content without any manual linking step. See
+[docs/artbook.md](docs/artbook.md) for the full artbook author and
+consumer reference.
+
+See [docs/init-flow.md](docs/init-flow.md) for the complete two-stage flow,
 settings tier reference, and flag documentation.
 
 ### Common commands
@@ -115,11 +126,12 @@ Coding conventions:
 | Page | Summary |
 |------|---------|
 | [docs/architecture.md](docs/architecture.md) | Package overview, module map, dependency DAG, design principles |
+| [docs/artbook.md](docs/artbook.md) | Artbook distros — authoring `artbook.yaml`, promotion mechanism, consumer behaviour, migration guide |
 | [docs/settings.md](docs/settings.md) | Cross-cutting settings: public API, extension pattern, schema versioning |
 | [docs/events.md](docs/events.md) | Event catalog, JSONL stream format, `artifacts events` CLI reference |
 | [docs/hooks.md](docs/hooks.md) | Declarative hooks — shell, notify, file-drop actions; phase, blocking, env vars |
 | [docs/adding-a-kind.md](docs/adding-a-kind.md) | How to add a new artifact kind — `ARTIFACT.md` description contract, L1 catalogue surface, evaluation-first authoring, `kind.json` schema reference |
-| [docs/init-flow.md](docs/init-flow.md) | `artifacts init` three-step flow — settings tiers, kind/agent catalogues, variable interpolation, non-TTY behaviour |
+| [docs/init-flow.md](docs/init-flow.md) | `artifacts init` two-stage flow — settings tiers, distro book loop, variable interpolation, non-TTY behaviour |
 
 ### Module References
 
