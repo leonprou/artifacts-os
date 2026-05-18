@@ -3,12 +3,13 @@ kind: task
 id: t0174
 name: document-artbook-promotion-mechanism
 type: documentation
-status: verified
+status: done
 assignee: technical-writer
 owner: user
 parent: "[[t0169-add-post-pull-artifact-promotion]]"
 created: 2026-05-18
 started: 2026-05-18
+completed: 2026-05-18
 ---
 
 # Document Artbook Promotion Mechanism
