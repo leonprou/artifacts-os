@@ -8,9 +8,10 @@ kind: task
 name: spec-the-books-driven-init
 owner: user
 parent: '[[t0165]]'
-status: verified
+status: done
 type: spec
 started: 2026-05-16
+completed: 2026-05-18
 ---
 
 # Spec The Books-Driven Init Flow
