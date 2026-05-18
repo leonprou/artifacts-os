@@ -1,9 +1,9 @@
 """cli init command — bootstrap a new artifacts-os project."""
 
-import json
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
@@ -26,46 +26,6 @@ def _load_settings_template(tier: str) -> str:
             f"template not found: artifacts_os/templates/settings/{tier}.yaml\n"
             "       (this is a bug — please file an issue)"
         ) from exc
-
-
-def _load_kind_schema(name: str) -> str:
-    return (
-        _template_root()
-        .joinpath("kinds", name, "kind.json")
-        .read_text(encoding="utf-8")
-    )
-
-
-def _load_kind_artifact(name: str) -> str:
-    return (
-        _template_root()
-        .joinpath("kinds", name, "ARTIFACT.md")
-        .read_text(encoding="utf-8")
-    )
-
-
-def _load_agent_template(name: str) -> str:
-    return (
-        _template_root()
-        .joinpath("agents", f"{name}.md")
-        .read_text(encoding="utf-8")
-    )
-
-
-def _discover_kinds() -> list[str]:
-    return sorted(
-        p.name
-        for p in _template_root().joinpath("kinds").iterdir()
-        if p.is_dir() and p.joinpath("kind.json").is_file()
-    )
-
-
-def _discover_agents() -> list[str]:
-    return sorted(
-        p.name.removesuffix(".md")
-        for p in _template_root().joinpath("agents").iterdir()
-        if p.is_file() and p.name.endswith(".md")
-    )
 
 
 # ─── Variable interpolation ────────────────────────────────────────────────
@@ -203,7 +163,7 @@ def _prompt_single_step(
 def _prompt_multi_step(
     label: str, options: list[str], defaults: list[str]
 ) -> list[str]:
-    """Prompt for a multi-select (Step 2 or 3)."""
+    """Prompt for a multi-select (per-book item selection)."""
     if defaults:
         defaults_display = ",".join(
             str(options.index(d) + 1) for d in defaults if d in options
@@ -252,7 +212,7 @@ def _print_fail(rel: str, reason: str) -> None:
     print(f"  ✗ {rel}: {reason}", file=sys.stderr)
 
 
-# ─── Distro step ───────────────────────────────────────────────────────────
+# ─── Distro helpers ────────────────────────────────────────────────────────
 
 
 def _distro_item_names(entries: list, recurse: bool) -> list[str]:
@@ -272,27 +232,166 @@ def _distro_item_names(entries: list, recurse: bool) -> list[str]:
     return list(seen)
 
 
-def _run_distro_step(
+# ─── Book flag parsing ─────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class BookSpec:
+    name: str
+    items: list[str] | None  # None = pull all
+
+
+def _parse_book_flags(args, distro_url: str | None) -> list[BookSpec] | None:
+    """Parse --book flags. Returns list[BookSpec] if flags given, None otherwise.
+
+    Returns None (with no error) when no --book flags are given.
+    Returns None when --book is given without a distro URL (caller checks args.book).
+    """
+    raw_flags: list[str] = getattr(args, "book", None) or []
+    if not raw_flags:
+        return None  # no --book flags → interactive or -y default
+    if distro_url is None:
+        # caller will detect this via args.book being non-empty
+        return None
+    specs: list[BookSpec] = []
+    for token in raw_flags:
+        name, sep, items_raw = token.partition(":")
+        name = name.strip()
+        if not name:
+            print(f"error: invalid --book value: {token!r}", file=sys.stderr)
+            return None
+        items = (
+            [i.strip() for i in items_raw.split(",") if i.strip()]
+            if sep else None
+        )
+        specs.append(BookSpec(name=name, items=items))
+    return specs
+
+
+# ─── Bundled skill install ─────────────────────────────────────────────────
+
+
+def _walk_resource(traversable) -> list:
+    """Recursively walk a Traversable, yielding leaf files."""
+    results = []
+    for entry in traversable.iterdir():
+        if entry.is_dir():
+            results.extend(_walk_resource(entry))
+        else:
+            results.append(entry)
+    return results
+
+
+def _excluded_from_bundle(rel_path: Path) -> bool:
+    """Returns True for __init__.py, __pycache__/, *.pyc, *.pyo, dotfiles."""
+    parts = rel_path.parts
+    if any(p == "__pycache__" for p in parts):
+        return True
+    if any(p.startswith(".") for p in parts):
+        return True
+    name = rel_path.name
+    return (
+        name == "__init__.py"
+        or name.endswith(".pyc")
+        or name.endswith(".pyo")
+    )
+
+
+def _install_bundled_skill(
+    target: Path, *, force: bool, dry_run: bool, no_promote: bool, _do_write
+) -> None:
+    """Install the bundled artifacts-os skill via canonical-write + promote (D40).
+
+    1. Write each skill file to ``artifacts/skills/artifacts-os/<rel>`` (canonical).
+    2. Unless *no_promote* or *dry_run*, run ``promote_book`` on a synthetic
+       in-memory Book to create relative symlinks at
+       ``.claude/skills/artifacts-os/<rel>`` → canonical.
+
+    The state file at ``artifacts/.artbook/state.json`` records the promotion
+    under ``promotions["artifacts-os-skill"]``.  A subsequent distro pull that
+    ships its own ``skills`` book replaces this entry cleanly (the synthetic
+    name does not collide with any real book name).
+
+    Uses the _do_write callable for canonical file writing so that ``--force``
+    and ``--dry-run`` semantics are respected.
+    """
+    root = files("artifacts_os.ai.claude.skills").joinpath("artifacts-os")
+    # 1. Canonical destination: artifacts/skills/artifacts-os/
+    canonical_dest_root = target / "artifacts" / "skills" / "artifacts-os"
+
+    leaf_files = _walk_resource(root)
+    for entry in leaf_files:
+        rel = _traversable_rel_path(entry, root)
+        if rel is None or _excluded_from_bundle(rel):
+            continue
+        content = entry.read_text(encoding="utf-8")
+        _do_write(canonical_dest_root / rel, content)
+
+    # dry_run: canonical writes already reported via _do_write; skip promotion.
+    if dry_run:
+        return
+
+    # 2. Promote: symlink .claude/skills/artifacts-os/<rel> → canonical.
+    if not no_promote:
+        from artifacts_os.artbook.manifest import Book, Promote
+        from artifacts_os.artbook.placement import promote_book
+        from artifacts_os.artbook.state import read_state
+
+        book = Book(
+            name="artifacts-os-skill",
+            src="(bundled)",
+            dest="artifacts/skills/",
+            promote=Promote(target=".claude/skills/", mode="symlink"),
+            recurse=True,
+            files=None,
+        )
+        state = read_state(target)
+        promote_book(book, target, state=state)
+
+
+def _traversable_rel_path(entry, root) -> Path | None:
+    """Compute the relative path of a Traversable entry from root.
+
+    Both entry and root are Traversable objects. We derive the relative
+    path by comparing their string representations (name segments).
+    """
+    # Convert to string paths — works for both zipimport and filesystem
+    try:
+        entry_path = Path(str(entry))
+        root_path = Path(str(root))
+        return entry_path.relative_to(root_path)
+    except (ValueError, TypeError):
+        # Fallback: just use the filename
+        return Path(entry.name)
+
+
+# ─── Book loop ─────────────────────────────────────────────────────────────
+
+
+def _run_book_loop(
     distro_url: str,
-    books_flag: str | None,
+    distro_source: str | None,
+    book_specs: list[BookSpec] | None,
     target: Path,
     *,
     yes: bool,
     dry_run: bool,
     is_tty: bool,
-) -> bool:
-    """Execute Step 4: clone the distro and pull selected books.
+    force: bool,
+    _do_write,
+) -> int:
+    """Execute the book loop: clone the distro and pull selected books.
 
-    Returns True if any error occurred (clone failure or per-book failure).
-    The vault files (artifacts.yaml, kinds, agents) have already been written
-    by the time this function is called (req 7).
+    Returns:
+        0  — success
+        1  — per-book errors (loop continues, non-zero exit at end)
+        2  — fatal pre-pull error (manifest/clone/unknown book)
     """
     import artifacts_os.artbook as artbook
     from artifacts_os.artbook import FetchError, ManifestError
     from artifacts_os.artbook.errors import ArtbookError
     from artifacts_os.artbook.placement import (
         _select_files,
-        destination_for,
         filter_entries_by_items,
     )
 
@@ -300,9 +399,15 @@ def _run_distro_step(
 
     # Req 12: dry-run — report intended action without cloning or writing.
     if dry_run:
-        flag_info = f" (books: {books_flag})" if books_flag else " (all books)"
-        print(f"  [would] pull from distro: {distro_url}{flag_info}")
-        return False
+        if book_specs is not None:
+            books_info = ", ".join(
+                f"{bs.name} ({len(bs.items)} items)" if bs.items else f"{bs.name} (all)"
+                for bs in book_specs
+            )
+            print(f"  [would] pull from distro: {distro_url} (books: {books_info})")
+        else:
+            print(f"  [would] pull from distro: {distro_url} (all books)")
+        return 0
 
     print("Fetching distro manifest…")
     try:
@@ -316,50 +421,53 @@ def _run_distro_step(
                     f"{exc.stderr.strip()}",
                     file=sys.stderr,
                 )
-                return True
+                # Env-supplied distro URL failure is non-fatal (fall through to D2 not
+                # applicable here — we already wrote artifacts.yaml). Exit 2 for CLI,
+                # exit 1 for env (vault is already written).
+                if distro_source == "cli":
+                    return 2
+                return 1
             except ManifestError as exc:
                 print(f"error: distro manifest invalid: {exc}", file=sys.stderr)
-                return True
+                if distro_source == "cli":
+                    return 2
+                return 1
 
             all_book_names = [b.name for b in manifest.books]
 
+            # ── Validate --book names against manifest ────────────────
+            if book_specs is not None:
+                invalid_books = [
+                    bs.name for bs in book_specs if bs.name not in all_book_names
+                ]
+                if invalid_books:
+                    avail = ", ".join(all_book_names)
+                    print(
+                        f"error: unknown book(s) in --book: {', '.join(invalid_books)}; "
+                        f"available: {avail}",
+                        file=sys.stderr,
+                    )
+                    return 2
+
             # ── Determine which books to pull ─────────────────────────
-            if books_flag is not None:
-                # --books flag supplied — skip book-selection prompt (req 2)
-                lower_flag = books_flag.strip().lower()
-                if lower_flag == "all":
-                    selected_book_names = list(all_book_names)
-                else:
-                    tokens = [t.strip() for t in books_flag.split(",") if t.strip()]
-                    invalid = [t for t in tokens if t not in all_book_names]
-                    if invalid:
-                        avail = ", ".join(all_book_names)
-                        print(
-                            f"error: unknown book(s) in --books: {', '.join(invalid)}; "
-                            f"available: {avail}",
-                            file=sys.stderr,
-                        )
-                        return True
-                    selected_book_names = tokens
+            if book_specs is not None:
+                # --book flags supplied — use exactly those books
+                selected_book_names = [bs.name for bs in book_specs]
             elif yes:
-                # Req 4: -y + distro → all books, all items
+                # -y + distro → all books, all items
                 selected_book_names = list(all_book_names)
             else:
-                # Interactive book selection (req 3)
+                # Interactive book selection: show all books, default = all
                 print()
-                print("Available books:")
-                for b in manifest.books:
-                    desc = f" — {b.description}" if b.description else ""
-                    print(f"  {b.name:<20} → {b.dest}{desc}")
                 selected_book_names = _prompt_multi_step(
-                    "Step 4 of 4: Distro books",
+                    "Books to pull",
                     all_book_names,
                     all_book_names,
                 )
 
             if not selected_book_names:
                 print("  No books selected — skipping distro pull.")
-                return False
+                return 0
 
             # ── Pull each selected book ───────────────────────────────
             had_error = False
@@ -376,17 +484,36 @@ def _run_distro_step(
                     had_error = True
                     continue
 
+                # Determine item filter for this book
                 preselected = None
-                if not yes and is_tty:
-                    # Interactive item selection (req 3 — per-book item subset)
+                if book_specs is not None:
+                    # Find the BookSpec for this book
+                    spec = next(bs for bs in book_specs if bs.name == book_name)
+                    if spec.items is not None:
+                        # Validate items before filtering
+                        item_names = _distro_item_names(all_entries, book.recurse)
+                        invalid_items = [i for i in spec.items if i not in item_names]
+                        if invalid_items:
+                            avail = ", ".join(item_names)
+                            print(
+                                f"error: unknown item(s) in --book {book_name}: "
+                                f"{', '.join(invalid_items)}; available: {avail}",
+                                file=sys.stderr,
+                            )
+                            return 2
+                        filtered, _unmatched, _ = filter_entries_by_items(
+                            all_entries,
+                            spec.items,
+                            recurse=book.recurse,
+                        )
+                        preselected = filtered
+                elif not yes and is_tty:
+                    # Interactive item selection (per-book item subset)
                     item_names = _distro_item_names(all_entries, book.recurse)
                     if item_names:
                         print()
-                        print(f"  Book '{book_name}' items:")
-                        for item in item_names:
-                            print(f"    • {item}")
                         selected_items = _prompt_multi_step(
-                            f"  Items from '{book_name}'",
+                            f"Book '{book_name}' ({len(item_names)} items)",
                             item_names,
                             item_names,
                         )
@@ -412,59 +539,20 @@ def _run_distro_step(
                         f"  ✓ {book_name}: {n} file{'s' if n != 1 else ''} written"
                     )
                 except (ManifestError, ArtbookError) as exc:
-                    # Req 11: continue with remaining books on per-book failure
+                    # Continue with remaining books on per-book failure
                     print(
                         f"  error: book '{book_name}': {exc}", file=sys.stderr
                     )
                     had_error = True
 
-            return had_error
+            return 1 if had_error else 0
 
     except Exception as exc:  # noqa: BLE001
         print(f"error: distro step failed unexpectedly: {exc}", file=sys.stderr)
-        return True
-
-
-# ─── Flag validation ───────────────────────────────────────────────────────
-
-
-def _parse_csv_flag(
-    raw: str, valid_options: list[str], flag_name: str
-) -> list[str] | None:
-    """Parse --kinds / --agents flag.  Returns list or None on validation error.
-
-    Prints an error message to stderr on failure (caller returns 2).
-    """
-    raw = raw.strip()
-    lower = raw.lower()
-    if lower in ("all",):
-        return list(valid_options)
-    if lower in ("none", "-"):
-        return []
-
-    tokens = [t.strip() for t in raw.split(",") if t.strip()]
-    result: list[str] = []
-    seen: set[str] = set()
-    for token in tokens:
-        if token in valid_options:
-            if token not in seen:
-                result.append(token)
-                seen.add(token)
-        else:
-            available = ", ".join(valid_options)
-            print(
-                f"error: unknown {flag_name} '{token}'; available: {available}",
-                file=sys.stderr,
-            )
-            return None
-    return result
+        return 1
 
 
 # ─── CLI registration ──────────────────────────────────────────────────────
-
-# Per spec D6 / D7
-_DEFAULT_KINDS = ["task", "note", "spec"]
-_DEFAULT_AGENTS: list[str] = []
 
 _TIER_DESCRIPTIONS: dict[str, str] = {
     "minimal": "header + lifecycle views (active / ready / done)",
@@ -483,13 +571,14 @@ def register(subparsers) -> None:
         help="initialise a new artifacts-os project",
         description=(
             "initialise a new artifacts-os project\n\n"
-            "The init flow has three independent selection steps:\n"
-            "  1. Settings tier — minimal / standard\n"
-            "  2. Kinds         — multi-select from the bundled catalogue\n"
-            "  3. Agents        — multi-select from the bundled catalogue\n\n"
-            "Pass --template / --kinds / --agents to skip the corresponding\n"
-            "step; use -y to accept defaults at every un-flagged step in\n"
-            "non-interactive mode."
+            "The init flow has two stages:\n"
+            "  1. Settings tier — single choice: minimal / standard\n"
+            "  2..N. One multi-select prompt per book in the distro\n"
+            "        (only when --distro or $ARTIFACTS_DISTRO_URL is set)\n\n"
+            "When no distro is configured, only Step 1 runs and the bundled\n"
+            "artifacts-os skill is installed into .claude/skills/artifacts-os/.\n\n"
+            "Pass --template to skip Step 1; use --book to specify which books\n"
+            "and items to pull non-interactively; use -y to accept defaults."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -507,21 +596,13 @@ def register(subparsers) -> None:
         help="settings tier (skips Step 1 when given)",
     )
     p.add_argument(
-        "--kinds",
-        default=None,
-        metavar="CSV",
+        "--book",
+        action="append",
+        metavar="NAME[:ITEMS]",
         help=(
-            "comma-separated kinds to install (skips Step 2)."
-            " Use 'all' for every kind, 'none' for none."
-        ),
-    )
-    p.add_argument(
-        "--agents",
-        default=None,
-        metavar="CSV",
-        help=(
-            "comma-separated agents to install (skips Step 3)."
-            " Use 'all' for every agent, 'none' for none."
+            "book to pull from distro (repeatable). "
+            "NAME pulls the whole book; NAME:item,item pulls a subset. "
+            "Requires --distro or $ARTIFACTS_DISTRO_URL."
         ),
     )
     p.add_argument(
@@ -550,17 +631,18 @@ def register(subparsers) -> None:
         default=None,
         metavar="URL",
         help=(
-            "git-clonable distro URL; activates Step 4 (distro book pull) after "
-            "vault files are written. Use -y to pull all books/items non-interactively."
+            "git-clonable distro URL; activates the book loop after "
+            "artifacts.yaml is written. Use -y to pull all books/items "
+            "non-interactively. Defaults to $ARTIFACTS_DISTRO_URL when set; "
+            "the CLI flag always wins."
         ),
     )
     p.add_argument(
-        "--books",
-        default=None,
-        metavar="CSV",
+        "--no-promote",
+        action="store_true",
         help=(
-            "comma-separated book names to pull from distro (skips book-selection prompt). "
-            "Use 'all' for every book. Requires --distro."
+            "skip the promotion step — write canonical files only, do not "
+            "create tool-specific symlinks or copies under .claude/"
         ),
     )
     p.set_defaults(func=run, _pre_registry=True)
@@ -585,34 +667,34 @@ def run(args) -> int:  # no registry — called before vault setup
             return 3
         target.mkdir(parents=True)
 
-    # ── Discover available template options ────────────────────
-    try:
-        all_kinds = _discover_kinds()
-        all_agents = _discover_agents()
-    except Exception as exc:
-        print(f"error: could not load bundled templates: {exc}", file=sys.stderr)
+    # ── Resolve distro URL (CLI flag > $ARTIFACTS_DISTRO_URL > none) ──
+    cli_distro: str | None = getattr(args, "distro", None)
+    env_distro_raw = os.environ.get("ARTIFACTS_DISTRO_URL", "")
+    env_distro = env_distro_raw.strip() or None
+    if cli_distro is not None:
+        distro_url: str | None = cli_distro
+        distro_source: str | None = "cli"
+    elif env_distro is not None:
+        distro_url = env_distro
+        distro_source = "env"
+    else:
+        distro_url = None
+        distro_source = None
+
+    # ── Validate --book requires --distro (or env var) ──────────
+    raw_book_flags: list[str] = getattr(args, "book", None) or []
+    if raw_book_flags and distro_url is None:
+        print(
+            "error: --book requires --distro or $ARTIFACTS_DISTRO_URL",
+            file=sys.stderr,
+        )
         return 2
 
-    # ── Validate --books requires --distro ────────────────────────
-    distro_url: str | None = getattr(args, "distro", None)
-    books_flag: str | None = getattr(args, "books", None)
-    if books_flag is not None and not distro_url:
-        print("error: --books requires --distro", file=sys.stderr)
+    # ── Parse --book flags ─────────────────────────────────────
+    book_specs: list[BookSpec] | None = _parse_book_flags(args, distro_url)
+    # If raw_book_flags is non-empty but book_specs is None, parsing failed
+    if raw_book_flags and book_specs is None:
         return 2
-
-    # ── Validate --kinds / --agents flag values (before any I/O) ──
-    flag_kinds: list[str] | None = None
-    flag_agents: list[str] | None = None
-
-    if args.kinds is not None:
-        flag_kinds = _parse_csv_flag(args.kinds, all_kinds, "--kinds")
-        if flag_kinds is None:
-            return 2
-
-    if args.agents is not None:
-        flag_agents = _parse_csv_flag(args.agents, all_agents, "--agents")
-        if flag_agents is None:
-            return 2
 
     # ── Already-initialised guard ──────────────────────────────
     settings_file = target / "artifacts.yaml"
@@ -624,25 +706,21 @@ def run(args) -> int:  # no registry — called before vault setup
         )
         return 2
 
-    # ── Non-TTY guard (D3) ─────────────────────────────────────
+    # ── Non-TTY guard ──────────────────────────────────────────
     is_tty = sys.stdin.isatty()
-    # Distro step is fully flagged when: no distro given, --books supplied, or dry-run
+    # Fully flagged = template is set AND (no distro OR book_specs given OR dry_run OR yes)
     distro_fully_flagged = (
         not distro_url
-        or books_flag is not None
+        or book_specs is not None
         or getattr(args, "dry_run", False)
+        or args.yes
     )
-    all_flags = (
-        args.template is not None
-        and args.kinds is not None
-        and args.agents is not None
-        and distro_fully_flagged
-    )
+    all_flags = args.template is not None and distro_fully_flagged
     if not is_tty and not args.yes and not all_flags:
         print(
             "error: stdin is not a TTY and no defaults were accepted.\n"
             "       Pass -y to accept defaults at every un-flagged step,\n"
-            "       or supply --template, --kinds, and --agents explicitly.",
+            "       or supply --template (and --book for distro steps) explicitly.",
             file=sys.stderr,
         )
         return 2
@@ -657,47 +735,26 @@ def run(args) -> int:  # no registry — called before vault setup
     elif args.yes or not is_tty:
         tier = _TIER_DEFAULT
     else:
+        step_label = "Settings tier (1 of 1)" if distro_url is None else "Settings tier (1 of N)"
         tier = _prompt_single_step(
-            "Settings tier (1 of 3)",
+            step_label,
             _TIER_OPTIONS,
             _TIER_DESCRIPTIONS,
             default_idx=_TIER_OPTIONS.index(_TIER_DEFAULT) + 1,
         )
 
-    # ── Step 2: Kinds ──────────────────────────────────────────
-    if flag_kinds is not None:
-        selected_kinds: list[str] = flag_kinds
-    elif args.yes or not is_tty:
-        selected_kinds = list(_DEFAULT_KINDS)
-    else:
-        selected_kinds = _prompt_multi_step("Kinds (2 of 3)", all_kinds, _DEFAULT_KINDS)
-
-    # ── Step 3: Agents ─────────────────────────────────────────
-    if flag_agents is not None:
-        selected_agents: list[str] = flag_agents
-    elif args.yes or not is_tty:
-        selected_agents = list(_DEFAULT_AGENTS)
-    else:
-        selected_agents = _prompt_multi_step(
-            "Agents (3 of 3)", all_agents, _DEFAULT_AGENTS
-        )
-
-    # ── D10: agent-kind auto-include ───────────────────────────
-    agent_auto_included = False
-    if selected_agents and "agent" not in selected_kinds:
-        selected_kinds = list(selected_kinds) + ["agent"]
-        agent_auto_included = True
-
     # ── Print summary ──────────────────────────────────────────
-    kinds_display = ", ".join(selected_kinds) if selected_kinds else "(none)"
-    if agent_auto_included:
-        kinds_display += " (agent kind auto-included for selected agents)"
-    agents_display = ", ".join(selected_agents) if selected_agents else "(none)"
-
     print("\nSelected:")
     print(f"  template : {tier}")
-    print(f"  kinds    : {kinds_display}")
-    print(f"  agents   : {agents_display}")
+    if distro_url:
+        suffix = " (from ARTIFACTS_DISTRO_URL)" if distro_source == "env" else ""
+        print(f"  distro   : {distro_url}{suffix}")
+        if book_specs:
+            books_summary = ", ".join(
+                f"{bs.name} ({len(bs.items)} items)" if bs.items else f"{bs.name} (all)"
+                for bs in book_specs
+            )
+            print(f"  books    : {books_summary}")
     print()
 
     # ── Build settings content ─────────────────────────────────
@@ -711,7 +768,7 @@ def run(args) -> int:  # no registry — called before vault setup
         settings_content, project_name, project_alias, today_iso
     )
 
-    # Req 6: inject artbook.distro_url before writing artifacts.yaml
+    # Inject artbook.distro_url before writing artifacts.yaml
     if distro_url:
         settings_content = settings_content.rstrip("\n") + (
             f"\n\nartbook:\n  distro_url: {distro_url}\n"
@@ -750,42 +807,6 @@ def run(args) -> int:  # no registry — called before vault setup
     # artifacts.yaml
     _do_write(target / "artifacts.yaml", settings_content)
 
-    # kinds
-    for kind_name in selected_kinds:
-        try:
-            schema_text = _load_kind_schema(kind_name)
-            artifact_text = _load_kind_artifact(kind_name)
-        except Exception as exc:
-            msg = str(exc)
-            _print_fail(f"kinds/{kind_name}/*", msg)
-            failed += 1
-            failures.append((f"kinds/{kind_name}/*", msg))
-            continue
-
-        try:
-            schema_obj = json.loads(schema_text)
-        except Exception:
-            schema_obj = {}
-        x_dir: str = schema_obj.get("x-dir", f"{kind_name}s")
-
-        _do_write(target / "artifacts" / "kinds" / kind_name / "kind.json", schema_text)
-        _do_write(
-            target / "artifacts" / "kinds" / kind_name / "ARTIFACT.md", artifact_text
-        )
-        _do_write(target / "artifacts" / x_dir / ".gitkeep", "")
-
-    # agents
-    for agent_name in selected_agents:
-        try:
-            agent_text = _load_agent_template(agent_name)
-        except Exception as exc:
-            msg = str(exc)
-            _print_fail(f"agents/{agent_name}.md", msg)
-            failed += 1
-            failures.append((f"agents/{agent_name}.md", msg))
-            continue
-        _do_write(target / "artifacts" / "agents" / f"{agent_name}.md", agent_text)
-
     # openstation-compat symlink
     if getattr(args, "openstation_compat", False):
         symlink = target / "openstation"
@@ -806,19 +827,49 @@ def run(args) -> int:  # no registry — called before vault setup
                     failed += 1
                     failures.append((rel_sym, str(exc)))
 
-    # ── Step 4: Distro (req 3–12) ──────────────────────────────
-    # Vault files are written first (req 7); then clone + pull.
-    # When -y and no --distro: skip silently (req 5).
-    distro_had_error = False
-    if distro_url:
-        distro_had_error = _run_distro_step(
-            distro_url,
-            books_flag,
+    # ── D2 fallback: no distro → install bundled skill ─────────
+    if distro_url is None:
+        _install_bundled_skill(
             target,
-            yes=args.yes,
+            force=args.force,
             dry_run=args.dry_run,
-            is_tty=is_tty,
+            no_promote=getattr(args, "no_promote", False),
+            _do_write=_do_write,
         )
+        # Final output
+        print()
+        if args.dry_run:
+            print(f"Dry-run complete. {written} files would be written.")
+            return 0
+        print(f"Initialised artifacts-os project: {target}")
+        if failed > 0:
+            print(f"  {written} files written, {failed} failed.")
+            if failures:
+                print()
+                print("Failures:")
+                for path, reason in failures:
+                    print(f"  ✗ {path}: {reason}")
+            return 1
+        return 0
+
+    # ── D1 + D3: book loop ─────────────────────────────────────
+    book_loop_result = _run_book_loop(
+        distro_url,
+        distro_source,
+        book_specs,
+        target,
+        yes=args.yes,
+        dry_run=args.dry_run,
+        is_tty=is_tty,
+        force=args.force,
+        _do_write=_do_write,
+    )
+
+    # For exit code 2 from book loop (pre-pull fatal errors), propagate directly
+    if book_loop_result == 2:
+        return 2
+
+    distro_had_error = book_loop_result == 1
 
     # ── Final output ───────────────────────────────────────────
     print()

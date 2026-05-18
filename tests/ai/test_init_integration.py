@@ -1,11 +1,11 @@
-"""Tests for artifacts init — AI integration was removed in s0021.
+"""Tests for artifacts init — AI integration notes (updated for s0030).
 
-Per s0021 §3 (Non-Goals): `.claude/` symlink tree installation is out of
-scope for `artifacts init`. AI commands are no longer installed by init;
-`--no-ai` was also removed (it has no meaning when AI install is absent).
+Per s0030 (books-driven init flow): the D2 no-distro fallback installs the
+bundled artifacts-os skill into .claude/skills/artifacts-os/. This is the
+only opinionated content the package itself writes to the consumer's vault.
 
-These tests verify the updated init behaviour rather than the removed
-AI-install behaviour.
+No kinds or agent specs are installed by init without a distro. These tests
+verify the updated init behaviour.
 """
 
 from __future__ import annotations
@@ -17,14 +17,23 @@ import pytest
 from artifacts_os.cli import main
 
 
-def test_init_creates_vault_without_ai_dir(tmp_path: Path, monkeypatch) -> None:
-    """Init succeeds and does NOT create .claude/ — AI install removed per s0021."""
+@pytest.fixture(autouse=True)
+def _clear_distro_env(monkeypatch):
+    """Clear ARTIFACTS_DISTRO_URL for all tests in this module."""
+    monkeypatch.delenv("ARTIFACTS_DISTRO_URL", raising=False)
+
+
+def test_init_creates_vault_with_skill(tmp_path: Path, monkeypatch) -> None:
+    """D2: init -y writes artifacts.yaml and the bundled skill."""
     monkeypatch.chdir(tmp_path)
     main(["init", "-y"])
 
     assert (tmp_path / "artifacts.yaml").is_file()
-    # .claude/ is NOT created — AI install is out of scope
-    assert not (tmp_path / ".claude").exists()
+    # D2 fallback installs the bundled skill
+    assert (tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md").is_file()
+    # No kinds or agents (those come from distro books)
+    assert not (tmp_path / "artifacts" / "kinds").exists()
+    assert not (tmp_path / "artifacts" / "agents").exists()
 
 
 def test_init_no_ai_flag_removed(tmp_path: Path, monkeypatch) -> None:
@@ -36,25 +45,25 @@ def test_init_no_ai_flag_removed(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_init_with_yes_flag_is_non_interactive(tmp_path: Path, monkeypatch) -> None:
-    """init -y works in non-TTY contexts without AI install."""
+    """init -y works in non-TTY contexts and writes the D2 payload."""
     monkeypatch.chdir(tmp_path)
     main(["init", "-y"])
 
     assert (tmp_path / "artifacts.yaml").is_file()
-    assert (tmp_path / "artifacts" / "kinds").is_dir()
+    assert (tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md").is_file()
 
 
-def test_init_with_openstation_compat_no_ai(tmp_path: Path, monkeypatch) -> None:
-    """--openstation-compat creates symlink; AI commands still not installed."""
+def test_init_with_openstation_compat(tmp_path: Path, monkeypatch) -> None:
+    """--openstation-compat creates symlink alongside D2 skill install."""
     monkeypatch.chdir(tmp_path)
     main([
         "init",
         "--template", "minimal",
-        "--kinds", "none",
-        "--agents", "none",
         "--openstation-compat",
+        "-y",
     ])
 
     symlink = tmp_path / "openstation"
     assert symlink.is_symlink()
-    assert not (tmp_path / ".claude").exists()
+    # D2: skill is installed
+    assert (tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md").is_file()

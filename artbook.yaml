@@ -3,22 +3,26 @@
 # This file makes the artifacts-os repository itself publishable as an
 # artbook distro (Layout B from spec s0029 §3.1 — "project repo doubling
 # as its own distro"). Consumers point `artbook.distro_url` at this
-# repo's git remote and `artifacts book pull agents` pulls the agent
-# specs below into their `.claude/agents/`.
+# repo's git remote; `artifacts book pull agents` pulls the agent specs
+# into `artifacts/agents/` (canonical) and `.claude/agents/` (promoted
+# symlinks).
 #
 # References:
+#   - s0031-artbook-post-pull-artifact-promotion §4.3 (migration example),
+#     §3 D28 (dest: canonical-only), D29 (promote: field)
 #   - s0029-artbook-mvp-distribution-model §3 (schema), §3.1 Layout B, D24, D25
-#   - t0155-publish-artifacts-os-as-its (this delivery)
-#   - t0158-implement-artbook-v2-schema (v2 schema migration)
+#   - t0155-publish-artifacts-os-as-its (original delivery)
+#   - t0175-migrate-artbook-yaml-to-promote (this migration)
 #
 # Notes:
-#   - `files:` is intentionally omitted — the D20 walker ships every
-#     `*.md` under `artifacts/agents/` except `README.md` and dotfiles
-#     (non-recursive). Curated directory; no allowlist needed.
-#   - `artifacts/agents/` is the canonical source per CLAUDE.md
-#     ("Store all project artifacts under `artifacts/`"). Parallel
-#     copies under `openstation/agents/`, `.openstation/agents/`, and
-#     `.claude/agents/` are out of this distro's view (s0029 §7.2.1).
+#   - `dest:` is omitted for `agents` — D37 default resolves to
+#     `artifacts/agents/` (canonical mirror of src basename).
+#   - For `commands` and `skills` the src basename differs from the
+#     desired canonical path, so `dest:` is set explicitly.
+#   - `promote:` declares the tool-shaped consumer location. The
+#     promotion engine creates relative symlinks from the promote target
+#     back to each canonical file under `artifacts/`.
+#   - `kinds` has no `promote:` — kind definitions are canonical-only.
 
 version: 1
 
@@ -29,12 +33,13 @@ distro:
 books:
   - name: agents
     src: artifacts/agents/
-    dest: .claude/agents/
+    promote: .claude/agents/
     description: Default agent specs (architect, developer, researcher, etc.).
 
   - name: commands
     src: src/artifacts_os/ai/claude/commands/
-    dest: .claude/commands/
+    dest: artifacts/commands/
+    promote: .claude/commands/
     description: Slash commands for artifacts CLI (artifacts.create, artifacts.list, artifacts.show).
 
   # Tier 2 — skills (D26 recurse mode: folder-of-folders).
@@ -44,16 +49,16 @@ books:
   # See s0029 §3.2, §7.3, D26 and n0014 §Phase 2.
   - name: skills
     src: src/artifacts_os/ai/claude/skills/
-    dest: .claude/skills/
+    dest: artifacts/skills/
+    promote: .claude/skills/
     description: Skills that teach Claude how to use artifacts-os.
     recurse: true
 
   # Tier 3 — kinds (vault structure, not .claude/).
   # D26 recurse walker picks up both ARTIFACT.md and kind.json per unit —
   # no file-type override needed (recurse mode is not *.md-only).
-  # dest lands in artifacts/kinds/ (vault root), not .claude/.
+  # No promote: — kinds are canonical-only.
   - name: kinds
     src: artifacts/kinds/
-    dest: artifacts/kinds/
     description: Standard artifact kinds (task, note, spec, research, agent).
     recurse: true
