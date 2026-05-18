@@ -42,12 +42,20 @@ from artifacts_os.artbook import (
     ArtbookSettings,
     FetchError,
     ManifestError,
+    PromotionReport,
+    SettingsError,
     UnknownBookError,
 )
 from artifacts_os.artbook.errors import ArtbookError
 from artifacts_os.artbook.fetch import get_short_sha
 from artifacts_os.artbook.manifest import load_manifest
-from artifacts_os.artbook.placement import _select_files, destination_for, filter_entries_by_items
+from artifacts_os.artbook.placement import (
+    _select_files,
+    destination_for,
+    filter_entries_by_items,
+    promote_book,
+)
+from artifacts_os.artbook.state import read_state
 from artifacts_os.core import find_vault_root
 from artifacts_os.core.models import ItemMeta
 from artifacts_os.views._views import FieldSpec
@@ -118,9 +126,13 @@ def _load_vault_and_raw() -> tuple[Path | None, dict]:
 
 
 def _artbook_settings_from_raw(raw: dict) -> ArtbookSettings:
-    """Build ArtbookSettings directly from the raw artifacts.yaml dict."""
-    artbook_section = raw.get("artbook", {}) or {}
-    return ArtbookSettings(distro_url=artbook_section.get("distro_url") or None)
+    """Build ArtbookSettings directly from the raw artifacts.yaml dict.
+
+    Uses ArtbookSettings.from_base via a duck-typed namespace; raises
+    SettingsError for invalid promotion / promote_mode values (D39).
+    """
+    from types import SimpleNamespace
+    return ArtbookSettings.from_base(SimpleNamespace(raw=raw))
 
 
 def _book_header(manifest, distro_url: str, sha: str) -> str:
@@ -476,8 +488,75 @@ def _pull_write_rows(report, vault_root: Path) -> list[WriteActionRow]:
     return rows
 
 
+def _render_promotion_report(
+    promo: PromotionReport,
+    vault_root: Path,
+    *,
+    json_out: bool,
+    dry_run: bool = False,
+) -> None:
+    """Render a PromotionReport as a Rich table or JSON (D33, D34)."""
+    from rich.table import Table as _Table
+    from rich.text import Text as _Text
+
+    if json_out:
+        payload = {
+            "book": promo.book.name,
+            "target_root": str(promo.target_root.relative_to(vault_root)),
+            "mode": promo.mode,
+            "dry_run": dry_run,
+            "promoted": [
+                {
+                    "canonical": str(pf.canonical.relative_to(vault_root)),
+                    "target": str(pf.target.relative_to(vault_root)),
+                    "mode": pf.mode,
+                    "overwritten": pf.overwritten,
+                    "fallback": pf.fallback,
+                }
+                for pf in promo.promoted
+            ],
+            "cleaned": [str(p.relative_to(vault_root)) for p in promo.cleaned],
+            "skipped": [str(p.relative_to(vault_root)) for p in promo.skipped],
+            "fallback_count": promo.fallback_count,
+            "errors": list(promo.errors),
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return
+
+    header_dry = _markup_escape("[dry-run] ") if dry_run else ""
+    _CONSOLE.print(f"\n{header_dry}Promotion → {_markup_escape(str(promo.target_root.relative_to(vault_root)))}/")
+
+    if promo.promoted:
+        table = _Table()
+        table.add_column("Action")
+        table.add_column("Target")
+        for pf in promo.promoted:
+            label = "overwrite" if pf.overwritten else "write"
+            if pf.fallback:
+                label += " (copy fallback)"
+            action_text = _Text(f"[would] {label}" if dry_run else label)
+            target_rel = str(pf.target.relative_to(vault_root))
+            table.add_row(action_text, _Text(target_rel))
+        _CONSOLE.print(table)
+
+    if promo.cleaned:
+        _CONSOLE.print(f"  Cleaned {len(promo.cleaned)} stale target(s).")
+    if promo.skipped:
+        _CONSOLE.print(f"  Skipped {len(promo.skipped)} user-modified target(s).")
+    if promo.errors:
+        for err in promo.errors:
+            _CONSOLE.print(f"  [red]error:[/red] {_markup_escape(err)}")
+    n_promoted = len(promo.promoted)
+    _CONSOLE.print(f"  {n_promoted} file{'s' if n_promoted != 1 else ''} promoted.")
+
+
 def _run_pull(args, root: Path, raw: dict) -> int:
-    arts = _artbook_settings_from_raw(raw)
+    try:
+        arts = _artbook_settings_from_raw(raw)
+    except SettingsError as exc:
+        _err(str(exc))
+        return 1
+
     if not arts.distro_url:
         _err(
             "artbook.distro_url not configured in artifacts.yaml",
@@ -488,6 +567,7 @@ def _run_pull(args, root: Path, raw: dict) -> int:
     book_name: str = args.name
     dry_run: bool = args.dry_run
     items: list[str] = args.items or []
+    no_promote: bool = getattr(args, "no_promote", False)
 
     try:
         with tempfile.TemporaryDirectory(prefix="artbook-pull-") as td:
@@ -530,6 +610,8 @@ def _run_pull(args, root: Path, raw: dict) -> int:
                     return 1
                 preselected = filtered
 
+            promo_report = None
+            promo_skipped_reason = None
             if dry_run:
                 try:
                     rows = _plan_writes(book, clone_root, root, preselected=preselected)
@@ -543,11 +625,16 @@ def _run_pull(args, root: Path, raw: dict) -> int:
                         distro_url=arts.distro_url,
                         distro_sha=sha,
                         preselected=preselected,
+                        no_promote=no_promote,
+                        promote_disabled=(arts.promotion == "disabled"),
+                        promote_mode_override=arts.promote_mode,
                     )
                 except (ManifestError, ArtbookError) as exc:
                     _err(str(exc))
                     return 1
                 rows = _pull_write_rows(report, root)
+                promo_report = report.promotion
+                promo_skipped_reason = report.promotion_skipped_reason
 
             # --- Compute summary stats ---
             n_written = len(rows)
@@ -576,6 +663,14 @@ def _run_pull(args, root: Path, raw: dict) -> int:
                 }
                 if dry_run:
                     summary_line["dry_run"] = True
+                elif promo_report is not None:
+                    summary_line["promotion"] = {
+                        "promoted": len(promo_report.promoted),
+                        "cleaned": len(promo_report.cleaned),
+                        "errors": len(promo_report.errors),
+                    }
+                elif not dry_run:
+                    summary_line["promotion_skipped"] = promo_skipped_reason
                 print(json.dumps(summary_line, ensure_ascii=False))
                 return 0
 
@@ -584,7 +679,6 @@ def _run_pull(args, root: Path, raw: dict) -> int:
             # as markup; for dry-run prefix each action with "[would] " — escaped.
             from rich.text import Text as _Text
 
-            dry_label = _markup_escape("[would] ") if dry_run else ""
             header_dry = _markup_escape("[dry-run] ") if dry_run else ""
 
             _CONSOLE.print(
@@ -616,6 +710,16 @@ def _run_pull(args, root: Path, raw: dict) -> int:
             else:
                 _CONSOLE.print(summary_text)
 
+            # Render promotion report if present
+            if not dry_run:
+                if promo_report is not None:
+                    _render_promotion_report(promo_report, root, json_out=False)
+                    # Exit 1 if any promotion errors (D36)
+                    if promo_report.errors:
+                        return 1
+                elif promo_skipped_reason:
+                    _CONSOLE.print(f"\nPromotion skipped (reason: {promo_skipped_reason}).")
+
     except FetchError as exc:
         _err(
             f"git clone failed (exit {exc.returncode})",
@@ -630,6 +734,99 @@ def _run_pull(args, root: Path, raw: dict) -> int:
         return 1
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Verb: promote
+# ---------------------------------------------------------------------------
+
+
+def _run_promote(args, root: Path, raw: dict) -> int:
+    """Re-run promotion for one or all books that have a promote: field (D34)."""
+    try:
+        arts = _artbook_settings_from_raw(raw)
+    except SettingsError as exc:
+        _err(str(exc))
+        return 1
+
+    book_name: str | None = getattr(args, "book_name", None) or None
+    clean: bool = getattr(args, "clean", False)
+    dry_run: bool = getattr(args, "dry_run", False)
+    json_out: bool = getattr(args, "json_out", False)
+
+    # Load manifest (local preferred, then remote)
+    local_manifest_path = root / "artbook.yaml"
+    if local_manifest_path.is_file():
+        try:
+            manifest = load_manifest(root)
+        except ManifestError as exc:
+            _err(str(exc))
+            return 1
+    elif arts.distro_url:
+        try:
+            with tempfile.TemporaryDirectory(prefix="artbook-promote-") as td:
+                clone_root = Path(td) / "clone"
+                manifest, _ = artbook.read_manifest(arts.distro_url, clone_into=clone_root)
+        except (FetchError, ManifestError, ArtbookError) as exc:
+            _err(str(exc))
+            return 1
+    else:
+        _err(
+            "no local artbook.yaml found and artbook.distro_url not configured",
+            "Cannot load manifest for promotion. Add artbook.distro_url to artifacts.yaml.",
+        )
+        return 4
+
+    # Resolve which books to promote
+    if book_name:
+        try:
+            books_to_promote = [artbook.find_book(manifest, book_name)]
+        except UnknownBookError:
+            available = ", ".join(b.name for b in manifest.books)
+            _err(
+                f"book '{book_name}' not found in distro '{manifest.name}'",
+                f"Available books: {available}.",
+            )
+            return 1
+    else:
+        books_to_promote = [b for b in manifest.books if b.promote is not None]
+
+    if not books_to_promote:
+        _CONSOLE.print("No books with promote: field found.")
+        return 0
+
+    exit_code = 0
+    state = read_state(root)
+
+    for book in books_to_promote:
+        if book.promote is None:
+            if book_name:
+                _err(f"book '{book.name}' has no promote: field; nothing to promote")
+                return 1
+            continue
+
+        try:
+            report = promote_book(
+                book,
+                root,
+                mode_override=arts.promote_mode,
+                state=state,
+                dry_run=dry_run,
+                clean=clean,
+            )
+        except (ArtbookError, ValueError) as exc:
+            _err(str(exc))
+            return 1
+
+        if json_out:
+            _render_promotion_report(report, root, json_out=True, dry_run=dry_run)
+        else:
+            _render_promotion_report(report, root, json_out=False, dry_run=dry_run)
+
+        if report.errors:
+            exit_code = 1
+
+    return exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -729,6 +926,54 @@ def register(subparsers) -> None:
         default=False,
         help="plan the writes but do not execute them",
     )
+    pull_p.add_argument(
+        "--no-promote",
+        action="store_true",
+        dest="no_promote",
+        default=False,
+        help=(
+            "skip the promotion step for this pull (canonical writes still happen). "
+            "One-shot opt-out per D31; wins over artbook.promotion: disabled setting."
+        ),
+    )
     pull_p.set_defaults(book_func=_run_pull)
+
+    # --- promote ---
+    promote_p = book_subs.add_parser(
+        "promote",
+        help="re-run promotion for book(s) against current canonical content",
+    )
+    promote_p.add_argument(
+        "book_name",
+        nargs="?",
+        metavar="BOOK",
+        default=None,
+        help=(
+            "book name to promote. "
+            "If omitted, re-runs promotion for every book with a promote: field."
+        ),
+    )
+    promote_p.add_argument(
+        "--clean",
+        action="store_true",
+        dest="clean",
+        default=False,
+        help="ignore existing state for this book and rebuild from current canonical content",
+    )
+    promote_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        default=False,
+        help="print planned writes/cleanups, make no filesystem changes",
+    )
+    promote_p.add_argument(
+        "--json", "-j",
+        action="store_true",
+        dest="json_out",
+        default=False,
+        help="emit PromotionReport as JSON (default: Rich table)",
+    )
+    promote_p.set_defaults(book_func=_run_promote)
 
     book_parser.set_defaults(func=_run_book, _pre_registry=True)

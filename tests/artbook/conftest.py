@@ -59,7 +59,8 @@ def distro_repo(tmp_path: Path) -> Path:
                 {
                     "name": "agents",
                     "src": "agents/",
-                    "dest": ".claude/agents/",
+                    "dest": "artifacts/agents/",
+                    "promote": ".claude/agents/",
                     "description": "Test agents.",
                 }
             ],
@@ -85,7 +86,8 @@ def distro_repo_allowlist(tmp_path: Path) -> Path:
                 {
                     "name": "agents",
                     "src": "agents/",
-                    "dest": ".claude/agents/",
+                    "dest": "artifacts/agents/",
+                    "promote": ".claude/agents/",
                     "files": ["architect.md"],
                 }
             ],

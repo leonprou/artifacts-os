@@ -54,7 +54,7 @@ def test_pull_book_happy_path(clone_root: Path, vault_root: Path) -> None:
 
     report = pull_book(book, clone_root, vault_root, distro_url="file:///fake", distro_sha="abc1234")
 
-    dest = vault_root / ".claude" / "agents"
+    dest = vault_root / "artifacts" / "agents"
     assert dest.is_dir()
     written_names = {w.destination.name for w in report.written}
     assert "architect.md" in written_names
@@ -71,7 +71,7 @@ def test_pull_book_overwrites_existing(clone_root: Path, vault_root: Path) -> No
     from artifacts_os.artbook.manifest import load_manifest
 
     # Pre-create the destination file
-    dest = vault_root / ".claude" / "agents"
+    dest = vault_root / "artifacts" / "agents"
     dest.mkdir(parents=True)
     (dest / "architect.md").write_text("old content")
 
@@ -88,7 +88,7 @@ def test_pull_book_overwrites_existing(clone_root: Path, vault_root: Path) -> No
 def test_pull_book_symlink_destination(clone_root: Path, vault_root: Path) -> None:
     from artifacts_os.artbook.manifest import load_manifest
 
-    dest = vault_root / ".claude" / "agents"
+    dest = vault_root / "artifacts" / "agents"
     dest.mkdir(parents=True)
     # Create a symlink at the destination of one of the files
     target = vault_root / "target.md"
@@ -115,8 +115,8 @@ def test_pull_book_creates_missing_parent_directory(
 ) -> None:
     from artifacts_os.artbook.manifest import load_manifest
 
-    # Ensure .claude/agents doesn't exist
-    dest = vault_root / ".claude" / "agents"
+    # Ensure artifacts/agents doesn't exist
+    dest = vault_root / "artifacts" / "agents"
     assert not dest.exists()
 
     manifest = load_manifest(clone_root)

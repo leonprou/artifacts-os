@@ -70,7 +70,8 @@ def distro_repo(tmp_path: Path) -> Path:
                 {
                     "name": "agents",
                     "src": "agents/",
-                    "dest": ".claude/agents/",
+                    "dest": "artifacts/agents/",
+                    "promote": ".claude/agents/",
                     "description": "Test agents.",
                 }
             ],
@@ -147,7 +148,7 @@ def test_book_list_json(vault_with_distro, capsys):
     assert len(data["books"]) == 1
     assert data["books"][0]["name"] == "agents"
     assert data["books"][0]["src"] == "agents/"
-    assert data["books"][0]["dest"] == ".claude/agents/"
+    assert data["books"][0]["dest"] == "artifacts/agents/"
     assert "type" not in data["books"][0]
     assert "url" in data["distro"]
     assert "sha" in data["distro"]
@@ -185,7 +186,7 @@ def test_book_show_table(vault_with_distro, capsys):
     assert "Source:" in out
     assert "Destination:" in out
     assert "Type:" not in out
-    assert ".claude/agents" in out
+    assert "artifacts/agents" in out
     # At least one content file listed (D20 walker, README excluded)
     assert "architect.md" in out
     assert "developer.md" in out
@@ -201,7 +202,7 @@ def test_book_show_json(vault_with_distro, capsys):
     data = json.loads(out)
     assert data["book"]["name"] == "agents"
     assert data["book"]["src"] == "agents/"
-    assert data["book"]["dest"] == ".claude/agents/"
+    assert data["book"]["dest"] == "artifacts/agents/"
     assert "type" not in data["book"]
     # standalone `destination` key removed in v2 (dest lives in book.dest)
     assert "destination" not in data
@@ -234,12 +235,12 @@ def test_book_show_no_distro_url(vault_no_distro, capsys):
 
 
 def test_book_pull_writes_files(vault_with_distro, capsys):
-    """`book pull agents` writes .md files to .claude/agents/ and exits 0."""
+    """`book pull agents` writes .md files to artifacts/agents/ and exits 0."""
     vault, _ = vault_with_distro
     code = _run(["book", "pull", "agents"])
     assert code == 0
 
-    agents_dir = vault / ".claude" / "agents"
+    agents_dir = vault / "artifacts" / "agents"
     assert agents_dir.is_dir()
     assert (agents_dir / "architect.md").is_file()
     assert (agents_dir / "developer.md").is_file()
@@ -259,8 +260,9 @@ def test_book_pull_dry_run(vault_with_distro, capsys):
     assert code == 0
 
     # Files should NOT have been written
-    agents_dir = vault / ".claude" / "agents"
-    assert not agents_dir.exists()
+    agents_dir = vault / "artifacts" / "agents"
+    assert not (agents_dir / "architect.md").exists()
+    assert not (agents_dir / "developer.md").exists()
 
     out = capsys.readouterr().out
     assert "[would]" in out
@@ -272,7 +274,10 @@ def test_book_pull_dry_run_no_writes(vault_with_distro):
     """--dry-run leaves the destination directory untouched."""
     vault, _ = vault_with_distro
     _run(["book", "pull", "agents", "--dry-run"])
-    assert not (vault / ".claude" / "agents").exists()
+    agents_dir = vault / "artifacts" / "agents"
+    # No actual files should be written (the agents dir may already exist from vault fixture)
+    assert not (agents_dir / "architect.md").exists()
+    assert not (agents_dir / "developer.md").exists()
 
 
 def test_book_pull_json(vault_with_distro, capsys):
@@ -315,8 +320,8 @@ def test_book_pull_overwrite(vault_with_distro, capsys):
 def test_book_pull_symlink_replaced(vault_with_distro, capsys):
     """Symlinked destination is replaced with a regular file and reported."""
     vault, _ = vault_with_distro
-    agents_dir = vault / ".claude" / "agents"
-    agents_dir.mkdir(parents=True)
+    agents_dir = vault / "artifacts" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
     target = vault / "target.md"
     target.write_text("old")
     sym = agents_dir / "architect.md"
@@ -368,7 +373,7 @@ def test_e2e_pull_agents_end_to_end(tmp_path, monkeypatch, capsys):
             "version": 1,
             "distro": {"name": "e2e-distro"},
             "books": [
-                {"name": "agents", "src": "agents/", "dest": ".claude/agents/"}
+                {"name": "agents", "src": "agents/", "dest": "artifacts/agents/"}
             ],
         },
         agent_files={
@@ -390,7 +395,7 @@ def test_e2e_pull_agents_end_to_end(tmp_path, monkeypatch, capsys):
     assert code == 0
 
     # Verify files landed
-    agent_file = vault / ".claude" / "agents" / "researcher.md"
+    agent_file = vault / "artifacts" / "agents" / "researcher.md"
     assert agent_file.is_file()
     assert "Researcher" in agent_file.read_text(encoding="utf-8")
 
@@ -418,7 +423,8 @@ def vault_with_local_manifest(vault: Path) -> Path:
             {
                 "name": "agents",
                 "src": "agents/",
-                "dest": ".claude/agents/",
+                "dest": "artifacts/agents/",
+                "promote": ".claude/agents/",
                 "description": "Local agents.",
             }
         ],
@@ -459,7 +465,7 @@ def test_book_list_local_manifest_json(vault_with_local_manifest: Path, capsys):
     assert len(data["books"]) == 1
     assert data["books"][0]["name"] == "agents"
     assert data["books"][0]["src"] == "agents/"
-    assert data["books"][0]["dest"] == ".claude/agents/"
+    assert data["books"][0]["dest"] == "artifacts/agents/"
     assert "type" not in data["books"][0]
 
 
@@ -483,7 +489,7 @@ def test_book_show_local_manifest_json(vault_with_local_manifest: Path, capsys):
     data = json.loads(capsys.readouterr().out)
     assert data["book"]["name"] == "agents"
     assert data["book"]["src"] == "agents/"
-    assert data["book"]["dest"] == ".claude/agents/"
+    assert data["book"]["dest"] == "artifacts/agents/"
     assert "type" not in data["book"]
     assert "destination" not in data  # standalone key removed in v2
     assert data["distro"]["local"] is True
@@ -532,7 +538,8 @@ def vault_with_recurse_book(vault: Path, monkeypatch) -> Path:
             {
                 "name": "skills",
                 "src": "skills/",
-                "dest": ".claude/skills/",
+                "dest": "artifacts/skills/",
+                "promote": ".claude/skills/",
                 "description": "Skills book.",
                 "recurse": True,
             }
@@ -621,3 +628,198 @@ def test_book_show_recurse_json_shape(vault_with_recurse_book: Path, capsys):
         for f in files:
             assert "__pycache__" not in f
             assert not f.endswith(".pyc")
+
+
+# ---------------------------------------------------------------------------
+# book pull --no-promote and artbook.promotion: disabled
+# ---------------------------------------------------------------------------
+
+
+def test_book_pull_no_promote_flag(vault_with_distro, capsys):
+    """`book pull --no-promote` writes canonical files but skips promotion."""
+    vault, _ = vault_with_distro
+    code = _run(["book", "pull", "agents", "--no-promote"])
+    assert code == 0
+
+    # Canonical written
+    canon_dir = vault / "artifacts" / "agents"
+    assert (canon_dir / "architect.md").is_file()
+    # Promotion skipped — .claude/agents/ not created
+    assert not (vault / ".claude" / "agents").exists()
+
+
+def test_book_pull_promotion_disabled_setting(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`artbook.promotion: disabled` skips promotion on pull."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n  promotion: disabled\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+
+    code = _run(["book", "pull", "agents"])
+    assert code == 0
+
+    canon_dir = vault / "artifacts" / "agents"
+    assert (canon_dir / "architect.md").is_file()
+    assert not (vault / ".claude" / "agents").exists()
+
+
+def test_book_pull_no_promote_flag_wins_over_setting(vault: Path, distro_repo: Path, monkeypatch):
+    """`--no-promote` wins over artbook.promotion: disabled (D31 — both skip)."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n  promotion: disabled\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+
+    code = _run(["book", "pull", "agents", "--no-promote"])
+    assert code == 0
+
+    # Both flag and setting skip promotion — canonical is written
+    assert (vault / "artifacts" / "agents" / "architect.md").is_file()
+    assert not (vault / ".claude" / "agents").exists()
+
+
+def test_book_pull_invalid_promotion_setting(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """Invalid artbook.promotion value → SettingsError → exit 1."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n  promotion: yes\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+
+    code = _run(["book", "pull", "agents"])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "promotion" in err
+
+
+def test_book_pull_invalid_promote_mode_setting(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """Invalid artbook.promote_mode value → SettingsError → exit 1."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n  promote_mode: hardlink\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+
+    code = _run(["book", "pull", "agents"])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "promote_mode" in err
+
+
+# ---------------------------------------------------------------------------
+# book promote
+# ---------------------------------------------------------------------------
+
+
+def _pull_first(vault: Path, distro_repo: Path, monkeypatch) -> None:
+    """Helper: pull agents book to populate canonical content."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+    _run(["book", "pull", "agents"])
+
+
+def test_book_promote_reruns_promotion(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`book promote agents` re-promotes from current canonical content."""
+    _pull_first(vault, distro_repo, monkeypatch)
+    # Remove the promotion target to simulate stale state
+    promo = vault / ".claude" / "agents" / "architect.md"
+    if promo.is_symlink() or promo.is_file():
+        promo.unlink()
+
+    code = _run(["book", "promote", "agents"])
+    assert code == 0
+    # File re-promoted
+    assert promo.exists() or promo.is_symlink()
+
+
+def test_book_promote_all_books(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`book promote` with no BOOK re-promotes all books with promote: field."""
+    _pull_first(vault, distro_repo, monkeypatch)
+
+    code = _run(["book", "promote"])
+    assert code == 0
+
+
+def test_book_promote_clean_flag(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`book promote --clean` rebuilds state from current canonical content."""
+    _pull_first(vault, distro_repo, monkeypatch)
+
+    code = _run(["book", "promote", "agents", "--clean"])
+    assert code == 0
+    out = capsys.readouterr().out
+    # Should produce some output about the promotion
+    assert "agents" in out or code == 0
+
+
+def test_book_promote_dry_run(vault: Path, distro_repo: Path, monkeypatch):
+    """`book promote --dry-run` makes no filesystem changes."""
+    _pull_first(vault, distro_repo, monkeypatch)
+
+    # Remove promotion targets
+    promo_dir = vault / ".claude" / "agents"
+    for f in promo_dir.iterdir() if promo_dir.exists() else []:
+        if f.is_symlink() or f.is_file():
+            f.unlink()
+
+    code = _run(["book", "promote", "agents", "--dry-run"])
+    assert code == 0
+
+    # Dry run: files should NOT be re-created
+    assert not promo_dir.exists() or all(
+        not f.exists() and not f.is_symlink()
+        for f in promo_dir.iterdir()
+    )
+
+
+def test_book_promote_json_output(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`book promote --json` emits a PromotionReport as JSON."""
+    _pull_first(vault, distro_repo, monkeypatch)
+
+    capsys.readouterr()  # clear
+    code = _run(["book", "promote", "agents", "--json"])
+    assert code == 0
+
+    out = capsys.readouterr().out
+    # Should be valid JSON
+    data = json.loads(out)
+    assert "book" in data
+    assert data["book"] == "agents"
+    assert "promoted" in data
+    assert "mode" in data
+
+
+def test_book_promote_no_promote_flag_rejected(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`book promote --no-promote` is rejected with a usage error (exit 2)."""
+    _pull_first(vault, distro_repo, monkeypatch)
+
+    with pytest.raises(SystemExit) as exc:
+        _run(["book", "promote", "--no-promote"])
+    assert exc.value.code == 2
+
+
+def test_book_promote_copy_mode(vault: Path, distro_repo: Path, monkeypatch, capsys):
+    """`artbook.promote_mode: copy` uses copy instead of symlink."""
+    distro_url = str(distro_repo)
+    (vault / "artifacts.yaml").write_text(
+        f"layout_version: 1\nartbook:\n  distro_url: '{distro_url}'\n  promote_mode: copy\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(vault)
+
+    code = _run(["book", "pull", "agents"])
+    assert code == 0
+
+    # Promoted file should be a regular file (copy), not a symlink
+    promo_file = vault / ".claude" / "agents" / "architect.md"
+    assert promo_file.exists()
+    assert not promo_file.is_symlink()

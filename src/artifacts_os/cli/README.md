@@ -651,80 +651,84 @@ artifacts verify t0042 -j
 ### `init` — Bootstrap a new project
 
 ```
-artifacts init [DIRECTORY] [--template TIER] [--kinds CSV] [--agents CSV]
+artifacts init [DIRECTORY] [--template TIER]
+               [--distro URL] [--book NAME[:ITEMS]] ...
                [--force] [-y] [--dry-run] [--openstation-compat]
-               [--distro URL] [--books CSV]
 ```
 
 Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
-Walks a selection flow (settings tier → kinds → agents, and optionally distro
-books), then writes `artifacts.yaml`, per-kind storage directories, per-kind
-JSON schemas under `artifacts/kinds/`, and optionally installs agent specs.
+Walks a two-stage selection flow:
 
-All steps can be driven by flags for non-interactive use. On a TTY, un-flagged
-steps prompt interactively. Pass `-y` to accept defaults for every un-flagged
-step. Refuses to run in non-TTY mode unless `-y` or all applicable flags are
-supplied.
+1. **Settings tier** — always runs; writes `artifacts.yaml`.
+2. **Book loop** — one multi-select prompt per book in the distro manifest
+   (only when `--distro` or `$ARTIFACTS_DISTRO_URL` is set).
+
+When no distro is configured, only Stage 1 runs and the bundled
+`artifacts-os` skill is installed into `.claude/skills/artifacts-os/`.
+
+All stages can be driven by flags for non-interactive use. On a TTY, un-flagged
+stages prompt interactively. Pass `-y` to accept defaults. Refuses to run
+in non-TTY mode unless `-y` or all applicable flags are supplied.
 
 | Flag | Description |
 |------|-------------|
 | `DIRECTORY` | Target directory (default: `.`) |
-| `--template TIER` | Settings tier: `minimal` or `standard` (default). Skips Step 1. |
-| `--kinds CSV` | Kinds to install — comma-separated names, `all`, or `none`. Skips Step 2. |
-| `--agents CSV` | Agents to install — comma-separated names, `all`, or `none`. Skips Step 3. |
+| `--template TIER` | Settings tier: `minimal` or `standard` (default). Skips Stage 1 prompt. |
+| `--distro URL` | Git-clonable distro URL. Activates the book loop after `artifacts.yaml` is written. Also injects `artbook.distro_url` into `artifacts.yaml`. Defaults to `$ARTIFACTS_DISTRO_URL` when unset. |
+| `--book NAME[:ITEMS]` | Book to pull from distro (repeatable). `NAME` pulls the whole book; `NAME:item,item` pulls a subset. Requires `--distro` or `$ARTIFACTS_DISTRO_URL`. |
 | `--force` | Overwrite existing files (per-file). Also bypasses the already-initialised guard. |
-| `-y` / `--yes` | Accept defaults at every un-flagged step (enables non-interactive mode). |
+| `-y` / `--yes` | Accept defaults at every un-flagged stage (enables non-interactive mode). |
 | `--dry-run` | Print planned writes without writing anything. |
 | `--openstation-compat` | Also create the legacy `openstation → artifacts` symlink. |
-| `--distro URL` | Git-clonable distro URL. Activates **Step 4: Distro** after vault files are written. Also injects `artbook.distro_url` into `artifacts.yaml`. |
-| `--books CSV` | Comma-separated book names to pull from the distro. `all` selects every book. Skips the book-selection prompt. Requires `--distro`. |
 
-**Bundled catalogue:**
+**Environment defaults:**
 
-- **Kinds** (5): `task` ✓, `note` ✓, `spec` ✓ (defaults), `research`, `agent`
-- **Agents** (9): `architect`, `author`, `developer`, `devrel`, `product-manager`, `project-manager`, `researcher`, `security-engineer`, `technical-writer`
+- `ARTIFACTS_DISTRO_URL` — supplies the default value for `--distro` when the flag is omitted. An explicit `--distro` always wins; an empty or whitespace-only env var is treated as unset. Useful for teams that share a single internal distro across many vaults.
 
-Selecting any agent auto-includes the `agent` kind (D10).
-
-**Distro step behaviour:**
+**Book loop behaviour:**
 
 - `--distro` + `-y` → pulls **all books, all items** with no prompts.
-- `--distro` + `-y` omitted + TTY → interactive book-selection prompt, then per-book item-subset prompt (default: all items).
-- `--distro` + `--books agents,skills` → skips book prompt; still prompts for items per book when on a TTY and `-y` is not set.
-- `-y` with no `--distro` → distro step skipped silently.
+- `--distro` + TTY (no `-y`) → one interactive multi-select prompt per book; default = all items.
+- `--distro` + `--book agents` → pulls only the `agents` book (all items); skips other books.
+- `--distro` + `--book agents:architect,developer` → pulls only those two items from `agents`.
+- `-y` with no `--distro` → D2 fallback (settings tier + bundled skill, no book loop).
 - `--dry-run` → prints `[would] pull from distro: <url>` without cloning or writing.
 
-Vault files (`artifacts.yaml`, kinds, agents) are written **before** the distro clone so destination resolution is always valid.
+`artifacts.yaml` is written **before** the distro clone so destination resolution is always valid.
 
 **Examples:**
 
 ```bash
-# Interactive — prompts for tier, kinds, agents
+# Interactive — prompts for tier; no distro = installs bundled skill
 artifacts init
 
-# Non-interactive with defaults
+# Non-interactive with defaults (D2 fallback — skill only)
 artifacts init -y
 
-# Fully specified — no prompts
-artifacts init --template standard --kinds task,note,spec --agents architect,developer
+# Bootstrap with specific tier
+artifacts init --template standard
 
-# Re-initialise existing vault with all templates
+# Re-initialise existing vault
 artifacts init --force -y
 
 # Dry-run to preview what would be written
-artifacts init --template standard --kinds all --agents none --dry-run
+artifacts init --template standard --dry-run
 
 # Bootstrap and pull all books from a distro (non-interactive)
 artifacts init --distro https://github.com/my-org/artbook-defaults -y
 
-# Bootstrap and pull only the 'agents' book from a distro
-artifacts init --distro https://github.com/my-org/artbook-defaults --books agents -y
+# Pull only the 'agents' book from a distro
+artifacts init --distro https://github.com/my-org/artbook-defaults --book agents -y
 
-# Interactive distro setup — prompts for books and items
+# Pull filtered items: agents (2 items) + full skills book
+artifacts init --distro https://github.com/my-org/artbook-defaults \
+    --book agents:architect,developer --book skills -y
+
+# Interactive distro setup — one prompt per book
 artifacts init --distro https://github.com/my-org/artbook-defaults
 ```
 
-See [docs/init-flow.md](../../docs/init-flow.md) for the full selection flow.
+See [docs/init-flow.md](../../docs/init-flow.md) for the full selection flow with transcripts.
 See [docs/artbook.md](../../docs/artbook.md) for distro authoring and consumer quickstart.
 
 ---
@@ -931,7 +935,8 @@ If `<view_name>` is not defined, the command exits `2` with
 ```
 artifacts book list                        [--json]
 artifacts book show <name>                 [--json]
-artifacts book pull <name> [ITEM …]        [--json] [--dry-run]
+artifacts book pull <name> [ITEM …]        [--json] [--dry-run] [--no-promote]
+artifacts book promote [BOOK]              [--json] [--dry-run] [--clean]
 ```
 
 Configure the distro URL once in `artifacts.yaml`:
@@ -1062,8 +1067,52 @@ line is prefixed with `[would]` and the summary with `[dry-run]`.
 {"summary": {"written": 2, "overwritten": 0, "new": 2}, "distro": {…}, "book": "agents"}
 ```
 
+`--no-promote` skips the post-pull promotion step for this invocation
+only. Canonical writes still happen; only the promotion step that fans
+out to tool-specific locations (e.g. `.claude/agents/`) is suppressed.
+This is a one-shot opt-out — it does not change `artbook.promotion` in
+`artifacts.yaml`. Use `artbook.promotion: disabled` in `artifacts.yaml`
+for a persistent opt-out. `--no-promote` always wins when both are set.
+
 Both `--dry-run` and `--json` respect item filters when `ITEM …` is
 supplied.
+
+#### `book promote [BOOK]` — re-run promotion without pulling
+
+Re-runs the promotion step against current canonical content without
+cloning the distro or modifying canonical files. Useful when you
+change `artbook.promote_mode`, restore a vault from backup, or
+manually delete a promotion target.
+
+```bash
+# Re-promote all books that have a promote: field
+artifacts book promote
+
+# Re-promote one book
+artifacts book promote agents
+
+# Rebuild from scratch (ignore recorded state)
+artifacts book promote agents --clean
+
+# Preview what would happen
+artifacts book promote agents --dry-run
+
+# Machine-readable output
+artifacts book promote agents --json
+```
+
+`--clean` ignores the existing state file entry for the book and
+rebuilds it from current canonical content. Use this after manually
+deleting a promotion target when the state file still records it as
+promoted.
+
+`--dry-run` prints the planned writes and cleanups without making any
+filesystem changes.
+
+`--json` emits a structured `PromotionReport` JSON object.
+
+`--no-promote` is not valid on `book promote` — this verb *is* the
+promotion step.
 
 #### Exit codes
 

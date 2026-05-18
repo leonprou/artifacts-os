@@ -3,6 +3,7 @@
 Parses ``artbook.yaml`` from a distro repo into typed dataclasses.
 
 Spec: s0029-artbook-mvp-distribution-model §3, §4.3, D24, D25
+     s0031-artbook-post-pull-artifact-promotion D28, D29, D37, D38
 """
 
 from __future__ import annotations
@@ -20,15 +21,30 @@ _REQUIRED_VERSION = 1
 
 
 @dataclass(frozen=True)
+class Promote:
+    """Promotion target for a book (D29).
+
+    ``target`` is the vault-relative destination directory for the promotion
+    (e.g. ``.claude/agents/``).  ``mode`` is ``'symlink'``, ``'copy'``, or
+    ``None`` meaning "use per-vault default then built-in default".
+    """
+
+    target: str
+    mode: str | None = None  # 'symlink' | 'copy' | None
+
+
+@dataclass(frozen=True)
 class Book:
-    """One book entry from the distro manifest (v2 schema: D24, D25, D26).
+    """One book entry from the distro manifest (v2 schema: D24, D25, D26, D28, D29).
 
     ``files`` is an explicit allowlist (D18); ``None`` means use the D20 walker.
     ``src`` is the path relative to the distro root.
-    ``dest`` is the vault-relative destination directory (D25).
+    ``dest`` is the vault-relative destination directory (D25, D28). Optional;
+    when absent it is computed from D37 default at parse time.
     ``recurse`` (D26) — when ``True``, the walker treats each direct
     subdirectory of ``src`` as a unit and ships its full subtree to
     ``dest/<unit>/...``. Mutually exclusive with ``files``.
+    ``promote`` (D29) — optional promotion target.
     """
 
     name: str
@@ -37,6 +53,7 @@ class Book:
     description: str | None = None
     files: tuple[str, ...] | None = None
     recurse: bool = False
+    promote: Promote | None = None
 
 
 @dataclass(frozen=True)
@@ -49,8 +66,87 @@ class Manifest:
     books: tuple[Book, ...]
 
 
+def _default_dest(src: str) -> str:
+    """Compute the default dest per D37: ``artifacts/<basename(src)>/``."""
+    basename = Path(src.rstrip("/")).name
+    return f"artifacts/{basename}/"
+
+
+def _parse_promote(raw_promote: Any, book_name: str) -> Promote:
+    """Parse the ``promote:`` field from a book entry (D29).
+
+    Accepts:
+    - String shorthand: ``promote: .claude/agents/``
+    - Object form: ``promote: {target: .claude/agents/, mode: symlink}``
+
+    Raises ManifestError for invalid shapes, empty values, unknown modes,
+    vault-escape on target, etc.
+    """
+    if isinstance(raw_promote, str):
+        target = raw_promote
+        if not target.strip():
+            raise ManifestError(
+                f"book '{book_name}' promote: target must be a non-empty string"
+            )
+        mode = None
+    elif isinstance(raw_promote, dict):
+        if not raw_promote:
+            raise ManifestError(
+                f"book '{book_name}' promote: mapping must not be empty"
+            )
+        if "target" not in raw_promote:
+            raise ManifestError(
+                f"book '{book_name}' promote: object form requires a 'target' field"
+            )
+        target = raw_promote["target"]
+        if not isinstance(target, str) or not target.strip():
+            raise ManifestError(
+                f"book '{book_name}' promote.target must be a non-empty string"
+            )
+        raw_mode = raw_promote.get("mode")
+        if raw_mode is not None:
+            if raw_mode not in ("symlink", "copy"):
+                raise ManifestError(
+                    f"book '{book_name}' promote.mode must be 'symlink' or 'copy'; "
+                    f"got '{raw_mode}'"
+                )
+        mode = raw_mode
+    elif isinstance(raw_promote, list):
+        raise ManifestError(
+            f"book '{book_name}' promote: must be a string or a mapping, not a list"
+        )
+    else:
+        raise ManifestError(
+            f"book '{book_name}' promote: must be a string or a mapping, "
+            f"got {type(raw_promote).__name__}"
+        )
+
+    # Vault-escape guard on promote target (D29: relative, no `..`)
+    if target.startswith("/"):
+        raise ManifestError(
+            f"book '{book_name}' promote.target '{target}' is absolute; "
+            "promote.target must be relative to the vault root"
+        )
+    if ".." in Path(target).parts:
+        raise ManifestError(
+            f"book '{book_name}' promote.target '{target}' contains '..'; "
+            "path traversal is not allowed"
+        )
+
+    return Promote(target=target, mode=mode)
+
+
 def _parse_book(raw: Any, index: int) -> Book:
-    """Parse one book entry dict, raising ManifestError on any problem."""
+    """Parse one book entry dict, raising ManifestError on any problem.
+
+    Validation order per D38:
+    - Required name, src
+    - src: relative, no ..
+    - dest (if set): relative, no .., canonical-only under artifacts/
+    - dest (if absent): compute D37 default
+    - promote (if set): parse per D29
+    - files/recurse exclusivity
+    """
     if not isinstance(raw, dict):
         raise ManifestError(f"books[{index}] must be a mapping, got {type(raw).__name__}")
 
@@ -68,7 +164,8 @@ def _parse_book(raw: Any, index: int) -> Book:
             "replace `path:` with `src:` in your manifest"
         )
 
-    for field in ("name", "src", "dest"):
+    # D38 4a: name and src required; dest no longer required
+    for field in ("name", "src"):
         if field not in raw:
             raise ManifestError(f"books[{index}] missing required field '{field}'")
         if not isinstance(raw[field], str) or not raw[field].strip():
@@ -76,10 +173,9 @@ def _parse_book(raw: Any, index: int) -> Book:
 
     name: str = raw["name"]
     src: str = raw["src"]
-    dest: str = raw["dest"]
     description: str | None = raw.get("description") or None
 
-    # Reject path traversal and absolute paths on src (distro-relative)
+    # D38 4b: Reject path traversal and absolute paths on src (distro-relative)
     if src.startswith("/"):
         raise ManifestError(
             f"book '{name}' src '{src}' is absolute; src must be relative to the distro root"
@@ -89,15 +185,41 @@ def _parse_book(raw: Any, index: int) -> Book:
             f"book '{name}' src '{src}' contains '..'; path traversal is not allowed"
         )
 
-    # D25 — vault-escape guard on dest at parse time
-    if dest.startswith("/"):
-        raise ManifestError(
-            f"book '{name}' dest '{dest}' is absolute; dest must be relative to the vault root"
-        )
-    if ".." in Path(dest).parts:
-        raise ManifestError(
-            f"book '{name}' dest '{dest}' contains '..'; path traversal is not allowed"
-        )
+    # D38 4c/4d: dest handling
+    if "dest" in raw:
+        dest_raw = raw["dest"]
+        if not isinstance(dest_raw, str) or not dest_raw.strip():
+            raise ManifestError(f"book '{name}' dest must be a non-empty string")
+        dest: str = dest_raw
+
+        # D25 — vault-escape guard on dest at parse time
+        if dest.startswith("/"):
+            raise ManifestError(
+                f"book '{name}' dest '{dest}' is absolute; dest must be relative to the vault root"
+            )
+        if ".." in Path(dest).parts:
+            raise ManifestError(
+                f"book '{name}' dest '{dest}' contains '..'; path traversal is not allowed"
+            )
+
+        # D28 — canonical-only check: dest must resolve under artifacts/
+        # Normalise: strip trailing slash for comparison
+        dest_path = Path(dest.rstrip("/"))
+        try:
+            dest_path.relative_to("artifacts")
+        except ValueError:
+            raise ManifestError(
+                f"book '{name}' dest: '{dest}' is not under 'artifacts/'. "
+                "dest: is canonical-only — move tool-specific paths to promote:"
+            )
+    else:
+        # D38 4d + D37: compute default dest from src basename
+        dest = _default_dest(src)
+
+    # D38 4e: parse promote if set
+    promote: Promote | None = None
+    if "promote" in raw:
+        promote = _parse_promote(raw["promote"], name)
 
     # Parse optional files allowlist (D18)
     files: tuple[str, ...] | None = None
@@ -126,7 +248,7 @@ def _parse_book(raw: Any, index: int) -> Book:
             )
         recurse = raw_recurse
 
-    # D26 — `recurse: true` and `files: [...]` are mutually exclusive.
+    # D38 4f — D26: `recurse: true` and `files: [...]` are mutually exclusive.
     if recurse and files is not None:
         raise ManifestError(
             f"book '{name}' cannot set both `recurse: true` and `files:`; "
@@ -140,6 +262,7 @@ def _parse_book(raw: Any, index: int) -> Book:
         description=description,
         files=files,
         recurse=recurse,
+        promote=promote,
     )
 
 
@@ -148,6 +271,7 @@ def parse_manifest(data: Any) -> Manifest:
 
     Raises ManifestError on any schema or validation problem.
     Version check (D17) runs first so old clients never partially interpret future schemas.
+    Validation order per D38.
     """
     if not isinstance(data, dict):
         raise ManifestError("manifest must be a YAML mapping at the top level")

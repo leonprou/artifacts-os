@@ -281,7 +281,7 @@ def _make_flat_distro(root: Path) -> Path:
     (root / "artbook.yaml").write_text(yaml.dump({
         "version": 1,
         "distro": {"name": "test-distro"},
-        "books": [{"name": "agents", "src": "agents/", "dest": ".claude/agents/"}],
+        "books": [{"name": "agents", "src": "agents/", "dest": "artifacts/agents/"}],
     }))
     subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True)
@@ -307,7 +307,7 @@ def _make_recurse_distro(root: Path) -> Path:
     (root / "artbook.yaml").write_text(yaml.dump({
         "version": 1,
         "distro": {"name": "test-distro"},
-        "books": [{"name": "skills", "src": "skills/", "dest": ".claude/skills/", "recurse": True}],
+        "books": [{"name": "skills", "src": "skills/", "dest": "artifacts/skills/", "recurse": True}],
     }))
     subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, capture_output=True)
@@ -347,7 +347,7 @@ class TestRunPullItems:
         args = _args(name="agents", items=[])
         rc = _run_pull(args, vault, raw)
         assert rc == 0
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert (dest / "architect.md").is_file()
         assert (dest / "developer.md").is_file()
 
@@ -362,7 +362,7 @@ class TestRunPullItems:
         args = _args(name="agents", items=["architect"])
         rc = _run_pull(args, vault, raw)
         assert rc == 0
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert (dest / "architect.md").is_file()
         assert not (dest / "developer.md").exists()
 
@@ -377,7 +377,7 @@ class TestRunPullItems:
         args = _args(name="agents", items=["architect.md"])
         rc = _run_pull(args, vault, raw)
         assert rc == 0
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert (dest / "architect.md").is_file()
         assert not (dest / "developer.md").exists()
 
@@ -392,7 +392,7 @@ class TestRunPullItems:
         args = _args(name="skills", items=["artifacts-os"])
         rc = _run_pull(args, vault, raw)
         assert rc == 0
-        dest = vault / ".claude" / "skills"
+        dest = vault / "artifacts" / "skills"
         assert (dest / "artifacts-os" / "SKILL.md").is_file()
         assert not (dest / "task").exists()
         assert not (dest / "note").exists()
@@ -408,7 +408,7 @@ class TestRunPullItems:
         args = _args(name="skills", items=["task", "note"])
         rc = _run_pull(args, vault, raw)
         assert rc == 0
-        dest = vault / ".claude" / "skills"
+        dest = vault / "artifacts" / "skills"
         assert (dest / "task" / "SKILL.md").is_file()
         assert (dest / "note" / "SKILL.md").is_file()
         assert not (dest / "artifacts-os").exists()
@@ -425,7 +425,7 @@ class TestRunPullItems:
         rc = _run_pull(args, vault, raw)
         assert rc == 1
         # Nothing written
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert not dest.exists()
 
     def test_mixed_valid_invalid_items_errors(self, tmp_path: Path) -> None:
@@ -439,7 +439,7 @@ class TestRunPullItems:
         args = _args(name="agents", items=["architect", "nonexistent"])
         rc = _run_pull(args, vault, raw)
         assert rc == 1
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert not dest.exists()
 
     def test_dry_run_with_items(self, tmp_path: Path) -> None:
@@ -454,7 +454,7 @@ class TestRunPullItems:
         rc = _run_pull(args, vault, raw)
         assert rc == 0
         # Nothing actually written
-        dest = vault / ".claude" / "agents"
+        dest = vault / "artifacts" / "agents"
         assert not dest.exists()
 
     def test_json_with_items(self, tmp_path: Path, capsys) -> None:

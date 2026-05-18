@@ -32,3 +32,11 @@ class UnknownBookError(ArtbookError):
 
 class DistroNotConfiguredError(ArtbookError):
     """artbook.distro_url is missing or empty in artifacts.yaml."""
+
+
+class PromotionError(ArtbookError):
+    """A promotion write failed (non-fatal for canonical writes per D36)."""
+
+
+class SettingsError(ArtbookError):
+    """Invalid value in the artbook settings section of artifacts.yaml (D39)."""

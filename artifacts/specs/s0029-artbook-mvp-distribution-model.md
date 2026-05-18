@@ -10,6 +10,17 @@ agent: architect
 
 # Artbook MVP Distribution Model
 
+> **Revision note — v3 (Promotion Engine, 2026-05-18).** Schema stays at
+> `version: 1` — v1 has not been published beyond this repo, so v1's
+> semantics are tightened in place rather than bumped. Changes: `dest:`
+> is now **optional** (default = `artifacts/<basename(src)>/` per D37)
+> and **canonical-only** — it must resolve under `artifacts/`; tool-specific
+> paths now go in the new `promote:` field (string shorthand or
+> `{target, mode}` object) specified in [[s0031-artbook-post-pull-artifact-promotion]].
+> D17, D24, D26, D27 carry over unchanged. No back-compat shim — the only
+> existing v1 manifest is this repo's own `artbook.yaml`, migrated in the
+> same commit as the schema change (S5 in [[s0031]] § 6).
+
 > **Revision note — v2 (Schema Simplification, 2026-05-15).** This
 > revision drops the per-book `type:` field and introduces a
 > required per-book `dest:` field. Books are now pure

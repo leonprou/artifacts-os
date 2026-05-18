@@ -1,20 +1,23 @@
-"""Tests for artbook.placement — destination_for, copy_book, atomic write (v2 schema)."""
+"""Tests for artbook.placement — destination_for, copy_book, atomic write, promote_book (v2 schema)."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from artifacts_os.artbook.errors import ArtbookError, ManifestError
-from artifacts_os.artbook.manifest import Book
+from artifacts_os.artbook.manifest import Book, Promote
 from artifacts_os.artbook.placement import (
     WrittenFile,
     _atomic_write,
     _select_files,
     copy_book,
     destination_for,
+    promote_book,
 )
+from artifacts_os.artbook.state import read_state
 
 
 # ---------------------------------------------------------------------------
@@ -452,3 +455,200 @@ def test_copy_book_d26_recurse_writes_nested_files(tmp_path: Path) -> None:
     assert (dest / "artifacts-os" / "SKILL.md").is_file()
     assert (dest / "artifacts-os" / "nested" / "helper.md").is_file()
     assert (dest / "release-changelog" / "SKILL.md").is_file()
+
+
+# ---------------------------------------------------------------------------
+# promote_book — symlink mode (D30, D33)
+# ---------------------------------------------------------------------------
+
+
+def _make_canonical(vault: Path, agent_names: list[str]) -> Path:
+    """Create canonical agent files under vault/artifacts/agents/."""
+    canon = vault / "artifacts" / "agents"
+    canon.mkdir(parents=True, exist_ok=True)
+    for name in agent_names:
+        (canon / f"{name}.md").write_text(f"# {name}")
+    return canon
+
+
+def _agents_book_with_promote(mode: str | None = None) -> Book:
+    return Book(
+        name="agents",
+        src="agents/",
+        dest="artifacts/agents/",
+        promote=Promote(target=".claude/agents/", mode=mode),
+    )
+
+
+def test_promote_book_symlink_mode_creates_relative_link(tmp_path: Path) -> None:
+    """D30: symlink promotion creates a relative link pointing at the canonical file."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["architect"])
+
+    book = _agents_book_with_promote()  # mode=None → default symlink
+    report = promote_book(book, vault)
+
+    promo_dir = vault / ".claude" / "agents"
+    link = promo_dir / "architect.md"
+
+    assert link.is_symlink(), "promotion target should be a symlink"
+    # Resolve relative to link's parent and verify it points at the canonical file
+    link_dest = (link.parent / os.readlink(link)).resolve()
+    canonical = (vault / "artifacts" / "agents" / "architect.md").resolve()
+    assert link_dest == canonical, f"symlink points to {link_dest!r}, expected {canonical!r}"
+
+    # Symlink should be relative (not absolute)
+    raw_link = os.readlink(link)
+    assert not Path(raw_link).is_absolute(), f"expected relative symlink, got {raw_link!r}"
+
+    assert len(report.promoted) == 1
+    assert report.promoted[0].mode == "symlink"
+    assert report.promoted[0].fallback is False
+
+
+def test_promote_book_copy_mode_writes_file_and_records_hash(tmp_path: Path) -> None:
+    """D30/D32: copy mode writes the canonical content and records its hash in state."""
+    from artifacts_os.artbook.state import file_hash
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["developer"])
+
+    book = _agents_book_with_promote(mode="copy")
+    report = promote_book(book, vault)
+
+    promo_file = vault / ".claude" / "agents" / "developer.md"
+    assert promo_file.is_file(), "copy-mode promotion target should be a regular file"
+    assert not promo_file.is_symlink()
+
+    # Content should match canonical
+    canonical = vault / "artifacts" / "agents" / "developer.md"
+    assert promo_file.read_text() == canonical.read_text()
+
+    # State file should record a hash entry (object form with "hash" key)
+    state = read_state(vault)
+    files = state["promotions"]["agents"]["files"]
+    assert len(files) == 1
+    entry = files[0]
+    assert isinstance(entry, dict), "copy-mode entry should be object form"
+    assert "hash" in entry
+    expected_hash = file_hash(canonical)
+    assert entry["hash"] == expected_hash
+
+    assert report.promoted[0].mode == "copy"
+
+
+def test_promote_book_symlink_fallback_when_os_symlink_raises(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """D30: when os.symlink raises OSError, fall back to copy mode for that file."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["researcher"])
+
+    original_symlink = os.symlink
+
+    def failing_symlink(src, dst, **kwargs):
+        raise OSError("symlinks not supported on this filesystem")
+
+    monkeypatch.setattr(os, "symlink", failing_symlink)
+
+    book = _agents_book_with_promote()  # mode=None → try symlink → fall back
+    report = promote_book(book, vault)
+
+    promo_file = vault / ".claude" / "agents" / "researcher.md"
+    assert promo_file.is_file(), "fallback copy should produce a regular file"
+    assert not promo_file.is_symlink()
+
+    assert report.fallback_count == 1
+    assert report.promoted[0].fallback is True
+    assert report.promoted[0].mode == "copy"
+
+
+def test_promote_book_idempotent(tmp_path: Path) -> None:
+    """D32: re-running promote_book produces the same result; state file is stable."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["architect"])
+
+    book = _agents_book_with_promote()
+    promote_book(book, vault)
+    state_after_first = read_state(vault)
+
+    promote_book(book, vault)
+    state_after_second = read_state(vault)
+
+    # Same promotions recorded
+    assert (
+        state_after_first["promotions"]["agents"]["files"]
+        == state_after_second["promotions"]["agents"]["files"]
+    )
+    # Symlink still present
+    assert (vault / ".claude" / "agents" / "architect.md").is_symlink()
+
+
+def test_promote_book_stale_cleanup_symlink_owned(tmp_path: Path) -> None:
+    """D32: stale symlink pointing at canonical tree is removed on re-promote."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["architect", "developer"])
+
+    book = _agents_book_with_promote()
+    promote_book(book, vault)
+
+    # Simulate upstream removing developer: delete canonical file
+    (vault / "artifacts" / "agents" / "developer.md").unlink()
+
+    # Re-run promotion — developer should be stale-cleaned
+    report = promote_book(book, vault)
+
+    promo_dir = vault / ".claude" / "agents"
+    assert not (promo_dir / "developer.md").exists()
+    assert not (promo_dir / "developer.md").is_symlink()
+    assert (promo_dir / "architect.md").is_symlink()  # still present
+    assert len(report.cleaned) == 1
+
+
+def test_promote_book_stale_cleanup_copy_owned(tmp_path: Path) -> None:
+    """D32: stale copy-mode file whose hash matches is removed on re-promote."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["architect", "developer"])
+
+    book = _agents_book_with_promote(mode="copy")
+    promote_book(book, vault)
+
+    # Simulate upstream removing developer: delete canonical file
+    (vault / "artifacts" / "agents" / "developer.md").unlink()
+
+    # Re-run promotion — developer's copy should be stale-cleaned (hash matches)
+    report = promote_book(book, vault)
+
+    promo_dir = vault / ".claude" / "agents"
+    assert not (promo_dir / "developer.md").exists()
+    assert (promo_dir / "architect.md").is_file()  # still present
+    assert len(report.cleaned) == 1
+
+
+def test_promote_book_user_modified_target_is_preserved(tmp_path: Path) -> None:
+    """D32: user-modified symlink target is not overwritten; recorded in skipped."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _make_canonical(vault, ["architect"])
+
+    # First promote (symlink mode)
+    book = _agents_book_with_promote()
+    promote_book(book, vault)
+
+    # Replace the symlink with a user-modified regular file (different content)
+    promo_file = vault / ".claude" / "agents" / "architect.md"
+    promo_file.unlink()  # remove the symlink
+    promo_file.write_text("# User-modified content")
+
+    # Re-run — should skip the user-modified file
+    report = promote_book(book, vault)
+
+    assert promo_file.read_text() == "# User-modified content", "user file should be untouched"
+    assert len(report.skipped) == 1
+    assert len(report.promoted) == 0
