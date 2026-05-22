@@ -87,7 +87,7 @@ use `artifacts show -j` so frontmatter and body come back parsed.
 ### Create — `artifacts create`
 
 ```bash
-artifacts create "<title>" [--kind KIND] [--body TEXT] [--fields KEY=VALUE …]
+artifacts create "<title>" [--kind KIND] [--body TEXT] [--body-file PATH|-] [--fields KEY=VALUE …]
 ```
 
 - Default kind is `task`.
@@ -112,6 +112,146 @@ artifacts create "Deploy pipeline" \
   --body "## Steps\n- Step 1\n- Step 2"
 artifacts create "Child task" --parent t0043                      # back-links into t0043.subtasks
 ```
+
+Every `artifacts create` call goes through **two preparation steps**
+before the command itself: (1) selecting the kind, (2) drafting the
+body from the chosen kind's `ARTIFACT.md`. Both happen at this agent
+layer — the CLI itself stays body-agnostic and never reads
+`ARTIFACT.md` bodies.
+
+#### Selecting a kind
+
+When the user does not name a kind explicitly, do **not** fall straight
+through to the `cli.defaults.create.kind` default (usually `task`).
+First consult the registered kinds and pick by the `description:`
+signal:
+
+```bash
+artifacts kinds -j | jq '.[] | {name, description}'
+```
+
+`description:` (≤ 1024 chars, third-person) encodes both the *what*
+(what the kind captures) and the *when* (which signals indicate this
+kind over alternatives). Read each candidate description and pick the
+kind whose *when* clause matches the user's request. Only fall back
+to the configured default when nothing matches.
+
+For human-friendly browsing run `artifacts kinds` (table). When
+scripting or piping, use `artifacts kinds -j`.
+
+#### Drafting the body from ARTIFACT.md
+
+Every kind ships an `ARTIFACT.md` that pairs the validation contract
+(`kind.json`) with an authored body skeleton. The skill's flow is
+**read-then-create**: load the skeleton, resolve placeholders, then
+pipe the result into `artifacts create` via `--body-file -`.
+
+```bash
+# 1. Load the chosen kind's ARTIFACT.md
+artifacts kinds <kind>            # full file (frontmatter + body)
+# or, for scripting:
+artifacts kinds <kind> -j         # {"meta": {...}, "body": "..."}
+
+# 2. Extract the skeleton section (## Skeleton, or ## Variants/<name>)
+#    — drop the surrounding ```markdown … ``` fence if present.
+
+# 3. Substitute {{TITLE}} with the user's title. Leave every other
+#    {{TOKEN}} placeholder LITERAL — the agent fills those in while
+#    drafting after the file is created.
+
+# 4. Pipe the resolved body into the CLI
+echo "<RESOLVED-BODY>" | artifacts create "<title>" --kind <kind> --body-file -
+```
+
+**Variant-selection precedence** (s0018 § 5.1). When the chosen kind's
+`ARTIFACT.md` declares one or more `## Variants/<name>` sub-sections,
+pick **exactly one** section to extract. Precedence, highest first:
+
+1. **Explicit user-requested variant.** The user named a variant
+   (e.g. "create a `decision` note"). Match it case-insensitively
+   against the declared `## Variants/<name>` headings.
+2. **`--type` token, only when the `ARTIFACT.md` frontmatter declares
+   `variant_field: type`.** A `type:<value>` token in the request
+   selects the variant whose name matches `<value>`. If the
+   frontmatter does not declare `variant_field: type`, ignore the
+   token for variant selection (it is still passed through as a
+   normal frontmatter field).
+3. **Default `## Skeleton`.** Used when neither 1 nor 2 applies,
+   or when the `ARTIFACT.md` declares no variants at all.
+
+Never infer a variant from the title's wording — title inference is
+explicitly rejected. If the user names a variant that does not exist,
+abort and list the declared variants rather than silently falling back.
+
+**Substitution scope.** `{{TITLE}}` is the **only** placeholder
+substituted at create time. Every other `{{TOKEN}}` (e.g.
+`{{ONE_PARAGRAPH_SUMMARY}}`, `{{DECISION_RATIONALE}}`) is left
+**literal** in the body so the agent fills it in during drafting after
+the file lands. Do not invent a substitution table — if a token's
+intent is unclear, ask the user.
+
+**Fallback — no ARTIFACT.md or no skeleton.** When the chosen kind has
+no `ARTIFACT.md`, or its `ARTIFACT.md` has no `## Skeleton` section
+(and no variant applies), skip the body step entirely and run
+`artifacts create` with no `--body` / `--body-file`. Surface a
+one-line info note to the user:
+
+```
+info: kind '<kind>' has no ARTIFACT.md; created with empty body.
+```
+
+This matches the `body_loader.py` policy (s0018 § 6): the empty body
+is the honest signal that the kind has not authored a skeleton yet —
+do not synthesise a generic stub.
+
+#### Worked example — creating a `note`
+
+User asks: "Capture the brainstorm we just had on retry semantics
+as a note titled *Retry budget brainstorm*."
+
+```bash
+# 1. Confirm the kind from descriptions (the user said "note" — verify
+#    description matches: "captures thinking at a point in time").
+artifacts kinds -j | jq -r '.[] | select(.name=="note") | .description'
+
+# 2. Load the kind's ARTIFACT.md.
+artifacts kinds note
+
+#    The body contains a ## Skeleton section:
+#
+#        ```markdown
+#        # {{TITLE}}
+#
+#        {{ONE_PARAGRAPH_SUMMARY}}
+#
+#        ## Origin
+#
+#        ## References
+#        ```
+
+# 3. Substitute {{TITLE}}; leave {{ONE_PARAGRAPH_SUMMARY}} literal.
+#    No variant applies (note declares no ## Variants/<name>).
+
+# 4. Pipe the resolved body into create.
+cat <<'EOF' | artifacts create "Retry budget brainstorm" \
+  --kind note \
+  --fields type=brainstorm \
+  --body-file -
+# Retry budget brainstorm
+
+{{ONE_PARAGRAPH_SUMMARY}}
+
+## Origin
+
+## References
+EOF
+```
+
+The CLI assigns the next note ID, writes the file, and prints the
+canonical stem (e.g. `n0007-retry-budget-brainstorm`). Follow up by
+filling in `{{ONE_PARAGRAPH_SUMMARY}}`, the `## Origin` context, and
+the `## References` links — those placeholders were intentionally
+left literal.
 
 ### Update status — `artifacts status`
 
@@ -213,3 +353,12 @@ artifacts show t0042 -j | jq -r .body
 5. **Body is immutable through the CLI.** `status` only updates
    frontmatter. If the body needs to change, surface that to the
    user — there is no CLI command for it today.
+6. **Select kinds by description; draft bodies from `ARTIFACT.md`.**
+   For every create: pick the kind by its `description:` field
+   (consulted via `artifacts kinds`) before falling back to the
+   configured default, then load the chosen kind's `ARTIFACT.md`
+   via `artifacts kinds <name>`, extract `## Skeleton` (or the
+   matching variant per the precedence above), substitute
+   `{{TITLE}}` only, and pipe the resolved body via
+   `--body-file -`. Read exactly one `ARTIFACT.md` per create —
+   the chosen kind's — and never fall back to direct file reads.

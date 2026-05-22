@@ -30,12 +30,44 @@ optional.
 | `fields:<KEY=VALUE>` | Generic frontmatter escape hatch; repeat for multiple. Comma-separated values become a list (`tags=a,b,c`). |
 | `dry-run` | Preview the resolved frontmatter + body without writing. |
 
-If the user has not specified a kind, run `artifacts kinds` first to see
-what is registered before guessing.
+If the user has not specified a kind, **do not** fall straight through to
+the configured default. Run `artifacts kinds -j` first and pick the kind
+whose `description:` field matches the user's request — the description
+encodes both the *what* (what the kind captures) and the *when* (which
+signals indicate this kind over alternatives). The
+`artifacts-os` skill's "Selecting a kind" subsection covers the full
+contract; honour it here.
 
 ## Procedure
 
-Run `artifacts create` with the title positional and the flags translated
+Before running `artifacts create`, draft the body from the chosen kind's
+`ARTIFACT.md`:
+
+1. Load the chosen kind's `ARTIFACT.md` body with
+   `artifacts kinds <KIND>` (text) or `artifacts kinds <KIND> -j`
+   (JSON `{meta, body}`).
+2. Extract the `## Skeleton` section — or the matching
+   `## Variants/<name>` section per the precedence locked in
+   s0018 § 5.1: **explicit user-requested variant** > **`--type` token
+   when the kind's `ARTIFACT.md` frontmatter declares
+   `variant_field: type`** > **default `## Skeleton`**. Strip the
+   surrounding ` ```markdown … ``` ` fence if present.
+3. Substitute `{{TITLE}}` with the artifact's title. **Leave every other
+   `{{TOKEN}}` placeholder literal** — they are intentional draft prompts
+   for the agent to fill in after the file lands (s0018 D1, D3).
+4. Pass the resolved body to the CLI via `--body-file -`.
+
+When the chosen kind has no `ARTIFACT.md`, or its `ARTIFACT.md` has no
+`## Skeleton` section (and no variant applies), skip the body step,
+create with an empty body, and surface a one-line note:
+`info: kind '<KIND>' has no ARTIFACT.md; created with empty body.`
+This matches the `body_loader.py` policy (s0018 § 6); do not synthesise a
+generic stub. The `artifacts-os` skill's "Drafting the body from
+ARTIFACT.md" subsection has the worked example.
+
+This selection + scaffolding flow lives at the agent layer; the CLI
+itself never reads `ARTIFACT.md` bodies (s0018 D6/D7). Then run
+`artifacts create` with the title positional and the flags translated
 from `$ARGUMENTS`:
 
 ```bash
