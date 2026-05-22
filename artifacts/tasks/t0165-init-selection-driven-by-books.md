@@ -5,7 +5,7 @@ id: t0165
 kind: task
 name: init-selection-driven-by-books
 owner: user
-status: in-progress
+status: review
 subtasks:
 - '[[t0166-spec-the-books-driven-init]]'
 - '[[t0167-implement-books-driven-init-flow]]'
