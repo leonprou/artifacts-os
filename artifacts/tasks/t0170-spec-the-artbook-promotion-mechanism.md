@@ -9,9 +9,10 @@ kind: task
 name: spec-the-artbook-promotion-mechanism
 owner: user
 parent: '[[t0169-add-post-pull-artifact-promotion]]'
-status: review
+status: done
 type: spec
 started: 2026-05-17
+completed: 2026-05-22
 ---
 
 ## Goal
@@ -94,13 +95,31 @@ The eight open questions ([[n0015]] § Open contract questions):
 
 ## Verification
 
-- [ ] Spec artifact exists under `artifacts/specs/`.
-- [ ] L1–L5 are restated verbatim with no contradicting design choices.
-- [ ] Every open question Q1–Q8 has an explicit decision in the spec with rationale.
-- [ ] Spec includes at least three worked transcripts (pull with promote, pull with promote disabled, artifacts-os distro `artbook.yaml` migration example).
-- [ ] Migration section names every file that will change.
-- [ ] Spec proposes an implementation-sub-task breakdown for project-manager to create from.
-- [ ] Spec linked in this task's `artifacts:` frontmatter.
+- [x] Spec artifact exists under `artifacts/specs/`.
+- [x] L1–L5 are restated verbatim with no contradicting design choices.
+- [x] Every open question Q1–Q8 has an explicit decision in the spec with rationale.
+- [x] Spec includes at least three worked transcripts (pull with promote, pull with promote disabled, artifacts-os distro `artbook.yaml` migration example).
+- [x] Migration section names every file that will change.
+- [x] Spec proposes an implementation-sub-task breakdown for project-manager to create from.
+- [x] Spec linked in this task's `artifacts:` frontmatter.
+
+## Verification Report
+
+*Verified: 2026-05-18*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | Spec artifact exists under `artifacts/specs/` | PASS | `artifacts/specs/s0031-artbook-post-pull-artifact-promotion.md` present (1410 lines). |
+| 2 | L1–L5 restated verbatim with no contradicting design choices | PASS | Spec § 2 ("Locked Foundations") restates L1–L5 verbatim from [[n0015]]; §§ 3–6 explicitly stay consistent (e.g., D29 defers list-form per L4; D40 ties D2 fallback through canonical + promote per L1+L5). |
+| 3 | Every open question Q1–Q8 has an explicit decision with rationale | PASS | D28 (Q1), D29 (Q2), D30 (Q3), D31 (Q4), D35 (Q5), D32 (Q6), D34 (Q7), D40 (Q8) — each with Decision / Rationale / Rejected alternatives sections. |
+| 4 | At least three worked transcripts | PASS | § 4.1 pull-with-promote; § 4.2 promote-disabled (variants B1 setting + B2 flag); § 4.3 artifacts-os distro before/after migration. |
+| 5 | Migration section names every file that will change | PASS | § 5 enumerates source code (5.1), distro manifest (5.2), documentation (5.3), tests (5.4), and spec-side revision notes (5.5). § 1.4 also provides the summary table. |
+| 6 | Implementation sub-task breakdown for project-manager | PASS | § 6 defines S1–S5 sub-tasks with scope, verification, and blocking relationships sized for single-PR delivery. |
+| 7 | Spec linked in this task's `artifacts:` frontmatter | PASS | Frontmatter contains `'[[s0031-artbook-post-pull-artifact-promotion]]'` alongside the brainstorm note `n0015`. |
+
+### Summary
+
+7 passed, 0 failed. All verification criteria met; task is ready to transition to `verified`.
 
 ## References
 

@@ -7,7 +7,7 @@ id: t0169
 kind: task
 name: add-post-pull-artifact-promotion
 owner: user
-status: in-progress
+status: review
 subtasks:
 - '[[t0170-spec-the-artbook-promotion-mechanism]]'
 - '[[t0173-implement-artbook-promotion-engine-and]]'
