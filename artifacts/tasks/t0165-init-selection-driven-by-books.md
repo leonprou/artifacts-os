@@ -5,11 +5,12 @@ id: t0165
 kind: task
 name: init-selection-driven-by-books
 owner: user
-status: review
+status: done
 subtasks:
 - '[[t0166-spec-the-books-driven-init]]'
 - '[[t0167-implement-books-driven-init-flow]]'
 type: feature
+completed: 2026-05-22
 ---
 
 # Init Selection Driven By Books, Not Bundled Kinds + Agents
