@@ -38,6 +38,9 @@ class KindDef:
     # L1 catalogue fields populated from ARTIFACT.md frontmatter.
     description: str | None = None
     has_template: bool = False
+    # Directory-storage primitive (s0032 §2.1).
+    storage: str = "file"          # "file" | "directory"
+    manifest_name: str = "{slug}.md"
 
     @property
     def schema_properties(self) -> set[str]:

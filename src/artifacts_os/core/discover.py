@@ -6,6 +6,7 @@ Spec: s2060-artifacts-os-architecture § discover.py
 import re
 import sys
 import warnings
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -80,6 +81,115 @@ def _meta_from_file_safe(path: Path) -> ArtifactMeta | None:
             f"({type(exc).__name__}: {exc})\n"
         )
         return None
+
+
+def _parse_bundle_stem(stem: str, kd: KindDef) -> tuple[str, str]:
+    """Return ``(id, slug)`` from a bundle directory name *stem*.
+
+    For non-numbered kinds: ``id == slug == stem``.
+    For numbered kinds: parse ``"{prefix}{NNNN}-{slug}"`` from *stem*.
+    Falls back to ``(stem, stem)`` if the pattern does not match.
+    """
+    if not kd.numbered:
+        return stem, stem
+    prefix = kd.prefix
+    m = re.match(rf"^({re.escape(prefix)}\d+)-(.+)$", stem)
+    if m:
+        return m.group(1), m.group(2)
+    return stem, stem
+
+
+def _iter_kind_paths(registry: "Registry", kd: KindDef) -> Iterator[Path]:
+    """Yield manifest paths for all artifacts of *kd*.
+
+    File-storage kinds: ``*.md`` files directly in the kind directory.
+    Directory-storage kinds (s0032 §2.3): manifest files one level deeper,
+    one per non-dotfile bundle directory.  Bundle directories with no
+    manifest are skipped with at most one ``stderr`` warning per call.
+    """
+    subdir = _kind_dir(registry, kd)
+    if not subdir.is_dir():
+        return
+    if kd.storage == "directory":
+        warned_missing = False
+        for bundle_dir in sorted(subdir.iterdir()):
+            if not bundle_dir.is_dir() or bundle_dir.name.startswith("."):
+                continue
+            id_, slug = _parse_bundle_stem(bundle_dir.name, kd)
+            manifest_filename = kd.manifest_name.format(
+                slug=slug, id=id_, name=slug, stem=bundle_dir.name
+            )
+            manifest_path = bundle_dir / manifest_filename
+            if not manifest_path.is_file():
+                if not warned_missing:
+                    sys.stderr.write(
+                        f"warning: bundle '{bundle_dir.name}' under "
+                        f"'{subdir}' is missing manifest "
+                        f"'{manifest_filename}'; skipping\n"
+                    )
+                    warned_missing = True
+                continue
+            yield manifest_path
+    else:
+        yield from sorted(subdir.glob("*.md"))
+
+
+def _find_in_dir_bundles(kdir: Path, query: str, kd: KindDef) -> list[Path]:
+    """Find manifest paths in a directory-storage kind matching *query*.
+
+    Applies the same four match strategies as :func:`_find_in_dir` but
+    matches against bundle directory stems rather than ``.md`` file stems.
+    Dot-prefixed bundle directories are always excluded.
+    """
+    if not kdir.is_dir():
+        return []
+
+    # Collect all (bundle_stem, manifest_path) pairs.
+    all_items: list[tuple[str, Path]] = []
+    for bundle_dir in sorted(kdir.iterdir()):
+        if not bundle_dir.is_dir() or bundle_dir.name.startswith("."):
+            continue
+        stem = bundle_dir.name
+        id_, slug = _parse_bundle_stem(stem, kd)
+        manifest_filename = kd.manifest_name.format(
+            slug=slug, id=id_, name=slug, stem=stem
+        )
+        manifest_path = bundle_dir / manifest_filename
+        if manifest_path.is_file():
+            all_items.append((stem, manifest_path))
+
+    # Strategy 1: exact stem match.
+    exact = [p for s, p in all_items if s == query]
+    if len(exact) == 1:
+        return exact
+
+    # Strategy 2: prefixed short/full ID (e.g. t42 → t0042).
+    m = _PREFIXED_ID_RE.match(query)
+    if m:
+        letters, digits = m.group(1), m.group(2)
+        expanded = f"{letters}{int(digits):04d}"
+        prefixed = [
+            p
+            for s, p in all_items
+            if s == expanded or s.startswith(f"{expanded}-")
+        ]
+        if prefixed:
+            return prefixed
+
+    # Strategy 3: all-digit numeric.
+    if _ALL_DIGITS_RE.match(query):
+        padded = query.zfill(4)
+        numeric = [
+            p
+            for s, p in all_items
+            if s.startswith(f"{padded}-")
+            or (kd.prefix and s.startswith(f"{kd.prefix}{padded}-"))
+        ]
+        if numeric:
+            return numeric
+
+    # Strategy 4: partial stem.
+    return [p for s, p in all_items if query in s]
 
 
 def _known_keys_for_kind(registry: "Registry", kind_name: str) -> set[str]:
@@ -179,10 +289,7 @@ def list_artifacts(
 
     results: list[ArtifactMeta] = []
     for kd in kinds:
-        subdir = _kind_dir(registry, kd)
-        if not subdir.is_dir():
-            continue
-        for path in sorted(subdir.glob("*.md")):
+        for path in _iter_kind_paths(registry, kd):
             meta = _meta_from_file_safe(path)
             if meta is None:
                 continue
@@ -266,7 +373,10 @@ def _find_in_dir(subdir: Path, query: str, kind_prefix: str) -> list[Path]:
 def _resolve_in_kind(
     registry: "Registry", query: str, kd: KindDef
 ) -> list[Path]:
-    return _find_in_dir(_kind_dir(registry, kd), query, kd.prefix)
+    kdir = _kind_dir(registry, kd)
+    if kd.storage == "directory":
+        return _find_in_dir_bundles(kdir, query, kd)
+    return _find_in_dir(kdir, query, kd.prefix)
 
 
 def resolve(

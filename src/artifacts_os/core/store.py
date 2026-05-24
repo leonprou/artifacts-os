@@ -109,33 +109,71 @@ def create(
     # Persisted `name` is slug-only across all kinds. The file path stem
     # encodes the full identifier — `{id}-{slug}` for numbered, `{slug}`
     # for non-numbered. See spec s0002 § Frontmatter — `name` field.
-    if kd.numbered:
-        last_err: OSError | None = None
-        for _ in range(5):
-            aid = next_prefixed_id(subdir, kd.prefix)
-            stem = f"{aid}-{slug}"
-            path = subdir / f"{stem}.md"
-            try:
-                fd = os.open(
-                    path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+    #
+    # Directory-storage kinds (s0032 §2.2): bundle dir is `subdir/<stem>/`,
+    # manifest is `<bundle_dir>/<manifest_name>`. Same O_EXCL atomicity.
+    if kd.storage == "directory":
+        if kd.numbered:
+            last_err: OSError | None = None
+            for _ in range(5):
+                aid = next_prefixed_id(subdir, kd.prefix)
+                stem = f"{aid}-{slug}"
+                bundle_dir = subdir / stem
+                manifest_filename = kd.manifest_name.format(
+                    slug=slug, id=aid, name=slug, stem=stem
                 )
-                break
-            except FileExistsError as e:
-                last_err = e
-                continue
+                path = bundle_dir / manifest_filename
+                try:
+                    bundle_dir.mkdir(exist_ok=True)
+                    fd = os.open(
+                        path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+                    )
+                    break
+                except FileExistsError as e:
+                    last_err = e
+                    continue
+            else:
+                raise last_err or FileExistsError(
+                    "Exhausted retries allocating numbered ID"
+                )
         else:
-            raise last_err or FileExistsError(
-                "Exhausted retries allocating numbered ID"
+            aid = slug
+            stem = slug
+            bundle_dir = subdir / slug
+            manifest_filename = kd.manifest_name.format(
+                slug=slug, id=slug, name=slug, stem=slug
             )
+            path = bundle_dir / manifest_filename
+            bundle_dir.mkdir(exist_ok=True)
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     else:
-        aid = slug
-        path = subdir / f"{slug}.md"
-        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        # File-storage kinds: original path.
+        if kd.numbered:
+            last_err = None
+            for _ in range(5):
+                aid = next_prefixed_id(subdir, kd.prefix)
+                stem = f"{aid}-{slug}"
+                path = subdir / f"{stem}.md"
+                try:
+                    fd = os.open(
+                        path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+                    )
+                    break
+                except FileExistsError as e:
+                    last_err = e
+                    continue
+            else:
+                raise last_err or FileExistsError(
+                    "Exhausted retries allocating numbered ID"
+                )
+        else:
+            aid = slug
+            stem = slug
+            path = subdir / f"{slug}.md"
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
 
     fm_dict: dict = {"kind": kind, "id": aid, "name": slug, **fields}
     _validate_schema(kd, fm_dict)
-
-    stem = path.stem
 
     # Pre-phase dispatch — fires BEFORE content is written to disk.
     # If a blocking pre-hook raises BlockedByPreHook, clean up the

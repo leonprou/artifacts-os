@@ -5,6 +5,7 @@ Spec: s2060-artifacts-os-architecture § registry.py
 
 import json
 import re
+import string
 import warnings
 from pathlib import Path
 
@@ -17,6 +18,10 @@ from artifacts_os.core.models import KindDef
 _DESCRIPTION_RESERVED_WORDS: tuple[str, ...] = ("anthropic", "claude")
 # Simple XML-tag pattern — angle-bracket opener with non-empty content.
 _XML_TAG_RE = re.compile(r"<[^>]+>")
+
+# Directory-storage primitive (s0032 §2.1).
+_KNOWN_STORAGE_VALUES: frozenset[str] = frozenset({"file", "directory"})
+_KNOWN_TEMPLATE_TOKENS: frozenset[str] = frozenset({"slug", "id", "name", "stem"})
 
 
 def _read_artifact_md_frontmatter(path: Path) -> dict:
@@ -164,6 +169,32 @@ class Registry:
                 meta["status_colors"] = schema["x-status-colors"]
             required_fields = schema.get("x-required-fields")
 
+            # --- Directory-storage primitive (s0032 §2.1) ---
+            storage = schema.get("x-storage", "file")
+            if storage not in _KNOWN_STORAGE_VALUES:
+                raise ValidationError(
+                    f"Kind '{name}': unknown 'x-storage' value {storage!r}; "
+                    f"expected one of {sorted(_KNOWN_STORAGE_VALUES)}"
+                )
+            manifest_name_template = schema.get("x-manifest-name", "{slug}.md")
+            if "x-manifest-name" in schema and storage != "directory":
+                raise ValidationError(
+                    f"Kind '{name}': 'x-manifest-name' is only valid when "
+                    f"x-storage is 'directory'; found x-storage={storage!r}"
+                )
+            if storage == "directory":
+                # Validate template tokens — fail fast before any artifact is created.
+                formatter = string.Formatter()
+                for _, field_name, _, _ in formatter.parse(manifest_name_template):
+                    if field_name is None:
+                        continue
+                    if field_name not in _KNOWN_TEMPLATE_TOKENS:
+                        raise ValidationError(
+                            f"Kind '{name}': 'x-manifest-name' template "
+                            f"contains unknown token '{{{field_name}}}'; "
+                            f"known tokens: {sorted(_KNOWN_TEMPLATE_TOKENS)}"
+                        )
+
             # --- L1: read ARTIFACT.md frontmatter only ---
             artifact_md = kinds_dir / name / "ARTIFACT.md"
             has_template = artifact_md.is_file()
@@ -198,6 +229,8 @@ class Registry:
                     required_fields=list(required_fields) if required_fields is not None else None,
                     description=description,
                     has_template=has_template,
+                    storage=storage,
+                    manifest_name=manifest_name_template,
                 )
             )
         return out

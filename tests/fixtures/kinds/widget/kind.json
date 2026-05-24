@@ -1,0 +1,16 @@
+{
+  "x-dir": "widgets",
+  "x-prefix": "",
+  "x-numbered": false,
+  "x-storage": "directory",
+  "x-manifest-name": "{slug}.md",
+  "x-columns": ["name", "color"],
+  "title": "Widget",
+  "type": "object",
+  "properties": {
+    "kind":  { "type": "string", "const": "widget" },
+    "name":  { "type": "string" },
+    "id":    { "type": "string" },
+    "color": { "type": "string", "description": "Widget color (test field)." }
+  }
+}

@@ -11,13 +11,24 @@ _SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def next_prefixed_id(directory: Path, prefix: str) -> str:
-    """Return next prefixed ID in directory. `{prefix}0001` when empty."""
+    """Return next prefixed ID in directory. `{prefix}0001` when empty.
+
+    Scans both ``*.md`` files (file-storage kinds) and subdirectories
+    (directory-storage kinds) so numbered IDs are unique across both
+    storage shapes.
+    """
     directory = Path(directory)
     pattern = re.compile(rf"^{re.escape(prefix)}(\d+)-")
     max_n = 0
     if directory.is_dir():
-        for path in directory.glob("*.md"):
-            match = pattern.match(path.stem)
+        for entry in directory.iterdir():
+            if entry.is_file() and entry.suffix == ".md":
+                stem = entry.stem
+            elif entry.is_dir():
+                stem = entry.name
+            else:
+                continue
+            match = pattern.match(stem)
             if match:
                 n = int(match.group(1))
                 if n > max_n:

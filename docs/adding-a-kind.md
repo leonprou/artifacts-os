@@ -240,6 +240,8 @@ drift. The `note` and `research` `ARTIFACT.md` files cite `r0001`,
 | `x-columns` | no | none | `meta["columns"]` | Default column list shown by `artifacts list`. |
 | `x-status-colors` | no | none | `meta["status_colors"]` | Rich rendering hints, keyed by status value. |
 | `x-required-fields` | no | none | `required_fields` | Frontmatter fields required at create time. |
+| `x-storage` | no | `"file"` | `storage` | Storage unit shape: `"file"` (single `.md`) or `"directory"` (bundle directory per artifact). See § "Directory Storage". |
+| `x-manifest-name` | no | `"{slug}.md"` | `manifest_name` | Manifest filename template for directory-storage kinds. Only valid when `x-storage: directory`. See § "Directory Storage". |
 | `properties.status.enum` | no | `[]` | `statuses` | Allowed status values; validated by `validate_one`. |
 | `properties.*` | no | — | `schema` | Full JSON Schema stored verbatim; drives validation and filter-flag generation. |
 
@@ -383,6 +385,89 @@ name is the natural key (agents, configuration stubs). Set
 
 See `CLAUDE.md` § "Naming Conventions" for slug rules (lowercase,
 hyphenated, max 5 words).
+
+---
+
+## Directory Storage
+
+By default every artifact is a single `.md` file.  A kind can opt
+into **directory-storage** when its artifacts need sibling files
+alongside the manifest (scripts, attachments, compiled assets, etc.).
+Each artifact then occupies an entire bundle directory instead of one
+file.
+
+### Two new `kind.json` fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `x-storage` | string enum | `"file"` | Storage unit. `"file"` (single `.md`, existing behaviour) or `"directory"` (bundle directory per artifact). |
+| `x-manifest-name` | string template | `"{slug}.md"` | **Only used when `x-storage: directory`.** Filename of the manifest inside the bundle directory. Supports the substitutions below. Setting this field on a `"file"`-storage kind is a `ValidationError`. |
+
+### Template substitutions for `x-manifest-name`
+
+| Token | Value |
+|-------|-------|
+| `{slug}` | The artifact slug (lowercase, hyphenated, ≤5 words). |
+| `{id}` | The full artifact ID — `{prefix}{NNNN}` for numbered kinds, `{slug}` for non-numbered. |
+| `{name}` | Alias of `{slug}`. |
+| `{stem}` | `{id}-{slug}` for numbered kinds; `{slug}` for non-numbered. |
+
+Unknown tokens raise a `ValidationError` at registry load time.
+
+Example declarations:
+
+```json
+{ "x-storage": "directory", "x-manifest-name": "{slug}.md" }
+{ "x-storage": "directory", "x-manifest-name": "SKILL.md" }
+```
+
+### Bundle layout contract
+
+```
+artifacts/<x-dir>/
+  <stem>/                  ← bundle directory (named after the artifact stem)
+    <manifest-name>        ← manifest file (frontmatter + optional prose body)
+    action.sh              ← any sibling files the kind needs
+    helpers/               ← subdirectories are allowed
+  .active/                 ← dot-prefixed; excluded from kind discovery
+  another-slug/
+    another-slug.md
+```
+
+- **`Artifact.path`** is the manifest file path, not the bundle directory.
+  Callers that need the bundle directory derive it as `artifact.path.parent`.
+- **Sibling files** live in the bundle directory alongside the manifest.
+  There is no schema constraint on sibling file names — the manifest's
+  `action`, `command`, or other fields reference them by relative path.
+- **Half-authored bundles** (directory exists, manifest missing) are
+  silently skipped by `artifacts list` with at most one warning per
+  invocation.
+- **Dot-prefixed bundle directories** (e.g. `.active/`) are always
+  excluded from kind discovery for *any* `x-storage: directory` kind.
+  This is a structural rule, not specific to any one kind.  Use it to
+  store operator-managed state alongside the canonical bundle tree
+  without polluting `artifacts list`.
+
+### Worked example — a `skill` kind that uses `SKILL.md`
+
+```json
+{
+  "x-dir": "skills",
+  "x-prefix": "",
+  "x-numbered": false,
+  "x-storage": "directory",
+  "x-manifest-name": "SKILL.md",
+  "title": "Skill"
+}
+```
+
+This declares that each skill artifact is stored as:
+```
+artifacts/skills/<slug>/SKILL.md
+```
+
+Sibling files in `artifacts/skills/<slug>/` are resolved relative to
+the manifest's containing directory when referenced from the manifest.
 
 ---
 
