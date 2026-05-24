@@ -1,17 +1,23 @@
 """Hook loader, matcher engine, and top-level emitter.
 
-Parses ``hooks:`` from ``artifacts.yaml``, matches events to hooks, and
-runs the appropriate actions.
+Parses ``hooks:`` from ``artifacts.yaml`` (legacy yaml-list form) and
+reads bundle manifests from ``artifacts/hooks/.active/`` (bundle form).
 
 The top-level ``notify(event, payload)`` function is registered with
 ``core.events.register_emitter`` when this module is imported (via
 ``hooks/__init__.py``).
 
-Spec: s0025-artifact-events § C4
+Host dispatch:
+  - ``host: artifacts-os`` (or absent) — enters the fire-list.
+  - ``host: openstation`` (reserved foreign) — loaded + listed, never fired.
+  - unknown hosts — warned once per process, skipped from fire-list (D113).
+
+Spec: s0025-artifact-events § C4; s0032-hooks-via-artbook §3, §6
 """
 from __future__ import annotations
 
 import fnmatch
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -20,6 +26,19 @@ from typing import Any
 
 from artifacts_os.core.vault import find_vault_root
 from artifacts_os.hooks.actions import BaseAction, from_config as action_from_config
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class BundleError(Exception):
+    """Raised when a hook bundle manifest cannot be safely loaded.
+
+    Covers path-escape attempts, symlink resolution failures, and
+    manifest parse failures that should block loading.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +74,12 @@ def _is_valid_matcher_key(key: str) -> bool:
 # Data model
 # ---------------------------------------------------------------------------
 
+# Reserved foreign hosts that are loaded + listed but never fired.
+_RESERVED_FOREIGN_HOSTS: frozenset[str] = frozenset(["openstation"])
+
+# The only host that enters the fire-list.
+_LOCAL_HOST: str = "artifacts-os"
+
 
 @dataclass(frozen=True)
 class Hook:
@@ -66,19 +91,75 @@ class Hook:
     phase: str = "post"  # "pre" | "post"
     blocking: bool = False
     timeout: int = 30
+    source: str = "yaml"  # "yaml" | "bundle"
+    host: str = "artifacts-os"
 
 
 # ---------------------------------------------------------------------------
-# Loader
+# Loader helpers
 # ---------------------------------------------------------------------------
 
 
-def load_hooks(root: Path) -> list[Hook]:
+def _parse_hook_entry(entry: dict, *, i: int, source: str = "yaml") -> Hook:
+    """Parse a single hook dict into a Hook instance.
+
+    Used by both yaml and bundle loaders — the only difference is the
+    ``source`` label.
+    """
+    if not isinstance(entry, dict):
+        raise ValueError(f"hooks[{i}] must be a mapping, got {type(entry)!r}")
+
+    name: str = entry.get("name", "")
+    if not name:
+        raise ValueError(f"hooks[{i}] missing required 'name' field")
+
+    matcher: dict[str, Any] = entry.get("matcher") or {}
+    for key in matcher:
+        if not _is_valid_matcher_key(key):
+            raise ValueError(
+                f"hook {name!r}: unknown matcher key {key!r}"
+            )
+
+    action_cfg: dict = entry.get("action") or {}
+    if not action_cfg.get("type"):
+        raise ValueError(f"hook {name!r}: missing action.type")
+    action = action_from_config(action_cfg)
+
+    phase: str = entry.get("phase", "post")
+    if phase not in ("pre", "post"):
+        raise ValueError(f"hook {name!r}: phase must be 'pre' or 'post'")
+
+    blocking: bool = bool(entry.get("blocking", False))
+    timeout: int = int(entry.get("timeout", 30))
+    host: str = str(entry.get("host", _LOCAL_HOST))
+
+    return Hook(
+        name=name,
+        matcher=matcher,
+        action=action,
+        phase=phase,
+        blocking=blocking,
+        timeout=timeout,
+        source=source,
+        host=host,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Legacy yaml-list loader
+# ---------------------------------------------------------------------------
+
+_legacy_deprecation_warned: bool = False
+
+
+def load_hooks_from_yaml(root: Path) -> list[Hook]:
     """Parse the ``hooks:`` section from ``<root>/artifacts.yaml``.
 
     Returns an empty list when the section is absent or empty.
     Raises ``ValueError`` for malformed entries (missing name, missing
     action type, unknown matcher keys).
+
+    Yaml-list hooks are implicitly treated as ``host: artifacts-os``.
     """
     import yaml
 
@@ -91,46 +172,267 @@ def load_hooks(root: Path) -> list[Hook]:
     if not hooks_data:
         return []
 
+    # Emit legacy deprecation notice once per process.
+    global _legacy_deprecation_warned
+    if not _legacy_deprecation_warned:
+        quiet = os.environ.get("ARTIFACTS_HOOKS_LEGACY_QUIET", "")
+        if not quiet or quiet == "0":
+            sys.stderr.write(
+                "deprecation: hooks defined in artifacts.yaml are deprecated. "
+                "Migrate to hook bundles (artifacts/hooks/<slug>/) and use "
+                "'artifacts hooks promote <slug>'. "
+                "Set ARTIFACTS_HOOKS_LEGACY_QUIET=1 to suppress this warning.\n"
+            )
+        _legacy_deprecation_warned = True
+
     hooks: list[Hook] = []
     for i, entry in enumerate(hooks_data):
-        if not isinstance(entry, dict):
-            raise ValueError(f"hooks[{i}] must be a mapping, got {type(entry)!r}")
-
-        name: str = entry.get("name", "")
-        if not name:
-            raise ValueError(f"hooks[{i}] missing required 'name' field")
-
-        matcher: dict[str, Any] = entry.get("matcher") or {}
-        for key in matcher:
-            if not _is_valid_matcher_key(key):
-                raise ValueError(
-                    f"hook {name!r}: unknown matcher key {key!r}"
-                )
-
-        action_cfg: dict = entry.get("action") or {}
-        if not action_cfg.get("type"):
-            raise ValueError(f"hook {name!r}: missing action.type")
-        action = action_from_config(action_cfg)
-
-        phase: str = entry.get("phase", "post")
-        if phase not in ("pre", "post"):
-            raise ValueError(f"hook {name!r}: phase must be 'pre' or 'post'")
-
-        blocking: bool = bool(entry.get("blocking", False))
-        timeout: int = int(entry.get("timeout", 30))
-
-        hooks.append(
-            Hook(
-                name=name,
-                matcher=matcher,
-                action=action,
-                phase=phase,
-                blocking=blocking,
-                timeout=timeout,
-            )
-        )
+        hooks.append(_parse_hook_entry(entry, i=i, source="yaml"))
 
     return hooks
+
+
+# ---------------------------------------------------------------------------
+# Bundle loader: reads .active/ symlinks / JSON stubs
+# ---------------------------------------------------------------------------
+
+_WARNED_UNKNOWN_HOSTS: set[str] = set()
+
+
+def _warn_unknown_host_once(host: str) -> None:
+    """Emit a one-line stderr warning for *host* the first time it's seen."""
+    if host not in _WARNED_UNKNOWN_HOSTS:
+        _WARNED_UNKNOWN_HOSTS.add(host)
+        sys.stderr.write(
+            f"warning: hook host {host!r} is unknown; "
+            "skipping from fire-list (loaded but not fired)\n"
+        )
+
+
+def _read_frontmatter(path: Path) -> dict[str, Any]:
+    """Read only the YAML frontmatter block from *path*.
+
+    Returns an empty dict when the file has no ``---`` delimiters.
+    """
+    import yaml
+
+    lines: list[str] = []
+    with path.open("r", encoding="utf-8") as fh:
+        first = fh.readline()
+        if first.strip() != "---":
+            return {}
+        for line in fh:
+            if line.rstrip("\n") == "---":
+                break
+            lines.append(line)
+    return yaml.safe_load("".join(lines)) or {}
+
+
+def _resolve_active_entry(
+    entry: Path,
+    hooks_dir: Path,
+) -> tuple[str, Path | None, str | None]:
+    """Resolve a single ``.active/<slug>`` entry.
+
+    Returns ``(slug, manifest_path, error_reason)`` where:
+    - ``manifest_path`` is not None on success.
+    - ``error_reason`` is one of ``"missing-target"``, ``"escape-attempt"``
+      on failure.
+    """
+    slug = entry.name
+    if slug.startswith("."):
+        return slug, None, "missing-target"
+
+    # Resolve the entry (symlink or .json stub).
+    if entry.suffix == ".json":
+        # Stub form: {"target": "../<slug>/…"}
+        try:
+            import json
+            data = json.loads(entry.read_text(encoding="utf-8"))
+            rel_target = data.get("target", "")
+        except Exception:
+            return slug, None, "parse-error"
+        manifest_path = (entry.parent / rel_target).resolve()
+    elif entry.is_symlink():
+        try:
+            manifest_path = entry.resolve()
+        except OSError:
+            return slug, None, "missing-target"
+        if not manifest_path.exists():
+            return slug, None, "missing-target"
+    else:
+        # Might be a regular file in test fixtures — just use it directly
+        manifest_path = entry.resolve()
+        if not manifest_path.exists():
+            return slug, None, "missing-target"
+
+    # Security: manifest must live inside artifacts/hooks/ (no path escape).
+    hooks_real = hooks_dir.resolve()
+    try:
+        manifest_path.relative_to(hooks_real)
+    except ValueError:
+        return slug, None, "escape-attempt"
+
+    return slug, manifest_path, None
+
+
+def _resolve_action_path(action_cfg: dict, bundle_dir: Path) -> dict:
+    """Return a copy of *action_cfg* with relative ``command`` resolved
+    against *bundle_dir*.
+
+    Absolute paths and non-shell actions pass through unchanged.
+    """
+    if action_cfg.get("type") != "shell":
+        return action_cfg
+    cmd = action_cfg.get("command", "")
+    if not cmd:
+        return action_cfg
+    # Only resolve paths that look like filesystem paths (contain / or are
+    # simple names without spaces). Skip plain commands like "echo", "true".
+    # A relative path is anything that doesn't start with / and contains /
+    # OR starts with ./ or ../ OR is a single filename that exists in bundle_dir.
+    is_relative = (
+        not os.path.isabs(cmd)
+        and (
+            "/" in cmd
+            or cmd.startswith("./")
+            or cmd.startswith("../")
+            or (bundle_dir / cmd).exists()
+        )
+    )
+    if not is_relative:
+        return action_cfg
+    resolved = str((bundle_dir / cmd).resolve())
+    return {**action_cfg, "command": resolved}
+
+
+def load_hooks_from_active(root: Path) -> list[Hook]:
+    """Load hooks from ``<root>/artifacts/hooks/.active/``.
+
+    Reads each entry (symlink or ``.json`` stub), validates that the
+    resolved manifest lives inside ``artifacts/hooks/``, parses frontmatter,
+    and returns in-memory ``Hook`` records with ``source="bundle"``.
+
+    Skipped entries emit ``hook.skipped`` events; they do not raise.
+    Returns hooks sorted by slug.
+    """
+    from artifacts_os.core import events as _core_events
+
+    hooks_dir = root / "artifacts" / "hooks"
+    active_dir = hooks_dir / ".active"
+    if not active_dir.exists():
+        return []
+
+    hooks: list[Hook] = []
+
+    entries = sorted(active_dir.iterdir())
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+
+        # Strip .json suffix for slug if it's a stub file
+        slug = entry.stem if entry.suffix == ".json" else entry.name
+
+        slug_resolved, manifest_path, error_reason = _resolve_active_entry(
+            entry, hooks_dir
+        )
+        if error_reason is not None:
+            _core_events._dispatch(
+                "hook.skipped",
+                hook=slug_resolved,
+                reason=error_reason,
+                path=str(entry),
+            )
+            continue
+
+        # Parse manifest frontmatter.
+        try:
+            fm = _read_frontmatter(manifest_path)
+        except Exception as exc:
+            _core_events._dispatch(
+                "hook.skipped",
+                hook=slug_resolved,
+                reason="parse-error",
+                path=str(manifest_path),
+            )
+            continue
+
+        if not fm:
+            _core_events._dispatch(
+                "hook.skipped",
+                hook=slug_resolved,
+                reason="parse-error",
+                path=str(manifest_path),
+            )
+            continue
+
+        # Resolve relative action.command against the bundle directory.
+        bundle_dir = manifest_path.parent
+        action_cfg = dict(fm.get("action") or {})
+        if action_cfg:
+            action_cfg = _resolve_action_path(action_cfg, bundle_dir)
+            fm = {**fm, "action": action_cfg}
+
+        try:
+            hook = _parse_hook_entry(fm, i=0, source="bundle")
+        except (ValueError, Exception) as exc:
+            _core_events._dispatch(
+                "hook.skipped",
+                hook=slug_resolved,
+                reason="parse-error",
+                path=str(manifest_path),
+            )
+            continue
+
+        hooks.append(hook)
+
+    return hooks
+
+
+# ---------------------------------------------------------------------------
+# Merged loader
+# ---------------------------------------------------------------------------
+
+
+def load_hooks(root: Path) -> list[Hook]:
+    """Load all hooks for *root*: yaml entries first, then bundle entries.
+
+    - Yaml entries are loaded via ``load_hooks_from_yaml`` (implicit
+      ``host: artifacts-os``).
+    - Bundle entries are loaded via ``load_hooks_from_active`` (respect
+      their declared ``host:``).
+    - Bundle entries are sorted by slug within their group.
+    - Returns yaml entries first, then bundle entries (sorted by slug).
+
+    Raises ``ValueError`` for malformed yaml hook entries.
+    """
+    yaml_hooks = load_hooks_from_yaml(root)
+    bundle_hooks = load_hooks_from_active(root)
+    return yaml_hooks + bundle_hooks
+
+
+# ---------------------------------------------------------------------------
+# Host dispatch: which hooks enter the fire-list
+# ---------------------------------------------------------------------------
+
+
+def _fire_list(hooks: list[Hook]) -> list[Hook]:
+    """Return the subset of *hooks* that should be fired.
+
+    - ``host: artifacts-os`` (or empty) → included.
+    - Reserved foreign hosts (e.g. ``openstation``) → excluded silently.
+    - Unknown hosts → warn once, excluded.
+    """
+    result: list[Hook] = []
+    for hook in hooks:
+        if hook.host == _LOCAL_HOST or not hook.host:
+            result.append(hook)
+        elif hook.host in _RESERVED_FOREIGN_HOSTS:
+            # Loaded + listed but not fired — silently skip.
+            pass
+        else:
+            _warn_unknown_host_once(hook.host)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +605,8 @@ def run_matched(
     - Failures emit ``hook.failed`` and raise ``BlockedByPreHook`` when
       the hook has ``blocking=true`` and ``phase=pre``; otherwise a
       warning is printed to stderr.
+    - ``hook.fired`` and ``hook.failed`` payloads carry an optional
+      ``source:`` key (``"yaml"`` | ``"bundle"``).
     """
     from artifacts_os.core import events as _core_events
     from artifacts_os.core.errors import BlockedByPreHook
@@ -324,6 +628,7 @@ def run_matched(
                 action=action_dict,
                 duration_ms=duration_ms,
                 phase=hook.phase,
+                source=hook.source,
             )
         except Exception as exc:
             duration_ms = int(time.monotonic() * 1000) - start_ms
@@ -336,6 +641,7 @@ def run_matched(
                 blocking=hook.blocking,
                 error=str(exc),
                 duration_ms=duration_ms,
+                source=hook.source,
             )
             if hook.phase == "pre" and hook.blocking:
                 raise BlockedByPreHook(
@@ -360,7 +666,8 @@ def notify(event: str, payload: dict) -> None:
     """Top-level emitter — registered with ``core.events.register_emitter``.
 
     Loads hooks from the vault root on first call (cached).  Matches the
-    event and phase, then dispatches to the action runners.
+    event and phase, then dispatches to the action runners.  Only hooks
+    that pass the host dispatch filter (``_fire_list``) are executed.
     """
     global _hooks_cache, _hooks_root, _notify_active
 
@@ -398,6 +705,11 @@ def _notify_inner(event: str, payload: dict) -> None:
     if not hooks:
         return
 
+    # Apply host dispatch: only fire hooks targeting artifacts-os.
+    fireable = _fire_list(hooks)
+    if not fireable:
+        return
+
     # Determine phase from event context:
     # Pre-phase events come from _dispatch_pre calls; they carry a
     # ``_phase`` sentinel that we inject via the emitter contract.
@@ -406,8 +718,8 @@ def _notify_inner(event: str, payload: dict) -> None:
     # falling back to "post" for all regular ``_dispatch`` calls.
     phase = payload.pop("_phase", "post")
 
-    pre_hooks = match(hooks, event, payload, phase="pre")
-    post_hooks = match(hooks, event, payload, phase="post")
+    pre_hooks = match(fireable, event, payload, phase="pre")
+    post_hooks = match(fireable, event, payload, phase="post")
 
     if phase == "pre":
         run_matched(pre_hooks, event, payload, root=root)
@@ -420,6 +732,8 @@ def invalidate_cache() -> None:
 
     Useful in tests to reset state between cases.
     """
-    global _hooks_cache, _hooks_root
+    global _hooks_cache, _hooks_root, _legacy_deprecation_warned, _WARNED_UNKNOWN_HOSTS
     _hooks_cache = None
     _hooks_root = None
+    _legacy_deprecation_warned = False
+    _WARNED_UNKNOWN_HOSTS.clear()

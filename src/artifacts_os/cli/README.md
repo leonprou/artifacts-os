@@ -1126,6 +1126,114 @@ promotion step.
 
 ---
 
+### `hooks` — manage hook bundles
+
+Hook bundles live under `artifacts/hooks/<slug>/`. Each bundle contains a
+manifest (`<slug>.md`) and optional sibling scripts. A bundle must be
+*promoted* before the loader fires it. See [`docs/hooks.md`](../../docs/hooks.md)
+for the full model.
+
+```
+artifacts hooks list [--host HOST] [--active | --inactive]
+                     [--source yaml|bundle] [--tail [N]] [-j]
+                     [--prune [--dry-run]]
+artifacts hooks show <slug>   [-j]
+artifacts hooks promote <slug> [--force] [-j]
+artifacts hooks demote  <slug> [-j]
+```
+
+#### `hooks list`
+
+Lists all hooks (yaml + bundle) as a Rich table.
+
+Default columns: `name`, `host`, `active`, `phase`, `event`, `source`.
+
+`active` values: `yes` (symlink resolves), `dangling` (target missing), `no`
+(no `.active/` entry).
+
+| Flag | Effect |
+|------|--------|
+| `--host HOST` | Filter by `host:` value |
+| `--active` | Show only hooks whose `.active/` entry resolves |
+| `--inactive` | Show only hooks without a resolving `.active/` entry |
+| `--source yaml\|bundle` | Restrict to one source |
+| `--tail [N]` | Show last N results (default 50 with bare flag) |
+| `-j` | JSON array output |
+| `--prune` | Remove dangling `.active/` entries; emits `hook.demoted` with `reason: "prune"` |
+| `--dry-run` | With `--prune`: show what would be removed without making FS changes |
+
+**JSON shape (`-j`):**
+
+```json
+[
+  {
+    "name": "auto-commit",
+    "host": "artifacts-os",
+    "phase": "post",
+    "blocking": false,
+    "timeout": 30,
+    "source": "bundle",
+    "active": "yes",
+    "matcher": {"event": "artifact.status_changed"}
+  }
+]
+```
+
+#### `hooks show <slug>`
+
+Renders manifest frontmatter, sibling-file listing (`path`, `+x`, `size`),
+active state, and a tail of the last 5 `hook.fired` / `hook.failed` events.
+
+**JSON shape (`-j`):**
+
+```json
+{
+  "frontmatter": {"kind": "hook", "name": "auto-commit", "host": "artifacts-os", …},
+  "active": "yes",
+  "siblings": [{"path": "action.sh", "executable": true, "size": 120}],
+  "recent_events": [{"event": "hook.fired", "hook": "auto-commit", "phase": "post", …}]
+}
+```
+
+#### `hooks promote <slug> [--force]`
+
+Creates `artifacts/hooks/.active/<slug>` → `../<slug>/<slug>.md` (relative
+symlink; falls back to a `.json` stub on filesystems without symlink support).
+Idempotent on same target. `--force` overwrites a divergent entry.
+
+**JSON shape (`-j`):**
+
+```json
+{
+  "slug": "auto-commit",
+  "active_path": "<vault>/artifacts/hooks/.active/auto-commit",
+  "target": "../auto-commit/auto-commit.md",
+  "was_stub": false,
+  "was_idempotent": false
+}
+```
+
+#### `hooks demote <slug>`
+
+Removes the `.active/<slug>` entry. No-op when not active.
+
+**JSON shape (`-j`):**
+
+```json
+{"slug": "auto-commit", "removed": true}
+```
+
+#### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | User error (unknown slug, divergent promote without `--force`) |
+| 2 | Configuration error (broken manifest, malformed `.active/`) |
+| 3 | Filesystem error (permissions) |
+
+---
+
 ## Project Configuration (`cli` section)
 
 The `cli` top-level key in `artifacts.yaml` lets you set

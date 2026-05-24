@@ -167,8 +167,298 @@ the process.
 
 ---
 
+## Bundle Form (hook bundles)
+
+> **Recommended form for new hooks.** The `artifacts.yaml hooks:` list is
+> deprecated; see [Migrating from the legacy hooks list](#migrating-from-the-legacy-hooks-list).
+
+A hook bundle is a directory under `artifacts/hooks/<slug>/` that contains a
+manifest file (`<slug>.md`) and any sibling scripts or helpers the action needs.
+Bundles are registered in git alongside your artifacts and survive distro re-pulls
+unchanged.
+
+### Bundle layout
+
+```
+artifacts/hooks/
+  auto-commit/
+    auto-commit.md        # manifest (frontmatter + optional prose)
+    action.sh             # +x sibling; referenced by action.command
+  notify-review/
+    notify-review.md      # inline-only — no siblings
+  lint-task/
+    lint-task.md
+    lint-task.py          # +x sibling
+    helpers.py            # non-+x helper sourced by lint-task.py
+  .active/                # operator-managed activation state (see "Promoting hooks")
+    auto-commit -> ../auto-commit/auto-commit.md
+```
+
+### Manifest frontmatter
+
+```yaml
+---
+kind: hook
+name: auto-commit
+host: artifacts-os            # artifacts-os | openstation | <custom>
+matcher:
+  event: artifact.status_changed
+  after: done
+action:
+  type: shell
+  command: ./action.sh        # relative paths resolve against the bundle dir
+  timeout: 30
+phase: post
+blocking: false
+---
+
+Body text is operator-facing documentation and is ignored by the loader.
+```
+
+### Sibling-file path resolution
+
+When `action.command` is a relative path (does not start with `/`), it is
+resolved against the **manifest's parent directory** at load time.
+
+| `command:` in manifest | Resolved path |
+|------------------------|---------------|
+| `./action.sh` | `<vault>/artifacts/hooks/<slug>/action.sh` |
+| `action.sh` | `<vault>/artifacts/hooks/<slug>/action.sh` |
+| `helpers/run.sh` | `<vault>/artifacts/hooks/<slug>/helpers/run.sh` |
+| `/usr/local/bin/foo` | `/usr/local/bin/foo` (absolute — unchanged) |
+
+**Divergence from the legacy yaml form:** `artifacts.yaml` hooks resolve
+relative commands against the **vault root** (their historical behaviour).
+Bundle hooks resolve against the bundle directory instead. This means the
+same relative path has different meanings in the two forms. When migrating
+a hook, adjust any relative paths in `action.command` to be bundle-relative.
+
+### `source:` distinction
+
+The `hook.fired` and `hook.failed` events carry an optional `source` key:
+
+| Value | Meaning |
+|-------|---------|
+| `"yaml"` | Hook loaded from `artifacts.yaml hooks:` list (legacy) |
+| `"bundle"` | Hook loaded from `artifacts/hooks/.active/` (bundle form) |
+
+Use `source` in `artifacts events --filter hook.fired` output or downstream
+consumers to tell the two forms apart.
+
+### Host dispatch
+
+The `host:` field in the manifest controls which loader fires the hook:
+
+| `host:` value | behaviour |
+|--------------|-----------|
+| `artifacts-os` | This loader fires the hook. |
+| `openstation` | Loaded and listed in `artifacts hooks list`; **never fired** by artifacts-os. |
+| Any other value | Loaded and listed; a one-line warning is printed once per process; never fired. |
+
+Legacy `artifacts.yaml` hooks have no `host:` field and are implicitly treated
+as `host: artifacts-os`.
+
+---
+
+## Promoting hooks
+
+Bundles must be *promoted* before they fire. Promotion creates a symlink in
+`artifacts/hooks/.active/` that the loader reads. The `.active/` directory is
+tracked in git so activation choices are PR-reviewable.
+
+```bash
+# See all available bundles and their activation state.
+artifacts hooks list
+
+# Activate a bundle (creates .active/my-hook → ../my-hook/my-hook.md).
+artifacts hooks promote my-hook
+
+# Deactivate without deleting the bundle.
+artifacts hooks demote my-hook
+
+# Inspect a bundle — frontmatter, sibling files, recent events.
+artifacts hooks show my-hook
+
+# Remove dangling .active/ entries (targets deleted by a re-pull).
+artifacts hooks list --prune
+```
+
+### Promote / demote semantics
+
+**`artifacts hooks promote <slug> [--force]`**
+
+1. Verifies that `artifacts/hooks/<slug>/<slug>.md` exists.
+2. Creates `artifacts/hooks/.active/<slug>` → `../<slug>/<slug>.md` (relative symlink).
+3. Idempotent: if the symlink already points at the same target, exits 0 with
+   "already active: …".
+4. Divergent target: exits 1 with an error unless `--force` is given, in which
+   case the old entry is replaced.
+5. Emits `hook.promoted` event.
+
+On systems where symlinks are not supported, `promote` falls back to a `.json`
+stub file `{"target": "../<slug>/…"}` which the loader also understands.
+
+**`artifacts hooks demote <slug>`**
+
+Removes `artifacts/hooks/.active/<slug>` (or the `.json` stub). No-op when
+not active. Emits `hook.demoted` event.
+
+### Re-pull preservation
+
+`artifacts book pull <hook-book>` writes bundle directories under
+`artifacts/hooks/` but never touches `artifacts/hooks/.active/`. Activation
+state survives a re-pull intact.
+
+If a re-pull removes a bundle that was promoted, the `.active/<slug>` symlink
+becomes dangling. The loader silently skips it and emits `hook.skipped`; run
+`artifacts hooks list --prune` to clean up.
+
+### Stale symlink policy
+
+| Scenario | Behaviour |
+|----------|-----------|
+| `artifacts hooks list` | Shows `dangling` in the `active` column |
+| `artifacts hooks promote` | Refuses to promote against a missing target |
+| `artifacts hooks list --prune` | Removes all dangling entries; emits `hook.demoted` with `reason: "prune"` |
+| Loader (`notify()`) | Silently skips; emits `hook.skipped` |
+
+---
+
+## `artifacts hooks` CLI
+
+All verbs output a Rich table by default; add `-j` / `--json` for JSON output.
+
+### `hooks list`
+
+```
+artifacts hooks list [--host HOST] [--active | --inactive]
+                     [--source yaml|bundle] [--tail [N]] [-j]
+                     [--prune [--dry-run]]
+```
+
+Default columns: `name`, `host`, `active`, `phase`, `event`, `source`.
+
+`active` values: `yes` (symlink resolves), `dangling` (target missing), `no`
+(no `.active/` entry).
+
+| Flag | Effect |
+|------|--------|
+| `--host HOST` | Filter by `host:` value |
+| `--active` | Show only hooks whose `.active/` entry resolves |
+| `--inactive` | Show only hooks without a resolving `.active/` entry |
+| `--source yaml\|bundle` | Restrict to one source |
+| `--tail [N]` | Show last N results (default 50 with bare flag) |
+| `-j` | JSON array output |
+| `--prune` | Remove dangling `.active/` entries |
+| `--dry-run` | With `--prune`: show what would be removed without removing it |
+
+**JSON shape (`-j`):**
+
+```json
+[
+  {
+    "name": "auto-commit",
+    "host": "artifacts-os",
+    "phase": "post",
+    "blocking": false,
+    "timeout": 30,
+    "source": "bundle",
+    "active": "yes",
+    "matcher": {"event": "artifact.status_changed"}
+  }
+]
+```
+
+### `hooks show <slug>`
+
+```
+artifacts hooks show <slug> [-j]
+```
+
+Renders: manifest frontmatter table, sibling-file listing (path, `+x`, size),
+resolved active state, and a tail of the last 5 `hook.fired` / `hook.failed`
+events from the JSONL log.
+
+**JSON shape (`-j`):**
+
+```json
+{
+  "frontmatter": {"kind": "hook", "name": "auto-commit", …},
+  "active": "yes",
+  "siblings": [{"path": "action.sh", "executable": true, "size": 120}],
+  "recent_events": [{"event": "hook.fired", "hook": "auto-commit", …}]
+}
+```
+
+### `hooks promote <slug> [--force]`
+
+```
+artifacts hooks promote <slug> [--force] [-j]
+```
+
+Creates `.active/<slug>` → `../<slug>/<slug>.md`. See [Promote / demote
+semantics](#promote--demote-semantics).
+
+**JSON shape (`-j`):**
+
+```json
+{"slug": "auto-commit", "active_path": "…/.active/auto-commit",
+ "target": "../auto-commit/auto-commit.md",
+ "was_stub": false, "was_idempotent": false}
+```
+
+### `hooks demote <slug>`
+
+```
+artifacts hooks demote <slug> [-j]
+```
+
+Removes the `.active/<slug>` entry. No-op when not active.
+
+**JSON shape (`-j`):**
+
+```json
+{"slug": "auto-commit", "removed": true}
+```
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | User error (unknown slug, divergent promote without `--force`) |
+| `2` | Configuration error (broken manifest, malformed `.active/`) |
+| `3` | Filesystem error (permissions) |
+
+---
+
+## Migrating from the legacy hooks list
+
+The `artifacts.yaml hooks:` list is deprecated. The deprecation notice is
+printed once to stderr on first load when the list is non-empty; set
+`ARTIFACTS_HOOKS_LEGACY_QUIET=1` to suppress it.
+
+To migrate a yaml-defined hook to a bundle:
+
+1. `artifacts create --kind hook my-hook-name`
+   (or create `artifacts/hooks/my-hook/my-hook.md` manually).
+2. Copy your `matcher:` and `action:` blocks into the manifest frontmatter;
+   add `host: artifacts-os`.
+3. If `action.command` was a vault-root-relative path (e.g. `bin/foo`), move
+   the script into the bundle directory and update `command: ./bin/foo`
+   (or `command: bin/foo`).
+4. `artifacts hooks promote my-hook`
+5. Remove the entry from `artifacts.yaml hooks:`.
+
+No automated migration tool ships in this release.
+
+---
+
 ## Cross-References
 
 - Full matcher key and action field reference — [settings.md § Hooks Section](settings.md#hooks-section)
 - Event types and payload fields — [events.md](events.md)
+- Bundle kind registration — `artifacts/kinds/hook/kind.json`
+- Artbook distribution for hooks — [artbook.md](artbook.md)
 - Design rationale, invariants, phase semantics — `s0025-artifact-events`
+- Hooks-via-artbook spec — `s0032-hooks-via-artbook-distribution`

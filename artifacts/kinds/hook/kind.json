@@ -1,0 +1,63 @@
+{
+  "x-dir": "hooks",
+  "x-storage": "directory",
+  "x-manifest-name": "{slug}.md",
+  "x-numbered": false,
+  "x-columns": ["name", "host", "phase", "blocking", "timeout"],
+  "title": "Hook",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "name"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "hook",
+      "description": "Kind discriminator. Always 'hook' for this schema."
+    },
+    "name": {
+      "type": "string",
+      "description": "Slug identifying this hook bundle. Lowercase, hyphenated."
+    },
+    "host": {
+      "type": "string",
+      "description": "Target host that executes this hook. 'artifacts-os' for local execution; 'openstation' and other values are reserved foreign hosts.",
+      "default": "artifacts-os"
+    },
+    "matcher": {
+      "type": "object",
+      "description": "Key/value pairs that must match the event for the hook to fire. Supports: event, kind, id, name, stem, path, changed, result, before, after, fields.<k>, before.<k>, after.<k>."
+    },
+    "action": {
+      "type": "object",
+      "description": "Action to execute when the hook fires. Must include 'type' (shell|notify|file-drop) plus type-specific fields.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["shell", "notify", "file-drop"],
+          "description": "Action type."
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command to run (shell action only). Relative paths resolve against the bundle directory."
+        }
+      }
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["pre", "post"],
+      "description": "Lifecycle phase to fire in. 'post' (default) runs after the operation; 'pre' runs before.",
+      "default": "post"
+    },
+    "blocking": {
+      "type": "boolean",
+      "description": "When true and phase is 'pre', a failing hook aborts the operation with BlockedByPreHook.",
+      "default": false
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "Maximum seconds the action may run before being killed.",
+      "default": 30
+    }
+  }
+}
