@@ -36,7 +36,7 @@ from artifacts_os.cli.commands import views as _views_cmd
 from artifacts_os.cli.commands import ai as _ai_cmd
 from artifacts_os.cli.commands import events as _events_cmd
 from artifacts_os.cli.commands import book as _book_cmd
-from artifacts_os.cli.settings import CliSettings
+from artifacts_os.cli.settings import CliSettings, DEFAULT_ALIASES
 
 
 _registered_kinds: list[KindDef] = []
@@ -256,11 +256,11 @@ def _run(argv: Sequence[str]) -> int:
     argv = list(argv)
 
     # Find vault root early so aliases can be applied before argparse sees argv.
-    # Aliases and defaults are silently ignored when no vault is found.
+    # Built-in DEFAULT_ALIASES are always active; vault-level aliases override per key.
     root = find_vault_root()
     cli_settings = _load_cli_settings(root) if root is not None else None
-    if cli_settings is not None:
-        argv = _apply_aliases(argv, cli_settings.aliases)
+    vault_aliases = cli_settings.aliases if cli_settings is not None else {}
+    argv = _apply_aliases(argv, {**DEFAULT_ALIASES, **vault_aliases})
 
     # Backward-compat: `events tail [...]` was the original (subcommand) form.
     # The flat parser at the top level handles every flag now (t0139), so

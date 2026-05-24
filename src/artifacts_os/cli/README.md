@@ -1151,10 +1151,37 @@ prints JSON regardless of the `editor` default.
 
 ### Command aliases
 
+The following aliases are **built in** and active in every vault — and
+outside any vault — without any configuration:
+
+| Alias | Command |
+|-------|---------|
+| `ls`  | `list` |
+| `sh`  | `show` |
+| `new` | `create` |
+| `st`  | `status` |
+| `vf`  | `verify` |
+| `va`  | `validate` |
+| `k`   | `kinds` |
+| `v`   | `views` |
+
+**Override rule — vault wins per key.** A vault-level `cli.aliases`
+entry with the same key as a built-in replaces that built-in for the
+current vault. All other built-ins remain active. Vault entries for
+keys that are not built-ins are added alongside the defaults.
+
 ```yaml
 cli:
   aliases:
-    ls: list          # `artifacts ls` → runs `list`
+    ls: status        # overrides the built-in ls→list for this vault
+    x: list           # new alias alongside the defaults
+```
+
+Additional custom aliases can be added the same way:
+
+```yaml
+cli:
+  aliases:
     t: status         # `artifacts t` → runs `status`
 ```
 

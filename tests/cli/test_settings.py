@@ -16,7 +16,7 @@ import pytest
 
 from artifacts_os.core import load_settings
 from artifacts_os.cli import main
-from artifacts_os.cli.settings import CliSettings
+from artifacts_os.cli.settings import CliSettings, DEFAULT_ALIASES
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -210,3 +210,61 @@ def test_no_aliases_configured_unknown_command_exits_2(vault):
     with pytest.raises(SystemExit) as exc:
         main(["unknowncmd"])
     assert exc.value.code == 2
+
+
+# ── Default aliases (built-in set) ───────────────────────────────────────────
+
+def test_default_aliases_applied_without_vault(tmp_path, monkeypatch):
+    """Built-in alias 'ls→list' resolves even outside a vault.
+
+    Alias resolves before argparse; the expected failure is the "not in a
+    vault" exit (code 2), not an argparse unknown-command error.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("artifacts_os.cli._registered_kinds", [])
+    with pytest.raises(SystemExit) as exc:
+        main(["ls"])
+    # 'ls' resolved to 'list' (valid command) → vault-not-found → exit 2
+    assert exc.value.code == 2
+
+
+def test_default_aliases_applied_with_empty_vault(vault, write_artifact, capsys):
+    """Built-in alias 'sh→show' works in a vault with no cli: section."""
+    write_artifact(
+        vault, "tasks", "t0001-fix-bug.md",
+        {"kind": "task", "id": "t0001", "name": "t0001-fix-bug", "status": "ready"},
+    )
+    main(["sh", "t0001"])
+    assert "t0001-fix-bug" in capsys.readouterr().out
+
+
+def test_vault_override_replaces_default(vault, write_artifact, capsys):
+    """Vault cli.aliases.ls: status overrides the built-in ls→list."""
+    (vault / "artifacts.yaml").write_text(
+        "layout_version: 1\nproject:\n  name: test\n"
+        "cli:\n  aliases:\n    ls: status\n"
+    )
+    write_artifact(
+        vault, "tasks", "t0001-fix-bug.md",
+        {"kind": "task", "id": "t0001", "name": "t0001-fix-bug", "status": "ready"},
+    )
+    main(["ls", "t0001", "in-progress"])
+    assert "in-progress" in capsys.readouterr().out
+
+
+def test_vault_alias_adds_alongside_defaults(vault, write_artifact, capsys):
+    """Vault adds a new alias; all built-in defaults remain active."""
+    (vault / "artifacts.yaml").write_text(
+        "layout_version: 1\nproject:\n  name: test\n"
+        "cli:\n  aliases:\n    x: list\n"
+    )
+    write_artifact(
+        vault, "tasks", "t0001-fix-bug.md",
+        {"kind": "task", "id": "t0001", "name": "t0001-fix-bug", "status": "ready"},
+    )
+    # New vault alias 'x' resolves to 'list'
+    main(["x"])
+    assert "t0001-fix-bug" in capsys.readouterr().out
+    # Built-in 'sh' still resolves to 'show'
+    main(["sh", "t0001"])
+    assert "t0001-fix-bug" in capsys.readouterr().out

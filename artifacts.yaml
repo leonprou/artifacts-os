@@ -149,12 +149,3 @@ cli:
       editor: true
     create:
       kind: note   # `artifacts create "..."` now creates a note by default
-  aliases:
-    ls: list
-    sh: show
-    new: create
-    st: status
-    vf: verify
-    va: validate
-    k: kinds
-    v: views

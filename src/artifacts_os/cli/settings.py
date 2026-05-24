@@ -11,6 +11,20 @@ from dataclasses import dataclass, field
 from artifacts_os.core.models import Settings
 
 
+#: Built-in aliases shipped with every vault (and outside any vault).
+#: Vault-level ``cli.aliases`` entries with the same key override these.
+DEFAULT_ALIASES: dict[str, str] = {
+    "ls": "list",
+    "sh": "show",
+    "new": "create",
+    "st": "status",
+    "vf": "verify",
+    "va": "validate",
+    "k": "kinds",
+    "v": "views",
+}
+
+
 @dataclass(kw_only=True)
 class CliSettings(Settings):
     """Settings subclass that adds typed access to the ``cli`` section.
