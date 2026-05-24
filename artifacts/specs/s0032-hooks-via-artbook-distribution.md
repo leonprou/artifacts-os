@@ -23,7 +23,7 @@ This is a **combined spec** (D12 below). It defines, end-to-end:
    contract.
 3. The `.active/` symlink promotion mechanism — operator-owned
    activation state that survives a re-pull of the registry.
-4. The CLI surface for `artifacts hook list|show|promote|demote`
+4. The CLI surface for `artifacts hooks list|show|promote|demote`
    plus integration with the existing `artifacts list --kind hook`.
 5. A new artbook book type — declared via a new manifest field —
    that carries hook registries from a distro to a consumer.
@@ -56,15 +56,15 @@ the parent decision tables in s0029 and s0031.
 | D108 | `.active/` directory name: literal `.active/` (dotfile-prefixed, sibling to bundle dirs). | Dotfile shields the directory from naive `--kind hook` walks; sibling-of-bundles keeps both pieces in one git subtree. |
 | D109 | `.active/` is tracked in git. | Hooks are project behaviour; activation changes are PR-reviewable, CI-consistent (n0018 §6). |
 | D110 | Symlink target shape: relative symlink pointing at the **manifest file**, not the bundle directory. Form: `artifacts/hooks/.active/auto-commit -> ../auto-commit/auto-commit.md`. | Loader can find both manifest (target) and bundle (`target.parent`) with one `os.readlink`. Relative form survives vault relocation (consistent with `promote:` symlinks, s0031). |
-| D111 | Stale-symlink policy: `artifacts hook list` warns inline; `artifacts hook promote` refuses against a missing target; `artifacts hook list --prune` removes dangling entries. The loader silently skips a broken symlink and emits a `hook.skipped` event (see §5). | Stale symlinks are a guaranteed consequence of registry refresh; they must not abort the loader nor be invisible. |
+| D111 | Stale-symlink policy: `artifacts hooks list` warns inline; `artifacts hooks promote` refuses against a missing target; `artifacts hooks list --prune` removes dangling entries. The loader silently skips a broken symlink and emits a `hook.skipped` event (see §5). | Stale symlinks are a guaranteed consequence of registry refresh; they must not abort the loader nor be invisible. |
 | D112 | Loader dispatch: artifacts-os loader fires only hooks whose `host:` value is `artifacts-os` (case-sensitive). Other `host:` values are loaded and listed but never fired by this loader. | n0018 §7 — `host:` declares action context, not matcher vocabulary. OpenStation's loader will fire `host: openstation` against the same `.active/` tree. |
 | D113 | `host:` enum policy: open set with a soft warning for unknown values. Reserved values: `artifacts-os`, `openstation`. The artifacts-os loader logs a one-line warning on first load for any other `host:` value (e.g. `host: jira-bot`) and skips firing them. | Open set unblocks third-party hosts; warning surfaces typos (`openstaion` → no fire, no error otherwise). |
 | D114 | Legacy `artifacts.yaml hooks:` entries continue to load and fire. A single deprecation notice is printed once per process to stderr when the list is non-empty. No forced cutover, no migration tool in MVP. | n0018 §10 — soft deprecation. The list-form predates this spec and is already documented (`docs/hooks.md`). |
 | D115 | `artifacts create --kind hook` writes the manifest only. No sibling files, no `--attach` flag. Operator authors `action.sh` (or similar) manually. | n0018 §9 — MVP UX. `--attach` is a fast-follow. |
 | D116 | Artbook book type for hook registries is declared by a new top-level book field `kind: hook` (mapping form), distinct from the v1 `type:` field that v2 already rejects. | Existing v2 parser rejects any `type:` key on books (manifest.py § `_parse_book` D24 reject). Introducing `type:` again would either require relaxing that rule (regression risk) or live with a clash. `kind:` is a fresh field with a closed enum (`hook` only in MVP) and is forward-compatible with future book kinds. |
-| D117 | `kind: hook` books opt out of promotion. The parser raises `ManifestError` if a `kind: hook` book declares `promote:`. | n0018 §8 + §pull = inert. The whole point of hook books is "canonical landing, operator promotes via `artifacts hook promote`, never on pull". |
+| D117 | `kind: hook` books opt out of promotion. The parser raises `ManifestError` if a `kind: hook` book declares `promote:`. | n0018 §8 + §pull = inert. The whole point of hook books is "canonical landing, operator promotes via `artifacts hooks promote`, never on pull". |
 | D118 | `kind: hook` books use the recurse walker semantics (one bundle directory per direct subdirectory of `src`), and the parser auto-sets `recurse: true` if omitted. Explicit `recurse: false` raises `ManifestError`. | Hook bundles are folder-of-folders by definition. Auto-set spares distro authors a redundant line; explicit-false catches mistakes. |
-| D119 | Locally-authored hooks are **never auto-promoted**. Promotion is always an explicit `artifacts hook promote <slug>` step regardless of whether the hook was pulled or hand-written. | n0018 §5 — pull is inert. Treating hand-written hooks differently would be a surprise; the consumer's "yes I want this to fire" decision deserves the same explicit gesture either way. |
+| D119 | Locally-authored hooks are **never auto-promoted**. Promotion is always an explicit `artifacts hooks promote <slug>` step regardless of whether the hook was pulled or hand-written. | n0018 §5 — pull is inert. Treating hand-written hooks differently would be a surprise; the consumer's "yes I want this to fire" decision deserves the same explicit gesture either way. |
 | D120 | Spec scope: combined single spec covering directory-storage primitive + hook kind + `.active/` mechanism + CLI + book type. | n0018 §12 weak prior; combined doc lets the developer execute against one contract without cross-spec drift. Sub-tasks (§9) decompose it for execution but share one spec. |
 
 The 12 contract questions from n0018 "Open contract questions"
@@ -157,7 +157,7 @@ applies uniformly to any kind that opts into `x-storage: directory`.
 - Delete is **not** added by this spec. The MVP rule: bundle
   directories are removed manually with `rm -rf
   artifacts/hooks/<slug>/`; `.active/` symlinks dangle and are
-  removed by `artifacts hook list --prune` (D111). A future
+  removed by `artifacts hooks list --prune` (D111). A future
   `artifacts delete` verb would handle both kinds uniformly.
 
 ---
@@ -313,13 +313,13 @@ Each entry in `.active/` is a relative symlink from the slug to
 the manifest file. The slug is the symlink filename, never the
 manifest's slug field (which is read but not trusted for naming).
 
-`.active/` is created on demand by `artifacts hook promote`. It
+`.active/` is created on demand by `artifacts hooks promote`. It
 is tracked in git (D109). The directory is excluded from
 `--kind hook` listings (§2.3).
 
 ### 4.2 Promote / demote semantics
 
-`artifacts hook promote <slug>`:
+`artifacts hooks promote <slug>`:
 
 1. Resolve `<slug>` against the canonical registry
    (`artifacts/hooks/<slug>/<manifest_name>` must exist). If
@@ -339,7 +339,7 @@ no-op, exit 0 (idempotent).
 If it exists and points elsewhere: error 1, "hook <slug> already
 promoted to <existing-target>; demote first or use `--force`".
 
-`artifacts hook demote <slug>`:
+`artifacts hooks demote <slug>`:
 
 1. If `.active/<slug>` does not exist: no-op, exit 0.
 2. `os.unlink('.active/<slug>')`.
@@ -358,7 +358,7 @@ the pull pipeline.
 Consequence: if a re-pull removes a bundle that was previously
 promoted, the `.active/<slug>` symlink becomes dangling. The
 loader skips it (D111) and emits `hook.skipped`; the operator
-sees the warning on next `artifacts hook list` and runs
+sees the warning on next `artifacts hooks list` and runs
 `--prune` or re-creates the bundle.
 
 ### 4.4 Concurrency
@@ -417,13 +417,13 @@ from two sources, in this fixed order:
      / action validators (`_is_valid_matcher_key`,
      `action_from_config`).
    - If `host` is not `"artifacts-os"`, the hook is **loaded and
-     listed** (so `artifacts hook list` shows it) but **not added
+     listed** (so `artifacts hooks list` shows it) but **not added
      to the fire-list** for this loader (D112). The `host:` value
      is preserved on the in-memory `Hook` and surfaced in the
-     `hook.skipped`-style metadata for `artifacts hook list
+     `hook.skipped`-style metadata for `artifacts hooks list
      --filter active=true`.
 
-Merge order matters only for `artifacts hook list` display; for
+Merge order matters only for `artifacts hooks list` display; for
 the matcher engine, the two sources are flattened into one list
 and evaluated in declaration order (yaml entries first, then
 bundle entries sorted by slug).
@@ -481,7 +481,7 @@ per process when the yaml list is non-empty:
 ```
 warning: artifacts.yaml `hooks:` list is deprecated.
          Migrate each entry to a bundle under artifacts/hooks/<slug>/
-         and promote it with `artifacts hook promote <slug>`.
+         and promote it with `artifacts hooks promote <slug>`.
          See docs/hooks.md § "Migrating from the legacy hooks list".
 ```
 
@@ -504,12 +504,12 @@ yaml and bundle sources are re-read on `invalidate_cache()`.
 All verbs are flat (CLAUDE.md CLI conventions), default to a
 Rich table, accept `-j` for JSON, and place filter flags at the
 top level. The verbs live in a new
-`src/artifacts_os/cli/commands/hook.py`.
+`src/artifacts_os/cli/commands/hooks.py`.
 
-### 7.1 `artifacts hook list`
+### 7.1 `artifacts hooks list`
 
 ```
-artifacts hook list [--host HOST] [--active | --inactive]
+artifacts hooks list [--host HOST] [--active | --inactive]
                     [--source yaml|bundle] [--tail [N]] [-j]
 ```
 
@@ -532,13 +532,13 @@ missing; `no` otherwise. The `source` column is `yaml` or
 five built-in artifact columns (`id`, `name`, `host`, etc.) using
 the `x-columns` declared in `hook/kind.json` (D101). The two
 commands compose: `list --kind hook` is the artifact-shaped view
-of the same data; `hook list` is the lifecycle-shaped view that
+of the same data; `hooks list` is the lifecycle-shaped view that
 adds `active`, `source`, and the dangling-target colouring.
 
-### 7.2 `artifacts hook show <slug>`
+### 7.2 `artifacts hooks show <slug>`
 
 ```
-artifacts hook show <slug> [-j]
+artifacts hooks show <slug> [-j]
 ```
 
 Default output (Rich): manifest frontmatter as a key/value table,
@@ -548,21 +548,21 @@ a section listing the bundle's sibling files (path + `+x` flag
 (default last 5). `-j` returns a single JSON object with the
 same fields.
 
-### 7.3 `artifacts hook promote <slug>` / `demote <slug>`
+### 7.3 `artifacts hooks promote <slug>` / `demote <slug>`
 
 ```
-artifacts hook promote <slug> [--force] [-j]
-artifacts hook demote  <slug> [-j]
+artifacts hooks promote <slug> [--force] [-j]
+artifacts hooks demote  <slug> [-j]
 ```
 
 Semantics in §4.2. `--force` on promote replaces an existing
 divergent symlink without erroring. `-j` returns
 `{"ok": true, "slug": "...", "target": "...", "mode": "symlink|stub"}`.
 
-### 7.4 `artifacts hook list --prune`
+### 7.4 `artifacts hooks list --prune`
 
 ```
-artifacts hook list --prune [--dry-run] [-j]
+artifacts hooks list --prune [--dry-run] [-j]
 ```
 
 Removes any `.active/` entry whose target does not resolve to a
@@ -643,8 +643,8 @@ books:
 
 A consumer running `artifacts book pull os-hooks` receives every
 bundle directory under `src` in their `artifacts/hooks/`, no
-activation. They follow up with `artifacts hook list`
-(see what's available) and `artifacts hook promote auto-commit`
+activation. They follow up with `artifacts hooks list`
+(see what's available) and `artifacts hooks promote auto-commit`
 (activate the ones they want). A subsequent re-pull overwrites
 the bundles but leaves their `.active/auto-commit` symlink
 intact (§4.3).
@@ -657,10 +657,10 @@ intact (§4.3).
 | Canonical landing | `artifacts/<basename(src)>/` | same | same |
 | `promote:` allowed? | yes | yes (typically omitted) | **no — ManifestError** |
 | Auto-activate on pull? | n/a (inert content) | n/a | **no — explicit operator step required** |
-| Required follow-up? | none | none | `artifacts hook promote <slug>` per hook to activate |
+| Required follow-up? | none | none | `artifacts hooks promote <slug>` per hook to activate |
 
 The defining property of `kind: hook` is the **absence** of
-auto-promote and the requirement of an explicit `hook promote`
+auto-promote and the requirement of an explicit `hooks promote`
 step. Everything else reuses existing book infrastructure.
 
 ---
@@ -675,8 +675,8 @@ must land in this order — each depends on the previous.
 |-------|---------------|-------|-------------------------------|
 | 1 | `add-directory-storage-primitive` | Implement §2 in full: `x-storage` + `x-manifest-name` in `kind.json`; `KindDef.storage` / `manifest_name`; branch in `core.create`; branch in `discover.iter_artifacts`; tests for both file and directory kinds; `docs/adding-a-kind.md` § "Directory Storage" written. | "Directory-storage primitive lands under `core` and is exercised by an in-repo test kind." |
 | 2 | `add-hook-kind-and-loader` | Implement §3 + §6: `artifacts/kinds/hook/{kind.json, ARTIFACT.md}`; loader merges yaml + `.active/` sources; host dispatch; legacy deprecation notice; events `hook.skipped`. New `hook.fired`/`hook.failed` `source:` key. `docs/hooks.md` updated. | "Hook kind registers; loader fires bundle hooks for `host: artifacts-os` and silently skips others; legacy yaml list still fires with deprecation warning." |
-| 3 | `add-active-promotion-and-cli` | Implement §4 + §7: `.active/` symlink mechanism; `artifacts hook list|show|promote|demote|--prune`; events `hook.promoted` / `hook.demoted` / `hook.pulled` (the last is wired by sub-task 4 but the event constant lands here); JSON output; CLI README section. | "`artifacts hook promote` survives a hook-book re-pull; `artifacts hook list --prune` removes stale symlinks." |
-| 4 | `add-artbook-hook-book-type` | Implement §8: `kind:` field in `artbook.yaml`; parser updates and ManifestError messages; pull-pipeline emits `hook.pulled`; `docs/artbook.md` updated; the `artifacts-os` distro's own `artbook.yaml` gains the `os-hooks` book pointing at `artifacts/hooks/`. | "`artifacts book pull os-hooks` lands inert bundles; `artifacts hook list` shows them; re-pull preserves `.active/` state." |
+| 3 | `add-active-promotion-and-cli` | Implement §4 + §7: `.active/` symlink mechanism; `artifacts hooks list|show|promote|demote|--prune`; events `hook.promoted` / `hook.demoted` / `hook.pulled` (the last is wired by sub-task 4 but the event constant lands here); JSON output; CLI README section. | "`artifacts hooks promote` survives a hook-book re-pull; `artifacts hooks list --prune` removes stale symlinks." |
+| 4 | `add-artbook-hook-book-type` | Implement §8: `kind:` field in `artbook.yaml`; parser updates and ManifestError messages; pull-pipeline emits `hook.pulled`; `docs/artbook.md` updated; the `artifacts-os` distro's own `artbook.yaml` gains the `os-hooks` book pointing at `artifacts/hooks/`. | "`artifacts book pull os-hooks` lands inert bundles; `artifacts hooks list` shows them; re-pull preserves `.active/` state." |
 
 Cross-cutting verification (lifted to the parent task once the
 spec is approved):
@@ -684,7 +684,7 @@ spec is approved):
 - [ ] All four sub-tasks done and merged.
 - [ ] End-to-end demo in `tests/integration/test_hooks_via_artbook.py`:
       author hook in source repo → `book pull` in fresh consumer
-      → `hook promote` → CRUD event fires the hook → re-pull
+      → `hooks promote` → CRUD event fires the hook → re-pull
       preserves `.active/`.
 - [ ] `docs/hooks.md`, `docs/artbook.md`, `docs/adding-a-kind.md`,
       `docs/events.md` updated.
@@ -712,7 +712,7 @@ that extend n0018's original list of 10.
 | 8 | `host:` enum policy | Open set; reserved values `{artifacts-os, openstation}`; warn once per unknown value; never reject. | D112, D113 |
 | 9 | Skills-as-kind sibling relationship | Skills migration is a separate task; this spec deliberately makes the directory-storage primitive (§2) reusable by skills without code change. Skills task will set `x-storage: directory`, `x-manifest-name: "SKILL.md"`, and consume the same `kind.json` extension. | D103 (mechanism), §2.1 (template), n0018 §4 |
 | 10 | Artbook book-type semantic differences | New `kind: hook` field; opts out of promotion; auto-sets `recurse: true`; rejects `promote:`; emits `hook.pulled` on pull. Otherwise reuses generic book infrastructure. | D116–D118, §8 |
-| 11 | Auto-promote policy for locally-authored hooks | Never auto-promote, regardless of origin (pulled or hand-written). The consumer's "yes I want this to fire" decision is always explicit via `artifacts hook promote`. | D119, §4 |
+| 11 | Auto-promote policy for locally-authored hooks | Never auto-promote, regardless of origin (pulled or hand-written). The consumer's "yes I want this to fire" decision is always explicit via `artifacts hooks promote`. | D119, §4 |
 | 12 | Combined vs. split spec decision | Combined single spec (this document). Decomposition for execution lives in §9, not as separate specs. | D120 |
 
 ---

@@ -22,7 +22,7 @@ completed: 2026-05-22
 - Resolve the 12 open contract questions enumerated in n0018 "Open contract questions": `.active/` naming, `x-storage` field shape, `x-manifest-name` template default, sibling-file resolution rule, stale-symlink cleanup behavior, legacy `hooks:` migration tool scope, `--attach` flag treatment, `host:` enum policy, skills-as-kind sibling relationship, hook book-type semantic differences, auto-promote policy for locally-authored hooks, combined-vs-split spec decision.
 - Define the loader contract: which loader fires which `host:` value, how an `.active/` symlink is resolved into a fired hook, and how legacy `artifacts.yaml hooks:` entries coexist (soft-deprecation path).
 - Define the events the new mechanism emits (pull/promote/demote/fire) so the existing events stream stays the single source of truth.
-- Specify the CLI surface: `artifacts hook list|show|promote|demote` flag shape, table columns, JSON output, and how it composes with `artifacts list --kind hook`. Must match the CLI conventions in `CLAUDE.md` (flat verbs, default Rich table, `-j` for JSON, `--tail` semantics where applicable, top-level filter flags).
+- Specify the CLI surface: `artifacts hooks list|show|promote|demote` flag shape, table columns, JSON output, and how it composes with `artifacts list --kind hook`. Must match the CLI conventions in `CLAUDE.md` (flat verbs, default Rich table, `-j` for JSON, `--tail` semantics where applicable, top-level filter flags).
 - Specify the artbook `type: hook` book contract: canonical landing path, absence of auto-promote, and any manifest-side requirements distinct from existing book types.
 - Identify the sub-task decomposition the developer will execute (e.g. "x-storage primitive" → "hook kind + loader" → "promote/demote + .active/" → "hook book type in artbook"), so the parent's verification checklist can be derived from it.
 - Out of scope (per n0018): OpenStation adoption, skills-as-kind migration, cryptographic trust posture, `--attach` flag, one-shot migration tool.
@@ -70,7 +70,7 @@ Key design moves worth flagging to the reviewer:
   as the loader.
 - **Locally-authored hooks are never auto-promoted (D119, Q11).**
   Pull and hand-authoring are treated identically: activation is
-  always `artifacts hook promote <slug>`. This was the new
+  always `artifacts hooks promote <slug>`. This was the new
   question added beyond n0018's original 10.
 - **Combined single spec (D120, Q12).** Decomposition for
   execution lives in s0032 §9 (four sequential implementation

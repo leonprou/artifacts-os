@@ -3,7 +3,7 @@ kind: task
 id: t0182
 name: add-hook-kind-and-bundle
 type: implementation
-status: in-progress
+status: done
 assignee: developer
 owner: architect
 parent: "[[t0178-ship-hooks-via-artbook-distribution]]"
@@ -11,6 +11,7 @@ depends_on:
   - "[[t0181-add-directory-storage-primitive-to]]"
 created: 2026-05-22
 started: 2026-05-24
+completed: 2026-05-24
 ---
 
 # Add Hook Kind, Bundle-Aware Loader, `.active/` Promotion + CLI Verbs
