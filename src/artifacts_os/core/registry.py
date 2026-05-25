@@ -13,6 +13,7 @@ import yaml
 
 from artifacts_os.core.errors import ValidationError
 from artifacts_os.core.models import KindDef
+from artifacts_os.core.transitions import parse_state_machines
 
 # Words whose appearance in a description triggers a hard error.
 _DESCRIPTION_RESERVED_WORDS: tuple[str, ...] = ("anthropic", "claude")
@@ -217,6 +218,11 @@ class Registry:
                     stacklevel=2,
                 )
 
+            # --- Per-property state machines (s0033 §4) ---
+            # parse_state_machines raises ValidationError on any of the five
+            # load-time failure conditions (D214a–d + D204 destination-wildcard).
+            state_machines = parse_state_machines(schema, name)
+
             out.append(
                 KindDef(
                     name=name,
@@ -231,6 +237,7 @@ class Registry:
                     has_template=has_template,
                     storage=storage,
                     manifest_name=manifest_name_template,
+                    state_machines=state_machines,
                 )
             )
         return out

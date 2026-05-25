@@ -266,3 +266,109 @@ def test_validate_many():
     results = validate_many(metas, _registry())
     assert len(results) == 2
     assert all(isinstance(r, ValidationResult) for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Rule 3 extension — state-machined properties (s0033 D209 §5.3)
+# ---------------------------------------------------------------------------
+
+
+def _registry_with_sm(prop: str, enum: tuple[str, ...]) -> "Registry":
+    """Build a registry with a kind that has a state machine on *prop*."""
+    from artifacts_os.core.models import StateMachineDef
+
+    sm = StateMachineDef(
+        enum=enum,
+        initial=enum[0],
+        transitions={v: tuple(enum) for v in enum},
+    )
+    kd = KindDef(
+        name="task",
+        dir="tasks",
+        prefix="t",
+        numbered=True,
+        statuses=list(enum) if prop == "status" else [],
+        state_machines={prop: sm},
+    )
+    return Registry([kd], root=None)
+
+
+def test_rule3_state_machine_valid_value() -> None:
+    """Valid state-machined property value → no Rule 3 issue."""
+    registry = _registry_with_sm("status", ("backlog", "ready"))
+    fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01", "status": "backlog"}
+    result = validate_one(_meta(fm), registry)
+    status_issues = [i for i in result.issues if i.field == "status" and i.severity == "error"]
+    assert status_issues == []
+
+
+def test_rule3_state_machine_invalid_value_raises_issue() -> None:
+    """Invalid value for a state-machined property → ValidationIssue with field=prop."""
+    registry = _registry_with_sm("status", ("backlog", "ready"))
+    fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01", "status": "wip"}
+    result = validate_one(_meta(fm), registry)
+    status_issues = [i for i in result.issues if i.field == "status"]
+    assert len(status_issues) == 1
+    assert status_issues[0].severity == "error"
+    assert status_issues[0].fixable is True
+    assert "wip" in status_issues[0].message
+    assert result.valid is False
+
+
+def test_rule3_non_status_property_invalid_value() -> None:
+    """Rule 3 catches membership violations for non-status state-machined properties."""
+    registry = _registry_with_sm("phase", ("scope", "design", "build"))
+    fm = {
+        "id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01",
+        "phase": "ship",  # not in enum
+    }
+    result = validate_one(_meta(fm), registry)
+    # Filter to errors only — Rule 6 may add a warning for unknown field 'phase'
+    phase_errors = [i for i in result.issues if i.field == "phase" and i.severity == "error"]
+    assert len(phase_errors) == 1
+    assert phase_errors[0].fixable is True
+    assert "ship" in phase_errors[0].message
+    assert "phase" in phase_errors[0].message
+
+
+def test_rule3_non_status_property_valid_value() -> None:
+    """Valid value for a non-status state-machined property → no Rule 3 error."""
+    registry = _registry_with_sm("phase", ("scope", "design", "build"))
+    fm = {
+        "id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01",
+        "phase": "design",
+    }
+    result = validate_one(_meta(fm), registry)
+    # No error-level issue for 'phase'; Rule 6 may add an "Unknown field" warning
+    phase_errors = [i for i in result.issues if i.field == "phase" and i.severity == "error"]
+    assert phase_errors == []
+
+
+def test_rule3_state_machine_prop_absent_from_fm_no_issue() -> None:
+    """State-machined property absent from frontmatter → no Rule 3 issue."""
+    registry = _registry_with_sm("phase", ("scope", "design"))
+    fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01"}
+    result = validate_one(_meta(fm), registry)
+    phase_issues = [i for i in result.issues if i.field == "phase"]
+    assert phase_issues == []
+
+
+def test_rule3_backward_compat_statuses_only() -> None:
+    """Backward compat: kinds with statuses but no state_machines still validated."""
+    # Uses _registry() which has statuses=["backlog", ...] and no state_machines
+    fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01", "status": "bogus"}
+    result = validate_one(_meta(fm), _registry())
+    status_issues = [i for i in result.issues if i.field == "status"]
+    assert len(status_issues) >= 1
+    assert any(i.severity == "error" for i in status_issues)
+
+
+def test_rule3_message_format() -> None:
+    """Rule 3 message uses 'Invalid value ... for field ...' format."""
+    registry = _registry_with_sm("status", ("backlog", "ready"))
+    fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01", "status": "oops"}
+    result = validate_one(_meta(fm), registry)
+    status_issue = next(i for i in result.issues if i.field == "status")
+    assert "Invalid value" in status_issue.message
+    assert "status" in status_issue.message
+    assert "oops" in status_issue.message

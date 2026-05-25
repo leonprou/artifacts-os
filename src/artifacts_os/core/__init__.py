@@ -14,7 +14,7 @@ from artifacts_os.core.vault import find_vault_root
 from artifacts_os.core.registry import Registry
 from artifacts_os.core.store import create, get, update
 from artifacts_os.core.discover import list_artifacts, resolve, search, parent, children, unwrap_wikilink
-from artifacts_os.core.models import Artifact, ArtifactMeta, ItemMeta, KindDef, Settings, ProjectConfig
+from artifacts_os.core.models import Artifact, ArtifactMeta, ItemMeta, KindDef, StateMachineDef, Settings, ProjectConfig
 from artifacts_os.core.settings import load_settings, UnsupportedSchemaVersion
 from artifacts_os.core.errors import (
     ArtifactError,
@@ -43,6 +43,7 @@ __all__ = [
     "ArtifactMeta",
     "ItemMeta",
     "KindDef",
+    "StateMachineDef",
     "ArtifactError",
     "NotFoundError",
     "AmbiguousError",

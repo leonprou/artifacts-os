@@ -24,7 +24,7 @@ from artifacts_os.core import (
     # settings
     load_settings, Settings, ProjectConfig, UnsupportedSchemaVersion,
     # models
-    Artifact, ArtifactMeta, KindDef,
+    Artifact, ArtifactMeta, KindDef, StateMachineDef,
     # validation
     validate_one, validate_many, ValidationIssue, ValidationResult,
     # errors
@@ -36,11 +36,46 @@ from artifacts_os.core import (
 
 | Class | Description |
 |---|---|
-| `KindDef` | Describes an artifact kind: directory, ID prefix, numbering, allowed statuses, JSON Schema. |
+| `KindDef` | Describes an artifact kind: directory, ID prefix, numbering, allowed statuses, JSON Schema, per-property state machines. |
+| `StateMachineDef` | Per-property state machine parsed from `kind.json` at load time. Frozen dataclass: `enum`, `initial`, `transitions`. |
 | `ArtifactMeta` | Lightweight view populated from frontmatter only (no body read). |
 | `Artifact` | Full artifact — extends `ArtifactMeta` with `body: str`. |
 | `Settings` | Base settings dataclass parsed from `artifacts.yaml`. Designed for extension by other modules. |
 | `ProjectConfig` | Project identity section: `name` (required) and `alias` (optional). |
+
+#### Per-Property State Machines
+
+`KindDef.state_machines: dict[str, StateMachineDef]` is populated by
+`Registry` at load time from each property definition in `kind.json`
+that carries an `initial:` or `transitions:` keyword (spec
+s0033 D211).
+
+`StateMachineDef` is a **frozen dataclass**:
+
+```python
+@dataclass(frozen=True)
+class StateMachineDef:
+    enum: tuple[str, ...]                           # allowed universe
+    initial: str | None                             # initial state; None = undeclared
+    transitions: dict[str, tuple[str, ...]] | None  # None = unrestricted; {} = locked
+```
+
+- `transitions is None` → any enum value is a legal update target (D206).
+- `transitions == {}` → field is locked at `initial`; any change fails (D207).
+- `"*"` may appear as a source key in `transitions` (additive wildcard, D204).
+
+Write-time enforcement is split across two helpers in
+`core/transitions.py`:
+- `check_create(kd, fields)` — injects `initial` defaults at create
+  time and rejects non-initial values (D203 + D223).
+- `check_transition(kd, prop, current, target)` — validates one update
+  edge against the property's transition table (D209 + D212).
+
+`validate_one` (Rule 3) checks value membership against `sm.enum`
+for every state-machined property in the static frontmatter snapshot.
+
+See `docs/adding-a-kind.md` § "Property-Level State Machines" for the
+full schema syntax and worked examples.
 
 ### CRUD (`store.py`)
 
@@ -171,9 +206,10 @@ Walks up from `start` (default: `cwd`) until a directory containing
 | `ValidationIssue` | Single issue: `field`, `message`, `fixable`, `severity` (`"error"` or `"warning"`). |
 | `ValidationResult` | Per-artifact result: `name`, `kind`, `issues`. Properties: `.errors`, `.warnings`, `.valid`. |
 
-`validate_one` checks (in order): `kind` present and registered → required fields present → status
-in allowed set → ID format → JSON Schema constraints → unknown fields (as warnings). Schema
-validation requires `jsonschema`; skipped silently if not installed.
+`validate_one` checks (in order): `kind` present and registered → required fields present →
+state-machined property values ∈ enum (Rule 3, all declared properties including `status`) →
+ID format → JSON Schema constraints → unknown fields (as warnings). Schema validation requires
+`jsonschema`; skipped silently if not installed.
 
 ---
 

@@ -15,6 +15,7 @@ from artifacts_os.core import events as _events
 from artifacts_os.core.errors import ValidationError
 from artifacts_os.core.ids import next_prefixed_id, slugify
 from artifacts_os.core.models import Artifact, ArtifactMeta, KindDef
+from artifacts_os.core.transitions import check_create, check_transition
 
 if TYPE_CHECKING:
     from artifacts_os.core.registry import Registry
@@ -99,6 +100,8 @@ def create(
     """Create a new artifact. Returns the full Artifact."""
     fields = fields or {}
     kd = registry.get(kind)
+    # D203 + D223: enforce strict initial and inject defaults for state-machined properties.
+    fields = check_create(kd, fields)
     subdir = _kind_dir(registry, kd)
     subdir.mkdir(parents=True, exist_ok=True)
 
@@ -251,15 +254,33 @@ def update(
         raise ValidationError(f"Artifact missing 'kind': {path}")
     kd = registry.get(kind)
 
-    if status is not None and kd.statuses and status not in kd.statuses:
+    new_meta: dict = {**meta, **fields}
+    if status is not None:
+        new_meta["status"] = status
+
+    # D209: check every state-machined property whose value would change.
+    # Replaces the old single-purpose status membership check for kinds that
+    # declare transitions: (s0033 §5.2).  For properties with enum-only
+    # declarations (D206), JSON Schema via _validate_schema still enforces
+    # target ∈ enum.
+    for prop in kd.state_machines:
+        if meta.get(prop) != new_meta.get(prop):
+            check_transition(kd, prop, meta.get(prop), new_meta.get(prop))
+
+    # Backward-compat: for kinds with statuses but no state_machines["status"]
+    # (e.g. in-memory KindDef instances that predate s0033), preserve the old
+    # status-membership guard so callers using the legacy path still get
+    # ValidationError on unknown statuses.
+    if (
+        status is not None
+        and kd.statuses
+        and "status" not in kd.state_machines
+        and status not in kd.statuses
+    ):
         raise ValidationError(
             f"Invalid status {status!r} for kind {kind!r}. "
             f"Allowed: {kd.statuses}"
         )
-
-    new_meta: dict = {**meta, **fields}
-    if status is not None:
-        new_meta["status"] = status
 
     _validate_schema(kd, new_meta)
 

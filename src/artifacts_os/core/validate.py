@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from artifacts_os.core.registry import Registry
 
 from artifacts_os.core.ids import validate_slug
+from artifacts_os.core.transitions import membership_error_msg
 
 Severity = Literal["error", "warning"]
 
@@ -107,16 +108,29 @@ def validate_one(
                 severity="error",
             ))
 
-    # Rule 3: status legality — only when status key is present in frontmatter.
-    if kind_def.statuses and "status" in fm:
+    # Rule 3: membership check for every state-machined property (s0033 D209 §5.3).
+    # Checks value ∈ enum for each property.  Cannot check transitions — no
+    # "before" value is available here (validate_one works on a static snapshot).
+    for prop, sm in kind_def.state_machines.items():
+        if prop in fm:
+            val = fm[prop]
+            if val not in sm.enum:
+                issues.append(ValidationIssue(
+                    field=prop,
+                    message=membership_error_msg(prop, val, sm.enum),
+                    fixable=True,
+                    severity="error",
+                ))
+
+    # Backward-compat: for kinds with statuses but no state_machines["status"]
+    # (e.g. in-memory KindDef instances that predate s0033), keep checking status
+    # membership via the statuses list so existing behaviour is not regressed.
+    if kind_def.statuses and "status" not in kind_def.state_machines and "status" in fm:
         status_val = fm["status"]
         if status_val not in kind_def.statuses:
             issues.append(ValidationIssue(
                 field="status",
-                message=(
-                    f"Unknown status '{status_val}' — "
-                    f"valid: {', '.join(kind_def.statuses)}"
-                ),
+                message=membership_error_msg("status", status_val, tuple(kind_def.statuses)),
                 fixable=True,
                 severity="error",
             ))
@@ -146,7 +160,10 @@ def validate_one(
     # Rule 5: KindDef.schema constraints
     # Skip status field from schema errors when rule 3 already handles it
     # (avoids double-reporting fixable status issues as both rule-3 and rule-5 errors).
-    _rule3_handled_status = bool(kind_def.statuses)
+    # True when state_machines["status"] exists OR the statuses list is non-empty.
+    _rule3_handled_status = (
+        "status" in kind_def.state_machines or bool(kind_def.statuses)
+    )
     if kind_def.schema:
         try:
             import datetime

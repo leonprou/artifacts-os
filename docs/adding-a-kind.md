@@ -249,6 +249,62 @@ The full schema object is stored on `KindDef.schema` and used for
 JSON Schema validation (requires `jsonschema`; skipped silently if
 unavailable).
 
+### Property-Level State Machines
+
+Any enum-typed property in a `kind.json` can declare a **state
+machine** using three sibling keywords inside the property
+definition (spec s0033 D201):
+
+| Keyword | Required | Meaning |
+|---|---|---|
+| `enum` | yes (for state machines) | The finite set of allowed values. |
+| `initial` | no | The only legal value at create time. If omitted, any enum value is legal at create. |
+| `transitions` | no | A map from current-value to list-of-reachable-next-values. If omitted, any enum value is legal at update. |
+
+**Wildcard source key (`*`)** — D204/D205: the special key `"*"` in
+`transitions` means "from any state, these targets are additionally
+reachable." Wildcard targets are additive — they extend, not replace,
+the per-state rows. `"*"` may only appear as a source key; putting
+it in a target list is a load-time error.
+
+**Strict `initial`** — D203: if `initial` is declared, the value must
+equal `initial` at create time (the system injects it when the
+property is omitted from `fields`). Setting any other value at create
+raises `ValidationError`.
+
+**No `transitions` → unrestricted updates** — D206: if `transitions`
+is omitted, any enum value is a legal update target. The kind opts
+into transition enforcement only by adding `transitions:`.
+
+**Empty `transitions: {}` → locked field** — D207: an empty object
+locks the field at `initial` forever. Any update that tries to change
+it fails.
+
+**Example — restrictive state machine:**
+
+```jsonc
+"phase": {
+  "enum": ["scope", "design", "build", "ship", "retired"],
+  "initial": "scope",
+  "transitions": {
+    "scope":   ["design"],
+    "design":  ["scope", "build"],
+    "build":   ["design", "ship"],
+    "ship":    ["build", "retired"],
+    "retired": [],
+    "*":       ["retired"]
+  }
+}
+```
+
+- Any new artifact's `phase` is `scope` (injected at create).
+- `scope` may only forward to `design`.
+- `retired` has no outgoing edges (terminal per D222).
+- Any state may emergency-jump to `retired` via the wildcard.
+
+See `src/artifacts_os/core/README.md` for the `StateMachineDef`
+dataclass surface.
+
 ---
 
 ## Layouts
@@ -589,11 +645,18 @@ in `artifacts.yaml` (pre-configured filters, columns, sort
 order). See
 [`src/artifacts_os/views/README.md`](../src/artifacts_os/views/README.md).
 
-**Status-transition logic.** `properties.status.enum` is validation
-only — it tells `artifacts-os` which values are legal. Lifecycle
-transitions (who may move an artifact from one status to another) are
-the concern of the host application (e.g., OpenStation), not
-`artifacts-os`. Do not encode transition rules inside a kind schema.
+**Status-transition logic.** Two layers govern lifecycle transitions:
+
+- **Declared legality (substrate):** `properties.status.enum` (or any
+  other property's `enum` + `transitions`) is enforced by
+  `artifacts-os` at write time and via `artifacts verify`. Declare
+  `transitions:` in `kind.json` to restrict which values may follow
+  which (see § "Property-Level State Machines" above).
+- **Relational legality (harness):** rules like "only the owner may
+  mark a task done" or "blocked tasks cannot move to in-progress"
+  are higher-layer concerns expressed via hooks in the host application
+  (e.g., OpenStation). They are not encodable in `kind.json` and are
+  explicitly out of scope for the substrate (s0033 D220).
 
 **Per-kind `ARTIFACT.md`.** Add an `ARTIFACT.md` to a kind's folder
 when agents need authoring guidance for that kind. Follow the

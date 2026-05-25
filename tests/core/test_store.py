@@ -117,3 +117,148 @@ def test_update_merges_fields(make_vault) -> None:
     updated = update(registry, a.id, fields={"priority": "high"})
     assert updated.frontmatter["owner"] == "alice"
     assert updated.frontmatter["priority"] == "high"
+
+
+# ---------------------------------------------------------------------------
+# Per-property state-machine integration tests (s0033)
+# ---------------------------------------------------------------------------
+
+
+def _sm_kind(make_vault, statuses=None, initial=None, transitions=None) -> tuple:
+    """Build a make_vault result with a state-machined 'widget' kind.
+
+    Uses a simple state machine on the 'status' property.
+    """
+    from artifacts_os.core.models import StateMachineDef
+
+    enum = tuple(statuses or ["new", "active", "done"])
+    sm = StateMachineDef(
+        enum=enum,
+        initial=initial,
+        transitions=(
+            {k: tuple(v) for k, v in transitions.items()}
+            if transitions is not None
+            else None
+        ),
+    )
+    kd = KindDef(
+        name="widget",
+        dir="widgets",
+        prefix="w",
+        numbered=True,
+        statuses=list(enum),
+        state_machines={"status": sm},
+    )
+    return make_vault([kd])
+
+
+def test_create_injects_initial_state_machine(make_vault) -> None:
+    """D223: create() without status injects initial from state machine."""
+    _, registry = _sm_kind(make_vault, statuses=["new", "active"], initial="new",
+                            transitions={"new": ["active"], "active": []})
+    a = create(registry, "widget", "My Widget")
+    assert a.frontmatter["status"] == "new"
+
+
+def test_create_rejects_non_initial_state_machine(make_vault) -> None:
+    """D203: create() with status != initial raises ValidationError."""
+    _, registry = _sm_kind(make_vault, statuses=["new", "active"], initial="new",
+                            transitions={"new": ["active"]})
+    with pytest.raises(ValidationError) as exc_info:
+        create(registry, "widget", "Bad Start", fields={"status": "active"})
+    assert "Illegal initial value" in str(exc_info.value)
+
+
+def test_create_accepts_initial_explicitly_set(make_vault) -> None:
+    """D203: create() with status == initial succeeds."""
+    _, registry = _sm_kind(make_vault, statuses=["new", "active"], initial="new",
+                            transitions={"new": ["active"]})
+    a = create(registry, "widget", "Ok", fields={"status": "new"})
+    assert a.frontmatter["status"] == "new"
+
+
+def test_update_legal_transition(make_vault) -> None:
+    """Legal transition via update() succeeds."""
+    _, registry = _sm_kind(
+        make_vault,
+        statuses=["new", "active", "done"],
+        initial="new",
+        transitions={"new": ["active"], "active": ["done"]},
+    )
+    a = create(registry, "widget", "W")
+    updated = update(registry, a.id, fields={"status": "active"})
+    assert updated.frontmatter["status"] == "active"
+
+
+def test_update_illegal_transition_raises_d212(make_vault) -> None:
+    """D212: illegal transition via update() raises ValidationError."""
+    _, registry = _sm_kind(
+        make_vault,
+        statuses=["new", "active", "done"],
+        initial="new",
+        transitions={"new": ["active"], "active": ["done"]},
+    )
+    a = create(registry, "widget", "W")
+    with pytest.raises(ValidationError) as exc_info:
+        update(registry, a.id, fields={"status": "done"})  # new → done not allowed
+    msg = str(exc_info.value)
+    assert "Illegal transition" in msg
+    assert "status" in msg
+
+
+def test_update_wildcard_target_accepted(make_vault) -> None:
+    """D205: target in transitions['*'] is accepted even if not in current's row."""
+    from artifacts_os.core.models import StateMachineDef
+    sm = StateMachineDef(
+        enum=("new", "active", "cancelled"),
+        initial="new",
+        transitions={
+            "new": ("active",),
+            "active": (),  # terminal, except wildcard
+            "*": ("cancelled",),
+        },
+    )
+    kd = KindDef(
+        name="widget", dir="widgets", prefix="w", numbered=True,
+        statuses=["new", "active", "cancelled"],
+        state_machines={"status": sm},
+    )
+    _, registry = make_vault([kd])
+    a = create(registry, "widget", "W")
+    u = update(registry, a.id, fields={"status": "active"})
+    # active has no explicit exits but wildcard allows cancelled
+    u2 = update(registry, a.id, fields={"status": "cancelled"})
+    assert u2.frontmatter["status"] == "cancelled"
+
+
+def test_create_no_state_machine_passthrough(make_vault) -> None:
+    """Kinds without state machines: create() is unchanged."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Normal Task")
+    assert a.id.startswith("t")
+
+
+def test_update_via_vault_loaded_task_kind(tmp_path: Path) -> None:
+    """End-to-end: vault-loaded task kind with permissive transitions accepts any status."""
+    import json
+    task_json = Path(__file__).parents[2] / "artifacts" / "kinds" / "task" / "kind.json"
+    schema = json.loads(task_json.read_text(encoding="utf-8"))
+    root = tmp_path / "vault"
+    kind_dir = root / "artifacts" / "kinds" / "task"
+    kind_dir.mkdir(parents=True)
+    (kind_dir / "kind.json").write_text(json.dumps(schema), encoding="utf-8")
+    (root / "artifacts" / "tasks").mkdir(parents=True, exist_ok=True)
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
+    registry = Registry([], root=root)
+    kd = registry.get("task")
+    # Verify state machine is loaded
+    assert "status" in kd.state_machines
+    assert kd.state_machines["status"].initial == "backlog"
+    # Create a task — status=backlog injected
+    a = create(registry, "task", "Test Task",
+                fields={"type": "feature", "assignee": "dev", "owner": "user",
+                        "created": "2026-01-01"})
+    assert a.frontmatter["status"] == "backlog"
+    # Update to in-progress (permissive table allows it)
+    u = update(registry, a.id, fields={"status": "in-progress"})
+    assert u.frontmatter["status"] == "in-progress"

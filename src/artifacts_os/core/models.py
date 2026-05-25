@@ -8,6 +8,23 @@ from pathlib import Path
 from typing import Any
 
 
+@dataclass(frozen=True)
+class StateMachineDef:
+    """Property-level state machine declared in kind.json.
+
+    Built by Registry at load time from the ``enum`` + ``initial`` +
+    ``transitions`` keywords inside a property definition.  Consumed by
+    ``core.transitions.{check_create, check_transition}`` and by
+    ``core.validate.validate_one`` (Rule 3 extension).
+
+    Spec: s0033-declarative-per-property-state-machines § 3.1
+    """
+
+    enum: tuple[str, ...]                           # allowed universe
+    initial: str | None                             # initial state; None when undeclared
+    transitions: dict[str, tuple[str, ...]] | None  # None → unrestricted (D206); {} → locked (D207)
+
+
 @dataclass
 class ItemMeta:
     """Base class for items renderable in a Rich table.
@@ -41,6 +58,9 @@ class KindDef:
     # Directory-storage primitive (s0032 §2.1).
     storage: str = "file"          # "file" | "directory"
     manifest_name: str = "{slug}.md"
+    # Per-property state machines (s0033).  Keyed by property name.
+    # Empty dict for kinds with no state machines declared.
+    state_machines: dict[str, StateMachineDef] = field(default_factory=dict)
 
     @property
     def schema_properties(self) -> set[str]:

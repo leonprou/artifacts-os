@@ -166,3 +166,157 @@ def test_schema_properties_task_kind(tmp_path: Path) -> None:
     assert kd.schema_properties == expected
     # Spot-check a few known properties to guard against silent regressions
     assert {"id", "name", "status", "assignee", "owner"} <= kd.schema_properties
+
+
+# ---------------------------------------------------------------------------
+# Per-property state-machine load-time validation (s0033 §4)
+# ---------------------------------------------------------------------------
+
+
+def _write_kind(tmp_path: Path, name: str, schema: dict) -> Path:
+    """Write a kind.json to a temp vault and return root."""
+    root = tmp_path / "vault"
+    _write_schema(root, name, schema)
+    return root
+
+
+def test_registry_state_machine_loads_cleanly(tmp_path: Path) -> None:
+    """Well-formed state machine in kind.json loads without error."""
+    root = _write_kind(tmp_path, "ticket", {
+        "x-dir": "tickets",
+        "properties": {
+            "status": {
+                "enum": ["open", "closed"],
+                "initial": "open",
+                "transitions": {"open": ["closed"], "*": ["open"]},
+            }
+        },
+    })
+    r = Registry([], root=root)
+    kd = r.get("ticket")
+    assert "status" in kd.state_machines
+    assert kd.state_machines["status"].initial == "open"
+    assert kd.state_machines["status"].transitions is not None
+
+
+# D214a — transitions without enum
+def test_registry_transitions_without_enum_fails(tmp_path: Path) -> None:
+    """D214a: transitions without enum → ValidationError on registry load."""
+    root = _write_kind(tmp_path, "bad", {
+        "x-dir": "bads",
+        "properties": {
+            "status": {"transitions": {"a": ["b"]}},
+        },
+    })
+    with pytest.raises(ValidationError) as exc_info:
+        Registry([], root=root)
+    msg = str(exc_info.value)
+    assert "bad" in msg
+    assert "status" in msg
+    assert "transitions" in msg
+    assert "enum" in msg
+
+
+# D214b — transition key not in enum
+def test_registry_transition_key_not_in_enum_fails(tmp_path: Path) -> None:
+    """D214b: transitions key not in enum → ValidationError on registry load."""
+    root = _write_kind(tmp_path, "bad", {
+        "x-dir": "bads",
+        "properties": {
+            "status": {
+                "enum": ["a", "b"],
+                "transitions": {"a": ["b"], "zzz": ["a"]},
+            },
+        },
+    })
+    with pytest.raises(ValidationError) as exc_info:
+        Registry([], root=root)
+    msg = str(exc_info.value)
+    assert "bad" in msg
+    assert "status" in msg
+    assert "zzz" in msg
+
+
+# D214c — transition target not in enum
+def test_registry_transition_target_not_in_enum_fails(tmp_path: Path) -> None:
+    """D214c: transitions RHS value not in enum → ValidationError on registry load."""
+    root = _write_kind(tmp_path, "bad", {
+        "x-dir": "bads",
+        "properties": {
+            "status": {
+                "enum": ["a", "b"],
+                "transitions": {"a": ["b", "zzz"]},
+            },
+        },
+    })
+    with pytest.raises(ValidationError) as exc_info:
+        Registry([], root=root)
+    msg = str(exc_info.value)
+    assert "bad" in msg
+    assert "status" in msg
+    assert "zzz" in msg
+
+
+# D214d — initial not in enum
+def test_registry_initial_not_in_enum_fails(tmp_path: Path) -> None:
+    """D214d: initial value not in enum → ValidationError on registry load."""
+    root = _write_kind(tmp_path, "bad", {
+        "x-dir": "bads",
+        "properties": {
+            "status": {
+                "enum": ["a", "b"],
+                "initial": "zzz",
+                "transitions": {"a": ["b"]},
+            },
+        },
+    })
+    with pytest.raises(ValidationError) as exc_info:
+        Registry([], root=root)
+    msg = str(exc_info.value)
+    assert "bad" in msg
+    assert "status" in msg
+    assert "zzz" in msg
+
+
+# D204 — wildcard as destination
+def test_registry_wildcard_as_destination_fails(tmp_path: Path) -> None:
+    """D204: '*' as a transitions target → ValidationError on registry load."""
+    root = _write_kind(tmp_path, "bad", {
+        "x-dir": "bads",
+        "properties": {
+            "status": {
+                "enum": ["a", "b"],
+                "transitions": {"a": ["*"]},
+            },
+        },
+    })
+    with pytest.raises(ValidationError) as exc_info:
+        Registry([], root=root)
+    msg = str(exc_info.value)
+    assert "bad" in msg
+    assert "status" in msg
+    assert "wildcard is source-only" in msg
+
+
+def test_registry_non_status_property_state_machine(tmp_path: Path) -> None:
+    """State machine on a non-status property loads correctly."""
+    root = _write_kind(tmp_path, "project", {
+        "x-dir": "projects",
+        "properties": {
+            "phase": {
+                "enum": ["scope", "design", "build"],
+                "initial": "scope",
+                "transitions": {
+                    "scope": ["design"],
+                    "design": ["scope", "build"],
+                    "build": [],
+                },
+            },
+            "status": {"enum": ["active", "archived"]},
+        },
+    })
+    r = Registry([], root=root)
+    kd = r.get("project")
+    assert "phase" in kd.state_machines
+    assert "status" not in kd.state_machines  # no initial/transitions → no state machine
+    assert kd.state_machines["phase"].initial == "scope"
