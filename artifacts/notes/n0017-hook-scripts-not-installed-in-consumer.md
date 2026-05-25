@@ -117,3 +117,33 @@ Three distinct papercuts bundled in this one failure:
 
 Not proposing a fix mechanism here. Options (absolute path resolution, bundled hook
 installer, `openstation doctor` suggestion) are for architect + product to weigh.
+
+---
+
+## Resolution (2026-05-24)
+
+Closed by [[s0032-hooks-via-artbook-distribution]] §8 and
+[[t0184-add-artbook-kind-hook-book]].
+
+Hooks are now distributable as artbook books with `kind: hook`.  A distro
+declares its hook registry once:
+
+```yaml
+- name: os-hooks
+  src: artifacts/hooks/
+  kind: hook
+```
+
+Consumers run `artifacts book pull os-hooks` to land the full bundle
+directories (manifest + sibling scripts) under their `artifacts/hooks/`.
+They activate hooks explicitly via `artifacts hooks promote <slug>`; the
+`.active/` directory survives subsequent re-pulls.
+
+The original failure mode (script referenced in `openstation.yaml` but
+absent in consumer) no longer applies: scripts ship inside the bundle,
+and the bundle is what gets pulled.
+
+**Evidence:** `tests/integration/test_hooks_via_artbook.py` — end-to-end
+test covering author → pull → list → promote → fire → re-pull → still fires,
+including assertions on `hook.pulled` events and `hook.fired` payloads
+carrying `source: "bundle"`.

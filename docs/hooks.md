@@ -462,3 +462,42 @@ No automated migration tool ships in this release.
 - Artbook distribution for hooks — [artbook.md](artbook.md)
 - Design rationale, invariants, phase semantics — `s0025-artifact-events`
 - Hooks-via-artbook spec — `s0032-hooks-via-artbook-distribution`
+
+---
+
+## Distributing hooks via artbook
+
+Hooks can be shipped from a distro to consumers using an artbook book entry
+with `kind: hook`.  This is the recommended path for distributing
+project-wide hooks (e.g. `auto-commit`, `auto-verify`).
+
+```yaml
+# artbook.yaml in the distro
+books:
+  - name: os-hooks
+    src: artifacts/hooks/
+    kind: hook
+    description: Project lifecycle hooks.
+```
+
+Effects of `kind: hook`:
+
+- `recurse: true` is auto-set; each direct subdirectory of `src` becomes a
+  bundle landing under the consumer's `artifacts/hooks/<slug>/`.
+- `promote:` is forbidden — activation is consumer-owned.
+- One `hook.pulled` event is emitted per book per pull.
+- `.active/` is never touched by pull, so previously promoted hooks survive
+  a re-pull intact.
+
+Consumer flow:
+
+```bash
+artifacts book pull os-hooks            # land the bundles (inert)
+artifacts hooks list                    # see what's available
+artifacts hooks promote auto-commit     # activate (creates .active/auto-commit)
+artifacts book pull os-hooks            # re-pull — bundle refreshed, .active/ preserved
+```
+
+See [artbook.md § Hook Books](artbook.md#hook-books) for the full
+manifest reference and `s0032-hooks-via-artbook-distribution` for the
+design.

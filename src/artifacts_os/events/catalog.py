@@ -152,7 +152,14 @@ class HookDemotedPayload:
 
 @dataclass
 class HookPulledPayload:
-    """Payload for ``hook.pulled``."""
+    """Payload for ``hook.pulled`` (s0032 §5).
 
-    hook: str
-    source: str = ""
+    Emitted once per ``kind: hook`` book pull.
+    ``book`` is the book name.
+    ``written`` / ``overwritten`` / ``removed`` are slug lists.
+    """
+
+    book: str
+    written: list[str] = field(default_factory=list)
+    overwritten: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)

@@ -21,8 +21,12 @@ revision (see `s0025-artifact-events`).
 | `artifact.updated` | After frontmatter is updated | `kind`, `id`, `name`, `stem`, `path`, `changed`, `before`, `after`, `fields` |
 | `artifact.status_changed` | After a `status` transition (subset of `updated`) | `kind`, `id`, `name`, `stem`, `path`, `before`, `after`, `fields` |
 | `artifact.validated` | After `validate_one` / `validate_many` runs | `kind`, `id`, `stem`, `path`, `result` (`"pass"` \| `"fail"`), `issues` |
-| `hook.fired` | After a hook action completes successfully | `hook`, `matcher`, `action`, `duration_ms`, `phase` |
-| `hook.failed` | After a hook action raises | `hook`, `matcher`, `action`, `phase`, `blocking`, `error`, `duration_ms` |
+| `hook.fired` | After a hook action completes successfully | `hook`, `matcher`, `action`, `duration_ms`, `phase`, `source` (`"yaml"` \| `"bundle"`) |
+| `hook.failed` | After a hook action raises | `hook`, `matcher`, `action`, `phase`, `blocking`, `error`, `duration_ms`, `source` |
+| `hook.promoted` | After `.active/<slug>` symlink (or stub) is created | `hook` (slug), `target` |
+| `hook.demoted` | After `.active/<slug>` is removed | `hook` (slug), `reason` (`""` \| `"prune"`) |
+| `hook.pulled` | After a `kind: hook` book finishes writing bundles (once per book pull) | `book` (name), `written`, `overwritten`, `removed` (slug lists) |
+| `hook.skipped` | When the loader hits a `.active/` entry with a missing/unparseable manifest | `hook` (slug), `reason` (`"missing-target"` \| `"parse-error"` \| `"escape-attempt"`), `path` |
 
 ### JSONL record shape
 

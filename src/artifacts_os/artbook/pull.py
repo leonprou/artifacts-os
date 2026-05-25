@@ -2,6 +2,7 @@
 
 Spec: s0029-artbook-mvp-distribution-model §4.4, §6, §7
      s0031-artbook-post-pull-artifact-promotion D33, D36
+     s0032-hooks-via-artbook §8.2 (kind: hook pull semantics)
 """
 
 from __future__ import annotations
@@ -58,6 +59,45 @@ def find_book(manifest: Manifest, name: str) -> Book:
     )
 
 
+def _slugs_from_written(written: tuple[WrittenFile, ...], dest: Path) -> tuple[list[str], list[str]]:
+    """Extract (written_slugs, overwritten_slugs) from a set of WrittenFile records.
+
+    For a recurse book (hook books are always recurse), each destination path
+    has the form ``<dest>/<slug>/...``.  The slug is the first path component
+    relative to *dest*.
+
+    Returns two de-duped slug lists (order: first appearance in *written*).
+    """
+    seen_written: dict[str, bool] = {}  # slug → any_overwritten
+    for wf in written:
+        try:
+            rel = wf.destination.relative_to(dest)
+        except ValueError:
+            continue
+        if not rel.parts:
+            continue
+        slug = rel.parts[0]
+        if slug not in seen_written:
+            seen_written[slug] = wf.overwritten
+        elif wf.overwritten:
+            seen_written[slug] = True
+
+    written_slugs = [s for s, ov in seen_written.items() if not ov]
+    overwritten_slugs = [s for s, ov in seen_written.items() if ov]
+    return written_slugs, overwritten_slugs
+
+
+def _pre_existing_bundle_slugs(dest: Path) -> set[str]:
+    """Return the set of existing bundle dir names under *dest* (ignoring dotfile dirs)."""
+    if not dest.is_dir():
+        return set()
+    return {
+        d.name
+        for d in dest.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+    }
+
+
 def pull_book(
     book: Book,
     clone_root: Path,
@@ -77,6 +117,7 @@ def pull_book(
     the pull to a consumer-specified subset of items.
 
     *no_promote* — when True, skip the promotion step (--no-promote flag, D31).
+      For ``kind: hook`` books this flag is accepted but is a no-op (D117).
     *promote_disabled* — when True, skip promotion due to settings (D31).
     *promote_mode_override* — per-vault artbook.promote_mode value (D30).
 
@@ -85,13 +126,36 @@ def pull_book(
     (the caller checks report.promotion.errors; D36).
     """
     dest = destination_for(vault_root, book)
+
+    # For kind: hook books, record pre-existing bundles to compute "removed" list.
+    pre_existing: set[str] = set()
+    if book.kind == "hook":
+        pre_existing = _pre_existing_bundle_slugs(dest)
+
     written = tuple(copy_book(clone_root, book, dest, vault_root=vault_root, preselected=preselected))
 
     # D36 — canonical writes complete before promotion runs.
     promotion: PromotionReport | None = None
     skipped_reason: str | None = None
 
-    if book.promote is not None:
+    if book.kind == "hook":
+        # D117: hook books never auto-promote; --no-promote is a no-op.
+        # Emit hook.pulled event once per book (s0032 §5, §8.2).
+        from artifacts_os.core import events as _events
+        from artifacts_os.events.catalog import HOOK_PULLED
+
+        written_slugs, overwritten_slugs = _slugs_from_written(written, dest)
+        all_new_slugs = set(written_slugs) | set(overwritten_slugs)
+        removed_slugs = sorted(pre_existing - all_new_slugs)
+
+        _events._dispatch(
+            HOOK_PULLED,
+            book=book.name,
+            written=sorted(written_slugs),
+            overwritten=sorted(overwritten_slugs),
+            removed=removed_slugs,
+        )
+    elif book.promote is not None:
         if no_promote:
             skipped_reason = "flag"
         elif promote_disabled:

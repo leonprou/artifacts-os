@@ -761,3 +761,78 @@ dest: is canonical-only — move tool-specific paths to promote:
 
 See spec `s0031-artbook-post-pull-artifact-promotion` for the full
 design rationale (§§ 2–3).
+
+---
+
+## Hook Books
+
+A book entry can declare `kind: hook` to ship a hook registry.  This is the
+mechanism artifacts-os uses to distribute lifecycle hooks (e.g. `auto-commit`,
+`auto-verify`) from a distro to consumer projects.
+
+### The `kind:` field
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `kind` | string enum | (unset) | Closed enum; MVP value: `"hook"`. Marks the book as a hook registry. Unknown values raise `ManifestError`. |
+
+Specifying `kind: hook` has three automatic effects:
+
+1. **`recurse: true` is auto-set** — hook books always use the recurse walker
+   (one bundle directory per direct subdirectory of `src`).  Omitting
+   `recurse:` is fine; declaring `recurse: false` raises `ManifestError`.
+2. **`promote:` is forbidden** — hook books cannot declare a `promote:` target
+   (raises `ManifestError`).  Activation is always an explicit
+   `artifacts hooks promote <slug>` step, never automatic on pull.
+3. **`hook.pulled` event emitted** — after all bundles are written, one
+   `hook.pulled` event is dispatched with `book`, `written`, `overwritten`,
+   and `removed` slug lists.
+
+### Pull semantics
+
+`artifacts book pull <hook-book>` writes each bundle directory verbatim (all
+files, not just `*.md`) from `src` into the canonical landing directory
+(default `artifacts/hooks/`, computed from `src` basename per D37).  The
+`.active/` directory is never touched by a pull — activation state is
+consumer-owned.
+
+### Worked example — `artifacts-os` distro
+
+```yaml
+# artbook.yaml (post s0032)
+books:
+  - name: os-hooks
+    src: artifacts/hooks/
+    kind: hook
+    description: artifacts-os lifecycle hooks (auto-commit, auto-verify, …).
+    # promote: forbidden (D117); recurse: auto-set (D118)
+```
+
+Consumer workflow:
+
+```bash
+# 1. Receive the bundles (inert — nothing is activated yet)
+artifacts book pull os-hooks
+
+# 2. See what's available
+artifacts hooks list
+
+# 3. Activate the hook(s) you want
+artifacts hooks promote auto-commit
+
+# 4. Re-pull in future: bundles overwritten, .active/ preserved
+artifacts book pull os-hooks
+```
+
+### Contrast with other book types
+
+| Property | `agents` (default) | `kinds` (default + recurse) | `os-hooks` (`kind: hook`) |
+|----------|-------------------|-----------------------------|---------------------------|
+| Walker | flat | recurse | recurse (auto-set) |
+| Canonical landing | `artifacts/<basename(src)>/` | same | same |
+| `promote:` allowed? | yes | yes (typically omitted) | **no — ManifestError** |
+| Auto-activate on pull? | n/a | n/a | **no — explicit `hooks promote` required** |
+
+See spec `s0032-hooks-via-artbook-distribution` §8 for the full design
+rationale.  For the activation and promotion mechanics, see
+[hooks.md § "Distributing hooks via artbook"](hooks.md#distributing-hooks-via-artbook).

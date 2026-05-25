@@ -713,3 +713,132 @@ def test_manifest_has_no_warnings_field() -> None:
     }
     m = parse_manifest(data)
     assert not hasattr(m, "warnings")
+
+
+# ---------------------------------------------------------------------------
+# D116-D118 — kind: hook book field
+# ---------------------------------------------------------------------------
+
+
+def test_parse_book_kind_hook_sets_field_and_auto_recurse() -> None:
+    """D116/D118: kind: hook sets Book.kind and auto-sets recurse=True."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {"name": "os-hooks", "src": "artifacts/hooks/", "kind": "hook"}
+        ],
+    }
+    m = parse_manifest(data)
+    b = m.books[0]
+    assert b.kind == "hook"
+    assert b.recurse is True
+
+
+def test_parse_book_kind_hook_explicit_recurse_true_ok() -> None:
+    """D118: explicit recurse: true on kind: hook is harmless."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "os-hooks",
+                "src": "artifacts/hooks/",
+                "kind": "hook",
+                "recurse": True,
+            }
+        ],
+    }
+    m = parse_manifest(data)
+    assert m.books[0].recurse is True
+
+
+def test_parse_book_kind_hook_rejects_explicit_recurse_false() -> None:
+    """D118: kind: hook with recurse: false raises ManifestError."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "os-hooks",
+                "src": "artifacts/hooks/",
+                "kind": "hook",
+                "recurse": False,
+            }
+        ],
+    }
+    with pytest.raises(ManifestError, match="explicit `recurse: false` is not"):
+        parse_manifest(data)
+
+
+def test_parse_book_kind_hook_rejects_promote() -> None:
+    """D117: kind: hook + promote: raises ManifestError with exact wording."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {
+                "name": "os-hooks",
+                "src": "artifacts/hooks/",
+                "kind": "hook",
+                "promote": ".claude/hooks/",
+            }
+        ],
+    }
+    with pytest.raises(
+        ManifestError,
+        match=r"book 'os-hooks' has `kind: hook`; hook books cannot declare "
+              r"`promote:` — activation is an explicit operator step",
+    ):
+        parse_manifest(data)
+
+
+def test_parse_book_kind_unknown_value_rejected() -> None:
+    """D116: unknown kind: values raise ManifestError (closed enum)."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {"name": "weird", "src": "weird/", "kind": "skill"}
+        ],
+    }
+    with pytest.raises(ManifestError, match="is not a recognised book type"):
+        parse_manifest(data)
+
+
+def test_parse_book_kind_empty_string_rejected() -> None:
+    """kind: must be a non-empty string."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {"name": "x", "src": "x/", "kind": "   "}
+        ],
+    }
+    with pytest.raises(ManifestError, match="kind must be a non-empty string"):
+        parse_manifest(data)
+
+
+def test_parse_book_kind_independent_from_v1_type() -> None:
+    """D116: new kind: field is parsed independently of the rejected v1 type: field."""
+    # type: alone still raises (regression check)
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [
+            {"name": "x", "src": "x/", "type": "agents"}
+        ],
+    }
+    with pytest.raises(ManifestError, match="v1 schema field"):
+        parse_manifest(data)
+
+
+def test_parse_book_kind_absent_defaults_to_none() -> None:
+    """When kind: is absent, Book.kind is None (default)."""
+    data = {
+        "version": 1,
+        "distro": {"name": "x"},
+        "books": [{"name": "agents", "src": "agents/"}],
+    }
+    m = parse_manifest(data)
+    assert m.books[0].kind is None

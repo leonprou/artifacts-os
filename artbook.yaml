@@ -62,3 +62,12 @@ books:
     src: artifacts/kinds/
     description: Standard artifact kinds (task, note, spec, research, agent).
     recurse: true
+
+  # Tier 4 — hook registry (kind: hook book, s0032 §8).
+  # Consumers run `artifacts book pull os-hooks` to land bundle dirs under
+  # artifacts/hooks/; then `artifacts hooks promote <slug>` to activate.
+  # promote: is forbidden for kind: hook books (D117); recurse: auto-set (D118).
+  - name: os-hooks
+    src: artifacts/hooks/
+    kind: hook
+    description: artifacts-os lifecycle hooks (auto-commit, auto-verify, …).

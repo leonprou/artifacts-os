@@ -45,6 +45,8 @@ class Book:
     subdirectory of ``src`` as a unit and ships its full subtree to
     ``dest/<unit>/...``. Mutually exclusive with ``files``.
     ``promote`` (D29) — optional promotion target.
+    ``kind`` (D116) — optional book type; ``"hook"`` means this book ships a
+    hook registry; auto-sets ``recurse: True``; forbids ``promote:``.
     """
 
     name: str
@@ -54,6 +56,7 @@ class Book:
     files: tuple[str, ...] | None = None
     recurse: bool = False
     promote: Promote | None = None
+    kind: str | None = None  # None | "hook"
 
 
 @dataclass(frozen=True)
@@ -238,7 +241,7 @@ def _parse_book(raw: Any, index: int) -> Book:
         files = tuple(raw_files)
 
     # D26 — parse optional recurse flag (default False); reject non-bool values.
-    recurse: bool = False
+    recurse_explicit: bool | None = None  # None means "not set in raw"
     if "recurse" in raw:
         raw_recurse = raw["recurse"]
         if not isinstance(raw_recurse, bool):
@@ -246,7 +249,38 @@ def _parse_book(raw: Any, index: int) -> Book:
                 f"book '{name}' recurse must be a boolean (true/false); "
                 f"got {type(raw_recurse).__name__}"
             )
-        recurse = raw_recurse
+        recurse_explicit = raw_recurse
+
+    # D116-D118 — parse optional kind: field (closed enum; MVP: "hook" only).
+    kind: str | None = None
+    if "kind" in raw:
+        raw_kind = raw["kind"]
+        if not isinstance(raw_kind, str) or not raw_kind.strip():
+            raise ManifestError(f"book '{name}' kind must be a non-empty string")
+        if raw_kind not in ("hook",):
+            raise ManifestError(
+                f"book '{name}' kind: '{raw_kind}' is not a recognised book type; "
+                "only 'hook' is supported in this version"
+            )
+        kind = raw_kind
+
+    # D117: kind: hook forbids promote:
+    if kind == "hook" and promote is not None:
+        raise ManifestError(
+            f"book '{name}' has `kind: hook`; hook books cannot declare "
+            "`promote:` — activation is an explicit operator step"
+        )
+
+    # D118: kind: hook auto-sets recurse: true; explicit recurse: false is rejected.
+    if kind == "hook":
+        if recurse_explicit is False:
+            raise ManifestError(
+                f"book '{name}' has `kind: hook`; explicit `recurse: false` is not "
+                "allowed — hook books always use recurse mode"
+            )
+        recurse = True  # auto-set (D118)
+    else:
+        recurse = recurse_explicit if recurse_explicit is not None else False
 
     # D38 4f — D26: `recurse: true` and `files: [...]` are mutually exclusive.
     if recurse and files is not None:
@@ -263,6 +297,7 @@ def _parse_book(raw: Any, index: int) -> Book:
         files=files,
         recurse=recurse,
         promote=promote,
+        kind=kind,
     )
 
 

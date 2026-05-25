@@ -3,7 +3,7 @@ kind: task
 id: t0178
 name: ship-hooks-via-artbook-distribution
 type: feature
-status: in-progress
+status: review
 assignee: developer
 owner: user
 created: 2026-05-22
