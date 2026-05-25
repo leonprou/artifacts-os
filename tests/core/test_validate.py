@@ -7,9 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from artifacts_os.core.models import ArtifactMeta, KindDef
+from artifacts_os.core.models import ArtifactMeta, KindDef, StateMachineDef
 from artifacts_os.core.registry import Registry
 from artifacts_os.core.validate import validate_one, validate_many, ValidationResult
+
+
+def _task_status_sm() -> StateMachineDef:
+    """The same enum the vault task kind declares (s0033 §5.3)."""
+    enum = ("backlog", "ready", "in-progress", "done")
+    return StateMachineDef(
+        enum=enum,
+        initial="backlog",
+        transitions={s: enum for s in enum},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -34,13 +44,15 @@ def _meta(frontmatter: dict, name: str = "t0001-test") -> ArtifactMeta:
 def _registry(kinds: list[KindDef] | None = None) -> Registry:
     """Build a Registry from a list of KindDefs (no vault root)."""
     if kinds is None:
+        sm = _task_status_sm()
         kinds = [
             KindDef(
                 name="task",
                 dir="tasks",
                 prefix="t",
                 numbered=True,
-                statuses=["backlog", "ready", "in-progress", "done"],
+                statuses=list(sm.enum),
+                state_machines={"status": sm},
             ),
             KindDef(
                 name="agent",
@@ -353,14 +365,25 @@ def test_rule3_state_machine_prop_absent_from_fm_no_issue() -> None:
     assert phase_issues == []
 
 
-def test_rule3_backward_compat_statuses_only() -> None:
-    """Backward compat: kinds with statuses but no state_machines still validated."""
-    # Uses _registry() which has statuses=["backlog", ...] and no state_machines
+def test_rule3_legacy_statuses_only_no_membership_check() -> None:
+    """Kinds with only ``statuses=[…]`` and no state_machines no longer get
+    a membership check from Rule 3 (s0033 §5.3 — single authority is
+    ``state_machines``). The legacy fallback was removed alongside the
+    parallel guard in ``store.update``.
+    """
+    kd = KindDef(
+        name="task",
+        dir="tasks",
+        prefix="t",
+        numbered=True,
+        statuses=["backlog", "ready", "in-progress", "done"],
+        # No state_machines — schema-less in-memory legacy fixture.
+    )
+    registry = Registry([kd], root=None)
     fm = {"id": "t0001", "kind": "task", "name": "t", "created": "2026-01-01", "status": "bogus"}
-    result = validate_one(_meta(fm), _registry())
-    status_issues = [i for i in result.issues if i.field == "status"]
-    assert len(status_issues) >= 1
-    assert any(i.severity == "error" for i in status_issues)
+    result = validate_one(_meta(fm), registry)
+    status_issues = [i for i in result.issues if i.field == "status" and i.severity == "error"]
+    assert status_issues == []
 
 
 def test_rule3_message_format() -> None:

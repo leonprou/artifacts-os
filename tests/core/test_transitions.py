@@ -474,6 +474,29 @@ def test_check_transition_first_set_absent_prop_no_initial() -> None:
     check_transition(kd, "status", None, "y")  # must not raise
 
 
+def test_check_transition_corrupt_current_recovers_to_initial() -> None:
+    """§7.5: current ∉ enum (corrupt) → target must be initial (recovery)."""
+    sm = _sm(
+        enum=("a", "b"),
+        initial="a",
+        transitions={"a": ("b",), "b": ("a",)},
+    )
+    kd = _kd_with_sm(sm)
+    # Recovery to initial succeeds even though "bogus" has no transition row.
+    check_transition(kd, "status", "bogus", "a")  # must not raise
+    # Recovery to a non-initial value still fails — only `initial` is legal.
+    with pytest.raises(ValidationError) as exc_info:
+        check_transition(kd, "status", "bogus", "b")
+    assert "Illegal initial value" in str(exc_info.value)
+
+
+def test_check_transition_corrupt_current_no_initial_is_noop() -> None:
+    """§7.5: corrupt current + no initial declared → no opinion (allow any)."""
+    sm = _sm(enum=("x", "y"), initial=None, transitions={"x": ("y",)})
+    kd = _kd_with_sm(sm)
+    check_transition(kd, "status", "bogus", "x")  # must not raise
+
+
 def test_check_transition_status_as_degenerate_case() -> None:
     """Status state machine works like any other property via check_transition."""
     sm = _sm(

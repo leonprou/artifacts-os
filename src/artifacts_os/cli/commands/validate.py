@@ -56,8 +56,16 @@ def _apply_fixes(args, registry: Registry, results: list[ValidationResult]) -> N
         for issue in fixable:
             if issue.field == "status":
                 kind_def = registry.get(result.kind)
-                if kind_def.statuses:
+                # Prefer the declared `initial` state when a state machine
+                # exists (s0033) so recovery lands on the canonical entry
+                # point; fall back to statuses[0] for legacy kinds.
+                sm = kind_def.state_machines.get("status")
+                new_val = None
+                if sm is not None and sm.initial is not None:
+                    new_val = sm.initial
+                elif kind_def.statuses:
                     new_val = kind_def.statuses[0]
+                if new_val is not None:
                     fields["status"] = new_val
                     if args.dry_run:
                         console.print(

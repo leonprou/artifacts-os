@@ -111,6 +111,9 @@ def validate_one(
     # Rule 3: membership check for every state-machined property (s0033 D209 §5.3).
     # Checks value ∈ enum for each property.  Cannot check transitions — no
     # "before" value is available here (validate_one works on a static snapshot).
+    # The single authority for membership: kinds that need a status check must
+    # declare state_machines["status"] (per s0033). Legacy `statuses=[…]`-only
+    # KindDef instances are no longer cross-checked here.
     for prop, sm in kind_def.state_machines.items():
         if prop in fm:
             val = fm[prop]
@@ -121,19 +124,6 @@ def validate_one(
                     fixable=True,
                     severity="error",
                 ))
-
-    # Backward-compat: for kinds with statuses but no state_machines["status"]
-    # (e.g. in-memory KindDef instances that predate s0033), keep checking status
-    # membership via the statuses list so existing behaviour is not regressed.
-    if kind_def.statuses and "status" not in kind_def.state_machines and "status" in fm:
-        status_val = fm["status"]
-        if status_val not in kind_def.statuses:
-            issues.append(ValidationIssue(
-                field="status",
-                message=membership_error_msg("status", status_val, tuple(kind_def.statuses)),
-                fixable=True,
-                severity="error",
-            ))
 
     # Rule 4: id format
     id_val = fm.get("id", "")
@@ -160,10 +150,10 @@ def validate_one(
     # Rule 5: KindDef.schema constraints
     # Skip status field from schema errors when rule 3 already handles it
     # (avoids double-reporting fixable status issues as both rule-3 and rule-5 errors).
-    # True when state_machines["status"] exists OR the statuses list is non-empty.
-    _rule3_handled_status = (
-        "status" in kind_def.state_machines or bool(kind_def.statuses)
-    )
+    # Rule 3 is the sole status-membership authority only when a state machine
+    # is declared. Enum-only / statuses-only kinds fall through to Rule 5
+    # so JSON Schema enforces membership.
+    _rule3_handled_status = "status" in kind_def.state_machines
     if kind_def.schema:
         try:
             import datetime

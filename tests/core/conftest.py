@@ -4,17 +4,29 @@ from pathlib import Path
 
 import pytest
 
-from artifacts_os import KindDef, Registry
+from artifacts_os import KindDef, Registry, StateMachineDef
+
+
+def _task_status_sm() -> StateMachineDef:
+    """Permissive task-status state machine matching the vault kind."""
+    enum = ("backlog", "ready", "in-progress", "done")
+    return StateMachineDef(
+        enum=enum,
+        initial="backlog",
+        transitions={s: enum for s in enum},
+    )
 
 
 def _default_kinds() -> list[KindDef]:
+    task_sm = _task_status_sm()
     return [
         KindDef(
             name="task",
             dir="tasks",
             prefix="t",
             numbered=True,
-            statuses=["backlog", "ready", "in-progress", "done"],
+            statuses=list(task_sm.enum),
+            state_machines={"status": task_sm},
         ),
         KindDef(
             name="research",

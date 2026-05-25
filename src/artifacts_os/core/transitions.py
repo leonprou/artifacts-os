@@ -206,7 +206,11 @@ def check_transition(
         return  # no state machine for this property
 
     # §7.1 — first set of a previously absent property.
-    if current is None:
+    # §7.5 (recovery) — also treat a corrupt current value (not in enum) like
+    # a first-set: the artifact is already broken; the only sane target is
+    # ``initial``. Mirrors §7.1 so validate --fix can repair corrupt status
+    # without going through a transition row that doesn't exist.
+    if current is None or current not in sm.enum:
         if sm.initial is None:
             return  # no opinion on first set
         if target != sm.initial:

@@ -6,13 +6,21 @@ from pathlib import Path
 import pytest
 
 
+_TASK_STATUSES = ["backlog", "ready", "in-progress", "done"]
 _KINDS = {
     "task": {
         "x-dir": "tasks",
         "x-prefix": "t",
         "x-numbered": True,
         "properties": {
-            "status": {"enum": ["backlog", "ready", "in-progress", "done"]},
+            "status": {
+                "enum": _TASK_STATUSES,
+                "initial": "backlog",
+                # Permissive transitions table — every status reachable from
+                # every other status. Lets CLI tests focus on the rest of the
+                # surface without fighting the state machine.
+                "transitions": {s: _TASK_STATUSES for s in _TASK_STATUSES},
+            },
             "assignee": {"type": "string"},
             "owner": {"type": "string"},
             "type": {"type": "string"},

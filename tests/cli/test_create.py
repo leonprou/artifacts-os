@@ -50,10 +50,14 @@ def test_create_with_kind(vault, capsys):
 
 
 def test_create_with_fields(vault, capsys):
-    main(["create", "Fix bug", "--fields", "status=ready", "priority=high"])
+    # Status defaults to the state machine's `initial` (D223) — only the
+    # initial value is legal at create time per D203. We pass status
+    # explicitly here to verify --fields parsing while still satisfying the
+    # state machine.
+    main(["create", "Fix bug", "--fields", "status=backlog", "priority=high"])
     out = capsys.readouterr().out.strip()
     meta = _meta(vault, out)
-    assert meta["status"] == "ready"
+    assert meta["status"] == "backlog"
     assert meta["priority"] == "high"
 
 
