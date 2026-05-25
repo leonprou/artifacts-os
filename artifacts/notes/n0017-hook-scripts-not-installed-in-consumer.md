@@ -2,11 +2,17 @@
 id: n0017
 name: hook-scripts-not-installed-in-consumer
 kind: note
-status: open
+status: closed
 created: 2026-05-18
+closed: 2026-05-25
+resolved_by: "[[t0178-ship-hooks-via-artbook-distribution]]"
 summary: >
   openstation.yaml references bin/hooks/* scripts that are never copied into
   the consumer project, causing post-transition hook failures on first use.
+  Resolved by t0178: hook bundles now ship via `artifacts book pull` with the
+  `kind: hook` artbook book type, landing under `artifacts/hooks/<slug>/` and
+  activated through `artifacts hooks promote`. Integration test
+  `tests/integration/test_hooks_via_artbook.py` covers the end-to-end flow.
 ---
 
 ## Context
