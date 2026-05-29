@@ -307,6 +307,65 @@ dataclass surface.
 
 ---
 
+## Property-Level State Machines
+
+Any `enum`-typed property in a `kind.json` may declare a state machine
+by adding `initial:` and/or `transitions:` siblings inside the property
+definition.  The three keywords work together: `enum` names the universe
+of allowed values; `initial` pins the only legal value at create time
+(the system injects it when the field is omitted); and `transitions` maps
+each current value to the set of values it may move to next.
+
+### Minimal example
+
+A fictional `ticket` kind with a `priority` property:
+
+```jsonc
+"priority": {
+  "enum": ["low", "normal", "high", "urgent"],
+  "initial": "normal",
+  "transitions": {
+    "low":    ["normal", "high"],
+    "normal": ["low", "high"],
+    "high":   ["normal", "urgent"],
+    "*":      ["urgent"]
+  }
+}
+```
+
+A new `ticket` artifact always starts with `priority: normal`.  `low`
+may advance to `normal` or `high`, but not directly to `urgent`.
+Any priority may jump to `urgent` via the `*` wildcard row.
+
+### The wildcard source key `*`
+
+`"*"` in a `transitions` map is **source-only** — it means "from any
+state, these targets are additionally reachable."  Wildcard entries are
+**additive**: they extend, not replace, the per-state rows.  `"*"` may
+not appear as a target (that is a load-time error, D204).
+
+### Backward compatibility
+
+Properties that declare `enum` but omit `transitions:` keep today's
+semantics: any enum value is a legal update target (D206).  Adding
+`transitions:` to a property is strictly opt-in.
+
+### Empty `transitions: {}`
+
+An empty object locks the field at its `initial` value forever (D207).
+Any attempt to change the value fails with `ValidationError`.  Use this
+for fields that must be immutable after creation.
+
+### Worked example — `task/kind.json`
+
+`artifacts/kinds/task/kind.json` carries a **fully permissive**
+`transitions:` table on its `status` property — every status may
+transition to every other status, including itself.  It exercises the
+substrate end-to-end without restricting any existing lifecycle move.
+Use it as an in-vault reference when authoring your own state machine.
+
+---
+
 ## Layouts
 
 Layout configuration lives in `artifacts.yaml`, not `kind.json`.

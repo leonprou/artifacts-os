@@ -5,6 +5,8 @@ import pytest
 
 from artifacts_os import KindDef, Registry
 from artifacts_os.core.errors import ValidationError
+from artifacts_os.core.store import create, update
+from artifacts_os.core.transitions import parse_state_machines
 
 
 def _write_schema(root: Path, name: str, schema: dict) -> None:
@@ -166,6 +168,84 @@ def test_schema_properties_task_kind(tmp_path: Path) -> None:
     assert kd.schema_properties == expected
     # Spot-check a few known properties to guard against silent regressions
     assert {"id", "name", "status", "assignee", "owner"} <= kd.schema_properties
+
+
+# ---------------------------------------------------------------------------
+# task/kind.json — per-property state machine assertions (t0191 / D218)
+# ---------------------------------------------------------------------------
+
+_TASK_KIND_JSON = Path(__file__).parents[2] / "artifacts" / "kinds" / "task" / "kind.json"
+_TASK_STATUSES = [
+    "backlog", "ready", "in-progress", "review",
+    "verified", "done", "cancelled", "rejected",
+]
+
+
+def test_task_kind_status_state_machine() -> None:
+    """task/kind.json status property has initial='backlog' and a non-empty transitions table."""
+    schema = json.loads(_TASK_KIND_JSON.read_text(encoding="utf-8"))
+    sms = parse_state_machines(schema, "task")
+    assert "status" in sms, "status property must declare a state machine"
+    sm = sms["status"]
+    assert sm.initial == "backlog"
+    assert sm.transitions is not None, "transitions must be declared (not D206 unrestricted)"
+    # One row per status value — fully permissive table (D218)
+    assert len(sm.transitions) == len(_TASK_STATUSES)
+    # Every status can reach every other status (including itself)
+    for src in _TASK_STATUSES:
+        assert src in sm.transitions, f"no transitions row for '{src}'"
+        reachable = set(sm.transitions[src])
+        assert reachable == set(_TASK_STATUSES), (
+            f"'{src}' row is not fully permissive: {reachable}"
+        )
+
+
+def test_task_kind_create_defaults_to_backlog(make_vault) -> None:
+    """Smoke: create with the vault task kind injects status='backlog' (D203 + D223)."""
+    schema = json.loads(_TASK_KIND_JSON.read_text(encoding="utf-8"))
+    sms = parse_state_machines(schema, "task")
+    task_kind = KindDef(
+        name="task",
+        dir="tasks",
+        prefix="t",
+        numbered=True,
+        statuses=_TASK_STATUSES,
+        state_machines=sms,
+    )
+    _, registry = make_vault(kinds=[task_kind])
+    artifact = create(registry, "task", "smoke-test")
+    assert artifact.frontmatter["status"] == "backlog"
+
+
+def test_task_kind_lifecycle_transitions_succeed(make_vault) -> None:
+    """Smoke: every openstation lifecycle move is legal against the permissive table."""
+    schema = json.loads(_TASK_KIND_JSON.read_text(encoding="utf-8"))
+    sms = parse_state_machines(schema, "task")
+    task_kind = KindDef(
+        name="task",
+        dir="tasks",
+        prefix="t",
+        numbered=True,
+        statuses=_TASK_STATUSES,
+        state_machines=sms,
+    )
+    _, registry = make_vault(kinds=[task_kind])
+
+    # Forward chain: backlog → ready → in-progress → review → verified → done
+    artifact = create(registry, "task", "lifecycle-test")
+    assert artifact.frontmatter["status"] == "backlog"
+    for status in ("ready", "in-progress", "review", "verified", "done"):
+        artifact = update(registry, artifact.id, status=status)
+        assert artifact.frontmatter["status"] == status
+
+    # Terminal escapes: any status → cancelled / rejected
+    a2 = create(registry, "task", "cancel-test")
+    a2 = update(registry, a2.id, status="cancelled")
+    assert a2.frontmatter["status"] == "cancelled"
+
+    a3 = create(registry, "task", "reject-test")
+    a3 = update(registry, a3.id, status="rejected")
+    assert a3.frontmatter["status"] == "rejected"
 
 
 # ---------------------------------------------------------------------------
