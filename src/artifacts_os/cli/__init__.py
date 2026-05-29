@@ -37,6 +37,9 @@ from artifacts_os.cli.commands import ai as _ai_cmd
 from artifacts_os.cli.commands import events as _events_cmd
 from artifacts_os.cli.commands import book as _book_cmd
 from artifacts_os.cli.commands import hooks as _hooks_cmd
+from artifacts_os.cli.commands import get as _get_cmd
+from artifacts_os.cli.commands import set as _set_cmd
+from artifacts_os.cli.commands import transitions as _transitions_cmd
 from artifacts_os.cli.settings import CliSettings, DEFAULT_ALIASES
 
 
@@ -250,6 +253,9 @@ def _build_parser(
     _events_cmd.register(subparsers)
     _book_cmd.register(subparsers)
     _hooks_cmd.register(subparsers)
+    _get_cmd.register(subparsers)
+    _set_cmd.register(subparsers)
+    _transitions_cmd.register(subparsers)
 
     return parser
 

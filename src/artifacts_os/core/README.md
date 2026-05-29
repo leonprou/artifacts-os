@@ -19,12 +19,14 @@ from artifacts_os.core import (
     Registry,
     # CRUD
     create, get, update,
+    # property API (t0189)
+    get_prop, set_prop, transitions_for,
     # discovery
     list_artifacts, resolve, search,
     # settings
     load_settings, Settings, ProjectConfig, UnsupportedSchemaVersion,
     # models
-    Artifact, ArtifactMeta, KindDef, StateMachineDef,
+    Artifact, ArtifactMeta, KindDef, StateMachineDef, TransitionView,
     # validation
     validate_one, validate_many, ValidationIssue, ValidationResult,
     # errors
@@ -38,6 +40,7 @@ from artifacts_os.core import (
 |---|---|
 | `KindDef` | Describes an artifact kind: directory, ID prefix, numbering, allowed statuses, JSON Schema, per-property state machines. |
 | `StateMachineDef` | Per-property state machine parsed from `kind.json` at load time. Frozen dataclass: `enum`, `initial`, `transitions`. |
+| `TransitionView` | Snapshot of legal next-values for one state-machined property. Frozen dataclass: `property`, `current`, `allowed_next`, `wildcard_targets`, `locked`. |
 | `ArtifactMeta` | Lightweight view populated from frontmatter only (no body read). |
 | `Artifact` | Full artifact — extends `ArtifactMeta` with `body: str`. |
 | `Settings` | Base settings dataclass parsed from `artifacts.yaml`. Designed for extension by other modules. |
@@ -84,6 +87,9 @@ full schema syntax and worked examples.
 | `create` | `(registry, kind, title, *, body="", fields=None) → Artifact` | Create and atomically write a new artifact file. |
 | `get` | `(registry, ref, *, kind=None) → Artifact` | Resolve ref, read file, return full `Artifact`. |
 | `update` | `(registry, ref, *, status=None, fields=None) → Artifact` | Merge frontmatter updates; body preserved verbatim. |
+| `get_prop` | `(registry, ref, property) → Any` | Return a single frontmatter property value. Raises `ValidationError` on unknown property. |
+| `set_prop` | `(registry, ref, property, value) → Artifact` | Write a single property; applies transition + schema validation. |
+| `transitions_for` | `(registry, ref, property=None) → TransitionView \| dict[str, TransitionView]` | Query legal-next-set for one or all state-machined properties. |
 
 ### Discovery (`discover.py`)
 

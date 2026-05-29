@@ -9,8 +9,13 @@ Spec: s0033-declarative-per-property-state-machines § 4–6
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from artifacts_os.core.errors import ValidationError
-from artifacts_os.core.models import KindDef, StateMachineDef
+from artifacts_os.core.models import KindDef, StateMachineDef, TransitionView
+
+if TYPE_CHECKING:
+    from artifacts_os.core.registry import Registry
 
 
 # ---------------------------------------------------------------------------
@@ -235,3 +240,88 @@ def check_transition(
         raise ValidationError(
             _msg_transition(prop, current, target, explicit, wildcard)
         )
+
+
+# ---------------------------------------------------------------------------
+# Query helpers (t0189)
+# ---------------------------------------------------------------------------
+
+
+def _build_transition_view(
+    prop: str,
+    sm: StateMachineDef,
+    current: Any,
+) -> TransitionView:
+    """Build a TransitionView for one property given its state machine and current value."""
+    transitions = sm.transitions
+
+    if transitions is None:
+        # Enum-only (D206): no transition table — any value is a legal target.
+        return TransitionView(
+            property=prop,
+            current=current,
+            allowed_next=(),
+            wildcard_targets=(),
+            locked=False,
+        )
+
+    if not transitions:
+        # Locked (D207).
+        return TransitionView(
+            property=prop,
+            current=current,
+            allowed_next=(),
+            wildcard_targets=(),
+            locked=True,
+        )
+
+    wildcard_targets: tuple[Any, ...] = transitions.get("*", ())  # type: ignore[assignment]
+    if current is not None and current in sm.enum:
+        allowed_next: tuple[Any, ...] = transitions.get(current, ())  # type: ignore[assignment]
+    else:
+        allowed_next = ()
+
+    return TransitionView(
+        property=prop,
+        current=current,
+        allowed_next=tuple(allowed_next),
+        wildcard_targets=tuple(wildcard_targets),
+        locked=False,
+    )
+
+
+def transitions_for(
+    registry: "Registry",
+    ref: str,
+    property: str | None = None,
+) -> "dict[str, TransitionView] | TransitionView":
+    """Query the legal-next-set for one or all state-machined properties.
+
+    When *property* is given, returns a single ``TransitionView``.
+    When *property* is None, returns a ``dict[prop → TransitionView]`` for
+    every state-machined property declared on the artifact's kind.
+
+    Raises:
+        NotFoundError: when *ref* cannot be resolved.
+        ValidationError: when *property* has no state machine on this kind.
+
+    Spec: t0189
+    """
+    from artifacts_os.core.store import get as _store_get
+
+    artifact = _store_get(registry, ref)
+    kd = registry.get(artifact.kind)
+
+    if property is not None:
+        sm = kd.state_machines.get(property)
+        if sm is None:
+            raise ValidationError(
+                f"no state machine declared for field {property!r} in kind {artifact.kind!r}"
+            )
+        current = artifact.frontmatter.get(property)
+        return _build_transition_view(property, sm, current)
+
+    return {
+        prop: _build_transition_view(prop, sm, artifact.frontmatter.get(prop))
+        for prop, sm in kd.state_machines.items()
+    }

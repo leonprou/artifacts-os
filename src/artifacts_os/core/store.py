@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 import jsonschema
 
+from typing import Any
+
 from artifacts_os.core import frontmatter as _frontmatter
 from artifacts_os.core import events as _events
 from artifacts_os.core.errors import ValidationError
@@ -326,3 +328,43 @@ def update(
         )
 
     return artifact
+
+
+def get_prop(
+    registry: "Registry",
+    ref: str,
+    property: str,
+) -> Any:
+    """Return the value of a single frontmatter property.
+
+    Raises:
+        NotFoundError: when *ref* cannot be resolved.
+        ValidationError: when *property* is not present in the artifact's
+            frontmatter.
+
+    Spec: t0189
+    """
+    artifact = get(registry, ref)
+    if property not in artifact.frontmatter:
+        kd = registry.get(artifact.kind)
+        known = sorted(artifact.frontmatter.keys())
+        raise ValidationError(
+            f"Unknown property {property!r} for kind {artifact.kind!r} — known: {known}"
+        )
+    return artifact.frontmatter[property]
+
+
+def set_prop(
+    registry: "Registry",
+    ref: str,
+    property: str,
+    value: Any,
+) -> Artifact:
+    """Write a single frontmatter property through ``update``.
+
+    Transition validation (s0033) and JSON Schema validation are applied
+    on every write — there is no fast path that bypasses them.
+
+    Spec: t0189
+    """
+    return update(registry, ref, fields={property: value})

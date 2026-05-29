@@ -102,6 +102,20 @@ class ProjectConfig:
     alias: str | None = None
 
 
+@dataclass(frozen=True)
+class TransitionView:
+    """Snapshot of legal next-values for one state-machined property.
+
+    Spec: t0189 — Add Property API Get/Set Transitions CLI Verbs
+    """
+
+    property: str
+    current: Any                       # current value; None when property absent
+    allowed_next: tuple[Any, ...]      # transitions[current] (excludes wildcard for clarity)
+    wildcard_targets: tuple[Any, ...]  # transitions["*"]
+    locked: bool                       # True iff transitions == {} (s0033 D207)
+
+
 @dataclass(kw_only=True)
 class Settings:
     """Base settings dataclass parsed from artifacts.yaml.

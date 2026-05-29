@@ -4,6 +4,7 @@ import pytest
 
 from artifacts_os import KindDef, Registry, create, get, update
 from artifacts_os.core.errors import ValidationError
+from artifacts_os.core.store import get_prop, set_prop
 
 
 def test_create_numbered(make_vault) -> None:
@@ -262,3 +263,90 @@ def test_update_via_vault_loaded_task_kind(tmp_path: Path) -> None:
     # Update to in-progress (permissive table allows it)
     u = update(registry, a.id, fields={"status": "in-progress"})
     assert u.frontmatter["status"] == "in-progress"
+
+
+# ---------------------------------------------------------------------------
+# get_prop / set_prop (t0189)
+# ---------------------------------------------------------------------------
+
+
+def test_get_prop_returns_value(make_vault) -> None:
+    """get_prop returns the current value of a frontmatter property."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Test Task")
+    # 'status' is injected as 'backlog' by the state machine
+    val = get_prop(registry, a.id, "status")
+    assert val == "backlog"
+
+
+def test_get_prop_returns_non_status_field(make_vault) -> None:
+    """get_prop works for free-form properties too."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Task", fields={"assignee": "alice"})
+    assert get_prop(registry, a.id, "assignee") == "alice"
+
+
+def test_get_prop_unknown_property_raises(make_vault) -> None:
+    """get_prop raises ValidationError on a property absent from frontmatter."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Task")
+    with pytest.raises(ValidationError) as exc_info:
+        get_prop(registry, a.id, "nonexistent_field")
+    msg = str(exc_info.value)
+    assert "Unknown property" in msg
+    assert "nonexistent_field" in msg
+
+
+def test_set_prop_round_trip(make_vault) -> None:
+    """set_prop writes the property; get_prop reads back the new value."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Task")
+    assert get_prop(registry, a.id, "status") == "backlog"
+
+    set_prop(registry, a.id, "status", "ready")
+    assert get_prop(registry, a.id, "status") == "ready"
+
+
+def test_set_prop_free_form_property(make_vault) -> None:
+    """set_prop writes a free-form (non-state-machined) property."""
+    _, registry = make_vault()
+    a = create(registry, "task", "Task")
+    updated = set_prop(registry, a.id, "assignee", "bob")
+    assert updated.frontmatter["assignee"] == "bob"
+
+
+def test_set_prop_transition_validated(make_vault) -> None:
+    """set_prop delegates to update(); illegal transitions are rejected."""
+    from artifacts_os.core.models import StateMachineDef
+    sm = StateMachineDef(
+        enum=("open", "closed"),
+        initial="open",
+        transitions={"open": ("closed",), "closed": ()},
+    )
+    kd = KindDef(
+        name="ticket", dir="tickets", prefix="x", numbered=True,
+        state_machines={"status": sm},
+    )
+    _, registry = make_vault([kd])
+    a = create(registry, "ticket", "Bug")
+    assert a.frontmatter["status"] == "open"
+
+    # Legal: open → closed
+    set_prop(registry, a.id, "status", "closed")
+
+    # Illegal: closed → open (no back-edge)
+    with pytest.raises(ValidationError) as exc_info:
+        set_prop(registry, a.id, "status", "open")
+    msg = str(exc_info.value)
+    assert "Illegal transition" in msg
+    assert "status" in msg
+
+
+def test_set_prop_preserves_body(make_vault) -> None:
+    """set_prop does not modify the artifact body."""
+    _, registry = make_vault()
+    body = "# Heading\n\nKeep me verbatim.\n"
+    a = create(registry, "task", "Task", body=body)
+    set_prop(registry, a.id, "status", "ready")
+    text = a.path.read_text(encoding="utf-8")
+    assert "Keep me verbatim." in text

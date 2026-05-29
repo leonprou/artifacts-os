@@ -20,6 +20,7 @@ from artifacts_os.core.transitions import (
     check_transition,
     membership_error_msg,
     parse_state_machines,
+    transitions_for,
 )
 
 
@@ -521,3 +522,129 @@ def test_membership_error_msg_format() -> None:
     assert "wip" in msg
     assert "backlog" in msg
     assert "ready" in msg
+
+
+# ---------------------------------------------------------------------------
+# transitions_for (t0189)
+# ---------------------------------------------------------------------------
+
+
+def _make_vault_with_sm(make_vault):
+    """Build a vault with a task kind that has a status state machine."""
+    sm = StateMachineDef(
+        enum=("backlog", "ready", "in-progress", "done"),
+        initial="backlog",
+        transitions={
+            "backlog": ("ready",),
+            "ready": ("in-progress",),
+            "in-progress": ("done", "ready"),
+            "done": (),
+            "*": ("backlog",),
+        },
+    )
+    kd = KindDef(
+        name="task",
+        dir="tasks",
+        prefix="t",
+        numbered=True,
+        statuses=["backlog", "ready", "in-progress", "done"],
+        state_machines={"status": sm},
+    )
+    return make_vault([kd])
+
+
+def test_transitions_for_single_property_returns_view(make_vault) -> None:
+    """transitions_for with a property name returns a TransitionView."""
+    from artifacts_os.core.models import TransitionView
+    from artifacts_os.core.store import create
+
+    _, registry = _make_vault_with_sm(make_vault)
+    a = create(registry, "task", "Test")
+    # artifact starts at backlog (initial)
+    view = transitions_for(registry, a.id, "status")
+    assert isinstance(view, TransitionView)
+    assert view.property == "status"
+    assert view.current == "backlog"
+    assert "ready" in view.allowed_next
+    # wildcard: any → backlog
+    assert "backlog" in view.wildcard_targets
+    assert view.locked is False
+
+
+def test_transitions_for_all_properties_returns_dict(make_vault) -> None:
+    """transitions_for without property returns dict keyed by property name."""
+    from artifacts_os.core.store import create
+
+    _, registry = _make_vault_with_sm(make_vault)
+    a = create(registry, "task", "Test")
+    result = transitions_for(registry, a.id)
+    assert isinstance(result, dict)
+    assert "status" in result
+
+
+def test_transitions_for_no_state_machines_returns_empty_dict(make_vault) -> None:
+    """Kind with no state machines → empty dict."""
+    from artifacts_os.core.store import create
+
+    _, registry = make_vault()
+    # 'research' kind has no state machines
+    a = create(registry, "research", "My Research")
+    result = transitions_for(registry, a.id)
+    assert result == {}
+
+
+def test_transitions_for_unknown_property_raises(make_vault) -> None:
+    """transitions_for on a non-state-machined property raises ValidationError."""
+    from artifacts_os.core.store import create
+
+    _, registry = _make_vault_with_sm(make_vault)
+    a = create(registry, "task", "Test")
+    with pytest.raises(ValidationError) as exc_info:
+        transitions_for(registry, a.id, "title")
+    msg = str(exc_info.value)
+    assert "no state machine declared" in msg
+    assert "title" in msg
+    assert "task" in msg
+
+
+def test_transitions_for_locked_property(make_vault) -> None:
+    """transitions_for on a locked (empty transitions) property → locked=True."""
+    from artifacts_os.core.store import create
+
+    sm = StateMachineDef(
+        enum=("x", "y"),
+        initial="x",
+        transitions={},  # locked
+    )
+    kd = KindDef(
+        name="widget", dir="widgets", prefix="w", numbered=True,
+        state_machines={"category": sm},
+    )
+    _, registry = make_vault([kd])
+    a = create(registry, "widget", "W")
+    view = transitions_for(registry, a.id, "category")
+    assert view.locked is True
+    assert view.allowed_next == ()
+    assert view.wildcard_targets == ()
+
+
+def test_transitions_for_enum_only_property(make_vault) -> None:
+    """transitions_for on an enum-only (no transitions table) property → not locked, no allowed_next."""
+    from artifacts_os.core.store import create
+
+    sm = StateMachineDef(
+        enum=("new", "active", "archived"),
+        initial="new",
+        transitions=None,  # enum-only — unrestricted
+    )
+    kd = KindDef(
+        name="widget", dir="widgets", prefix="w", numbered=True,
+        state_machines={"workflow": sm},
+    )
+    _, registry = make_vault([kd])
+    a = create(registry, "widget", "W")
+    view = transitions_for(registry, a.id, "workflow")
+    assert view.locked is False
+    assert view.allowed_next == ()
+    assert view.wildcard_targets == ()
+    assert view.current == "new"  # injected by check_create

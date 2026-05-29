@@ -12,9 +12,10 @@ except PackageNotFoundError:  # pragma: no cover — only hit in non-installed c
 
 from artifacts_os.core.vault import find_vault_root
 from artifacts_os.core.registry import Registry
-from artifacts_os.core.store import create, get, update
+from artifacts_os.core.store import create, get, update, get_prop, set_prop
 from artifacts_os.core.discover import list_artifacts, resolve, search, parent, children, unwrap_wikilink
-from artifacts_os.core.models import Artifact, ArtifactMeta, ItemMeta, KindDef, StateMachineDef, Settings, ProjectConfig
+from artifacts_os.core.models import Artifact, ArtifactMeta, ItemMeta, KindDef, StateMachineDef, TransitionView, Settings, ProjectConfig
+from artifacts_os.core.transitions import transitions_for
 from artifacts_os.core.settings import load_settings, UnsupportedSchemaVersion
 from artifacts_os.core.errors import (
     ArtifactError,
@@ -33,6 +34,9 @@ __all__ = [
     "create",
     "get",
     "update",
+    "get_prop",
+    "set_prop",
+    "transitions_for",
     "list_artifacts",
     "resolve",
     "search",
@@ -44,6 +48,7 @@ __all__ = [
     "ItemMeta",
     "KindDef",
     "StateMachineDef",
+    "TransitionView",
     "ArtifactError",
     "NotFoundError",
     "AmbiguousError",

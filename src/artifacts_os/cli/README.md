@@ -616,6 +616,155 @@ artifacts status t0042 done
 
 ---
 
+---
+
+### Property and Transition Verbs
+
+Three flat verbs expose single-property read/write and state-machine
+inspection without parsing `kind.json` or using `show` to read everything.
+
+#### `get` — Read a property (or all frontmatter)
+
+```
+artifacts get <ref> [<property>] [-j]
+```
+
+| Argument / Flag | Description |
+|-----------------|-------------|
+| `ref` | Artifact reference (name, id, or partial) |
+| `property` | Property name to read; omit to list all frontmatter fields |
+| `-j`, `--json` | JSON output |
+
+**With `<property>`** — prints the scalar value on one line. `--json`
+returns `{"property": "<name>", "value": <value>}`.
+
+**Without `<property>`** — prints all frontmatter as a two-column
+key/value table (no body, unlike `show`). `--json` returns the full
+frontmatter object.
+
+Unknown property → exits 2 with `"Unknown property '<name>' for kind '<kind>' — known: [...]"`.
+
+**Examples on `task` kind:**
+
+```bash
+# Read current status
+artifacts get t0042 status
+# → ready
+
+# JSON form — pipe-friendly
+artifacts get t0042 status --json
+# → {"property": "status", "value": "ready"}
+
+# All frontmatter fields (no body)
+artifacts get t0042
+
+# Full frontmatter as JSON
+artifacts get t0042 --json
+
+# Unknown property exits 2
+artifacts get t0042 nonexistent
+# error: Unknown property 'nonexistent' for kind 'task' — known: [...]
+```
+
+---
+
+#### `set` — Write a single property
+
+```
+artifacts set <ref> <property> <value>
+```
+
+Writes exactly one frontmatter property. Runs the full validation
+pipeline — transition check (s0033) for state-machined properties,
+JSON Schema check for all. The body is preserved verbatim.
+
+Free-form properties (those without a state machine) are allowed; `set`
+writes them through schema validation only.
+
+| Argument | Description |
+|----------|-------------|
+| `ref` | Artifact reference |
+| `property` | Property name to write |
+| `value` | New value (treated as a string; coercion follows YAML rules) |
+
+Illegal transition → exits 2 with the s0033 D212 message:
+
+```
+error: Illegal transition for field 'status': 'in-progress' → 'verified' (allowed targets: ['review']) (allowed from any state: ['rejected'])
+```
+
+**Examples on `task` kind:**
+
+```bash
+# Advance status (transition-validated)
+artifacts set t0042 status review
+
+# Set a free-form property
+artifacts set t0042 assignee alice
+
+# Illegal transition exits 2
+artifacts set t0042 status verified
+# error: Illegal transition for field 'status': ...
+```
+
+---
+
+#### `transitions` — Inspect legal next-values
+
+```
+artifacts transitions <ref> [<property>] [-j]
+```
+
+Displays the state-machine snapshot for one or all state-machined
+properties declared on the artifact's kind.
+
+| Argument / Flag | Description |
+|-----------------|-------------|
+| `ref` | Artifact reference |
+| `property` | Property name; omit to show all state-machined properties |
+| `-j`, `--json` | JSON output |
+
+Output columns: `property`, `current`, `allowed_next`, `wildcard_targets`, `locked?`.
+
+- `allowed_next` — targets reachable from the current value (explicit transitions table row, wildcard excluded for clarity).
+- `wildcard_targets` — targets reachable from any state (from `transitions["*"]`).
+- `locked?` — `yes` when `transitions == {}` (field is frozen at its initial value).
+
+**Single property** — `--json` returns:
+```json
+{"property": "status", "current": "ready", "allowed_next": ["in-progress"], "wildcard_targets": [], "locked": false}
+```
+
+**All properties** — `--json` returns a dict keyed by property name.
+
+A property with no state machine (e.g. `title`) exits 2 with:
+```
+error: no state machine declared for field 'title' in kind 'task'
+```
+
+**Examples on `task` kind:**
+
+```bash
+# All state-machined properties
+artifacts transitions t0042
+
+# Just 'status'
+artifacts transitions t0042 status
+
+# JSON for piping
+artifacts transitions t0042 status --json
+# → {"property": "status", "current": "ready", "allowed_next": ["in-progress"], ...}
+
+# All properties as JSON
+artifacts transitions t0042 --json
+
+# Non-state-machined property exits 2
+artifacts transitions t0042 title
+# error: no state machine declared for field 'title' in kind 'task'
+```
+
+---
+
 ### `verify` — Check an artifact's completion checklist
 
 ```
