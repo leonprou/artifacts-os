@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 
 from rich.console import Console
 
@@ -11,6 +12,22 @@ import artifacts_os.views as views
 from artifacts_os.core import get, Registry
 from artifacts_os.core.errors import NotFoundError, ValidationError
 from artifacts_os.core.models import Artifact
+
+
+def _is_interactive() -> bool:
+    """Return True when running in a human-interactive context.
+
+    Settings-driven defaults that require a live terminal (e.g. opening an
+    editor) must not fire for non-interactive callers such as agents, CI
+    pipelines, or piped shells.
+
+    Detection mirrors openstation's convention:
+    - ``CLAUDECODE`` env var is set by the Claude Code agent runtime.
+    - A missing stdout TTY covers other non-interactive callers.
+    """
+    if os.environ.get("CLAUDECODE"):
+        return False
+    return sys.stdout.isatty()
 
 
 def register(subparsers) -> None:
@@ -61,9 +78,11 @@ def run(args, registry: Registry) -> int:
         print(json.dumps(data, default=str))
         return 0
 
-    # editor mode: explicit -e flag, or default from cli settings (unless -j was given)
+    # editor mode: explicit -e flag, or default from cli settings (unless -j was given).
+    # The settings-driven default is suppressed in non-interactive / agent contexts
+    # so that agents always receive artifact content on stdout.
     open_editor = args.editor
-    if not open_editor:
+    if not open_editor and _is_interactive():
         cli_settings = getattr(args, "cli_settings", None)
         if cli_settings is not None:
             show_defaults = cli_settings.defaults.get("show") or {}
@@ -93,7 +112,7 @@ def run(args, registry: Registry) -> int:
 
     if artifact.body.strip():
         console.print()
-        console.print(artifact.body)
+        console.print(artifact.body, markup=False)
 
     return 0
 
@@ -102,7 +121,8 @@ def _render_meta(args, artifact: Artifact, registry: Registry) -> int:
     """Render frontmatter only (no body).
 
     JSON mode: emit ``json.dumps(frontmatter)``.
-    Editor mode: open the artifact file directly (TTY-gated).
+    Editor mode: open the artifact file directly (explicit ``-e`` flag only;
+        settings-driven defaults do not apply inside ``--meta`` mode).
     Table mode: render all frontmatter keys as a one-row table.
     """
     if args.json_out:
