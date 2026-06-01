@@ -1,5 +1,79 @@
 # Changelog
 
+## v0.5.0
+
+Fifth release of **artifacts-os**. Headline features: a **per-property
+state-machine substrate** that generalizes status workflows to any
+declared property and exposes them through new `get`, `set`, and
+`transitions` CLI verbs; a **hook kind** that ships hooks as
+artifacts via artbooks with a `.active/` promotion mechanism; an
+**artbook promotion engine** that splits canonical and active
+artifact placement; and a **books-driven `init`** flow.
+
+### Architecture
+
+- **Per-property state-machine substrate (s0033, t0187, t0190)** —
+  kinds can now declare typed properties with optional state
+  machines beyond the legacy `status` field. The substrate threads
+  through `core.models`, `core.registry`, `core.store`,
+  `core.transitions`, and `core.validate`; the task kind's `status`
+  field migrated to the new declarative shape (t0191).
+- **Hook kind + active promotion (s0032, t0179, t0182, t0184)** —
+  hooks are now first-class artifacts under `artifacts/hooks/`,
+  distributed via artbooks. A `.active/` directory promotes
+  selected hooks into the live registry, separating canonical
+  (versioned) definitions from active (executed) ones.
+- **Artbook promotion engine (s0031, t0170, t0173, t0175)** —
+  `artbook pull` now splits placement into a canonical destination
+  and an optional `.active/` promotion step, with a state file
+  tracking promoted items. `artbook.yaml` migrated to the
+  canonical+promote shape.
+
+### Artbook
+
+- **Promotion engine + state file (t0173, t0169, t0174)** — new
+  `src/artifacts_os/artbook/promotion.py`, `state.py`, and
+  placement rewrites. Tracks promoted artifacts so subsequent
+  pulls don't re-promote or stomp local edits. Documented in
+  [`docs/artbook.md`](docs/artbook.md).
+- **Books-driven init (s0030, t0165, t0166, t0167)** —
+  `artifacts init` selection is now driven by the artbook
+  manifest; D2 fallback path rewritten around the same primitives.
+
+### Core
+
+- **Property API — `get_prop`, `set_prop`, `transitions_for`
+  (t0189)** — three new core primitives operate on declared
+  properties with transition validation. Exposed through new
+  top-level CLI verbs.
+- **Directory storage primitive (t0181)** — kinds backed by a
+  directory (e.g. `hook`) are now supported by the store.
+
+### CLI
+
+- **`artifacts get` / `set` / `transitions` (t0189)** — read,
+  write, and inspect transitions for any declared property on an
+  artifact.
+- **`artifacts hooks` (t0182)** — list, show, activate, and
+  deactivate hooks from the new hook kind.
+- **CLI aliases (t0180)** — built-in short aliases for common
+  verbs.
+- **Guard `show.editor` default in agent/non-interactive contexts
+  (t0192)** — opening an artifact in `$EDITOR` no longer fires
+  when the runner is non-interactive (CI, agent invocation),
+  avoiding hung shells.
+
+### AI
+
+- **Teach `artifacts-os` skill + `artifacts.create` command
+  (t0176, t0177)** — the bundled Claude skill and create command
+  now select kinds by description and draft bodies from each
+  kind's `ARTIFACT.md`.
+
+### Install
+
+- **Version bump** — `pyproject.toml` to `0.5.0`.
+
 ## v0.4.0
 
 Fourth release of **artifacts-os**. Headline feature: a new **artbook**
