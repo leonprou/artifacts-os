@@ -3,11 +3,12 @@ kind: task
 id: t0176
 name: teach-the-artifacts-os-skill
 type: documentation
-status: verified
+status: done
 assignee: author
 owner: user
 created: 2026-05-18
 started: 2026-05-18
+completed: 2026-06-01
 ---
 
 # Teach The Artifacts-Os Skill To Use Artifact.Md For Kind Selection And Body
