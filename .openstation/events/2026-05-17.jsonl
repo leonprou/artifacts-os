@@ -1,0 +1,10 @@
+{"ts":"2026-05-17T21:11:03.311231+03:00","event":"run_started","task":"t0167-implement-books-driven-init-flow","agent":"developer","run_id":"r0178","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-17T21:11:50.682757+03:00","event":"status_transition","task":"t0167-implement-books-driven-init-flow","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-17T21:23:30.986484+03:00","event":"status_transition","task":"t0167-implement-books-driven-init-flow","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-17T21:25:34.188307+03:00","event":"run_complete","task":"t0167-implement-books-driven-init-flow","agent":"developer","run_id":"r0178","run_status":"complete","cost":"3.02","turns":24}
+{"ts":"2026-05-17T23:24:43.649802+03:00","event":"status_transition","task":"t0169-add-post-pull-artifact-promotion","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-17T23:24:54.319902+03:00","event":"status_transition","task":"t0170-spec-the-artbook-promotion-mechanism","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-17T23:25:02.511572+03:00","event":"run_started","task":"t0170-spec-the-artbook-promotion-mechanism","agent":"architect","run_id":"r0179","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-17T23:25:23.049062+03:00","event":"status_transition","task":"t0170-spec-the-artbook-promotion-mechanism","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-17T23:34:07.799935+03:00","event":"status_transition","task":"t0170-spec-the-artbook-promotion-mechanism","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-17T23:34:21.453620+03:00","event":"run_complete","task":"t0170-spec-the-artbook-promotion-mechanism","agent":"architect","run_id":"r0179","run_status":"complete","cost":"3.18","turns":48}

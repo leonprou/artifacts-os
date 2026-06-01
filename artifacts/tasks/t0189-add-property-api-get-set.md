@@ -1,14 +1,14 @@
 ---
-kind: task
-id: t0189
-name: add-property-api-get-set
-type: feature
-status: ready
 assignee: developer
-owner: user
-depends_on:
-  - "[[t0186-add-declarative-per-property-state]]"
 created: 2026-05-25
+depends_on:
+- '[[t0186-add-declarative-per-property-state]]'
+id: t0189
+kind: task
+name: add-property-api-get-set
+owner: user
+status: done
+type: feature
 ---
 
 # Add Property Api Get Set Transitions Cli Verbs

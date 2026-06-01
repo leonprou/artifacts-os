@@ -1,0 +1,5 @@
+{"ts":"2026-06-01T10:30:16.295347+03:00","event":"status_transition","task":"t0176-teach-the-artifacts-os-skill","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-06-01T10:30:48.186732+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0176-teach-the-artifacts-os-skill","duration_ms":31887}
+{"ts":"2026-06-01T10:31:16.192247+03:00","event":"run_started","task":"t0193-reorient-spec-skeleton-around-implementation","agent":"project-manager","run_id":"r0211","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-06-01T10:33:27.400000+03:00","event":"status_transition","task":"t0193-reorient-spec-skeleton-around-implementation","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-06-01T10:33:47.378208+03:00","event":"run_complete","task":"t0193-reorient-spec-skeleton-around-implementation","agent":"","run_id":"r0211","run_status":"complete","cost":"0.76","turns":19}

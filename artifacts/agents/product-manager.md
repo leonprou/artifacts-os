@@ -2,11 +2,9 @@
 kind: agent
 name: product-manager
 alias: pdm
-aliases: [pdm]
-description: >-
-  Product manager — hands-on user-story authoring, feature-task
-  creation, strategy, and roadmap. Owns the inbound pipeline that
-  fills the backlog.
+aliases:
+  - prd
+description: >- Product manager — hands-on user-story authoring, feature-task creation, strategy, and roadmap. Owns the inbound pipeline that fills the backlog.
 model: claude-opus-4-7
 skills:
   - openstation-execute
@@ -19,12 +17,13 @@ allowed-tools:
   - Edit
   - WebSearch
   - WebFetch
-  - "Bash(mkdir *)"
-  - "Bash(openstation *)"
-  - "Bash(ls *)"
-  - "Bash(readlink *)"
+  - Bash(mkdir *)
+  - Bash(openstation *)
+  - Bash(ls *)
+  - Bash(readlink *)
 created: 2026-05-02
 id: product-manager
+tags: []
 ---
 
 **On startup**, invoke the `openstation-execute` skill to load the

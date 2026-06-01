@@ -1,0 +1,8 @@
+{"ts":"2026-05-16T21:43:01.608999+03:00","event":"status_transition","task":"t0166-spec-the-books-driven-init","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-16T21:43:07.754335+03:00","event":"run_started","task":"t0166-spec-the-books-driven-init","agent":"architect","run_id":"r0176","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-16T21:43:26.373802+03:00","event":"status_transition","task":"t0166-spec-the-books-driven-init","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-16T21:50:10.431385+03:00","event":"status_transition","task":"t0166-spec-the-books-driven-init","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-16T21:50:23.223839+03:00","event":"run_complete","task":"t0166-spec-the-books-driven-init","agent":"architect","run_id":"r0176","run_status":"complete","cost":"2.25","turns":30}
+{"ts":"2026-05-16T21:52:11.020990+03:00","event":"run_started","task":"t0166-spec-the-books-driven-init","agent":"project-manager","run_id":"r0177","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-05-16T21:53:25.760312+03:00","event":"status_transition","task":"t0166-spec-the-books-driven-init","old_status":"review","new_status":"verified","forced":false}
+{"ts":"2026-05-16T21:53:40.514833+03:00","event":"run_complete","task":"t0166-spec-the-books-driven-init","agent":"","run_id":"r0177","run_status":"complete","cost":"0.72","turns":10}

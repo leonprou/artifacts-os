@@ -3,7 +3,7 @@ kind: agent
 name: security-engineer
   - secops
 description: "Use this agent when implementing comprehensive security solutions across infrastructure, building automated security controls into CI/CD pipelines, or establishing compliance and vulnerability management programs. Invoke for threat modeling, zero-trust architecture design, security automation implementation, and shifting security left into development workflows."
-model: opus
+model: claude-opus-4-8
 tools: "Read, Write, Edit, Bash, Glob, Grep"
 created: '2026-05-05'
 id: security-engineer

@@ -1,109 +1,119 @@
 ---
 name: spec
-description: Locks a technical contract — goals, non-goals, decisions, and the surfaces they imply — before implementation begins. Use when a design has alternatives worth recording, crosses a module boundary, or will land across multiple tasks.
+description: Locks an implementation contract before code — architecture, components, data models, surfaces, and file structure — concretely enough that an implementer builds from it and a reviewer approves it. Use when a change crosses a module boundary, lands across multiple tasks, or pins a public surface.
 ---
 
 # Spec
 
 ## What is a spec?
 
-A **spec** is a design document that locks a technical contract
-before implementation begins. It records goals, non-goals, the
-decisions the design is committing to, and the surfaces those
-decisions imply, in a form a reviewer can approve and a follow-up
-implementation task can build against without re-deriving the
-design. Its load-bearing property is **decision-locking**: every
-choice that shapes the contract earns a row in a decisions table
-plus a subsection of justification, so post-approval drift is
-visible.
+A **spec** is a design document that locks an *implementation
+contract* before code begins. It describes what is being built —
+the architecture, the components, the data models, the surfaces
+those imply, and the file structure they land in — concretely
+enough that an implementer builds from it without re-deriving the
+design and a reviewer approves it before any code is written. Its
+load-bearing property is **buildability**: the anchors the
+skeleton privileges are the ones that get re-read during
+implementation and six months later.
 
 Reach for a spec when at least one signal holds:
 
 | Signal | Why a spec |
 |---|---|
-| Two or more reasonable designs and the choice is non-obvious | The locked-decisions table records which alternative won and why. |
-| The change crosses a module boundary in the dependency DAG | The Surfaces section pins the contract each module sees. |
-| Implementation will land across multiple tasks | The approved spec is the shared north star for the sub-tasks. |
-| A public surface (CLI, TUI, agent, API) needs parity or backwards-compat guarantees | "Why X + Y, not just X" justifications belong in a spec, not a PR. |
-| Validation, error-routing, or compat rules are load-bearing | These rules drift easily; a spec freezes them. |
+| The change crosses a module boundary in the dependency DAG | The architecture diagram and `## Surfaces` pin the contract each module sees. |
+| Implementation will land across multiple tasks | The approved spec is the shared north star the sub-tasks build against. |
+| A public surface (CLI, API, TUI, agent) is added or changed | `## Surfaces` pins signatures and shapes before a PR locks them in. |
+| New data shapes are introduced, or a persisted/serialized shape changes | `## Data Models` freezes the schema implementers and reviewers depend on. |
+| A new module or non-trivial file layout lands | `## File Structure` shows where the code goes before it sprawls. |
 
-If none holds, prefer a `task` (mechanical change, no decision
-points) or a `note` (`type: decision` already locks the rationale,
-no new surface to design).
+If none holds, prefer a `task` (mechanical change, bounded by its
+own Requirements) or a `note` (`type: decision` locks a rationale
+with no surface to design).
+
+A spec has no fixed skeleton. A handful of anchors are **always
+required** because they are what the implementer and reviewer
+re-read; the implementation surfaces are **conditional** —
+required when the change touches them, absent otherwise;
+everything else is optional.
+
+| Section | Required / when to add |
+|---|---|
+| One-paragraph summary | **Required.** Directly under the title — what is being built and why, in prose. Carries the goal; there is no `## Goals`. |
+| `## Out of Scope` | **Required.** What the spec does *not* take responsibility for — the implementer's authoritative answer when scope creep arrives. May be a single bullet. |
+| `## Architecture` | **Required, with a diagram.** How the pieces fit, anchored by a diagram (see Step 1). Prose-only is not acceptable. |
+| `## Components` | **Conditional — multi-component.** Summary table + per-component contract when the change spans 2+ interacting components or modules. |
+| `## Data Models` | **Conditional — shapes change.** Field-level shape of any new or changed structure (frontmatter schema, dataclass, JSON/event payload, persisted form). |
+| `## Surfaces` | **Conditional — public surface touched.** Per CLI / API / TUI / agent surface added or changed: signatures, input/output shapes, backwards-compat impact. |
+| `## File Structure` | **Conditional — new module or non-trivial layout.** The files and directories created or moved, and what each holds. |
+| `## Test Plan` | **Required.** Grouped by the property each test verifies; the implementation task pulls this section verbatim into its work plan. |
+| `## Cross-References` | **Required.** Every artifact and code path the spec consumes or affects, as bare wikilinks (`[[s0014-...]]`) or paths. Load-bearing for vault navigation — link, never copy. |
+| `## Decisions` | Optional, high-level. Headline calls only (see Step 3). A `D1/D2` table with per-decision justification belongs only in a genuinely contested-design spec (`s0014`). Default: omit. |
+| `## Build Sequence` | Optional. Dependency order when components must land in sequence. |
+| `## Migration` | Optional. Upgrade path from the prior state, when one exists. |
 
 ## How to draft a spec
 
-A spec has no fixed skeleton. Several sections are required because
-they *are* the spec's accountability surface; everything else is
-shaped to fit the design. `s0014` and `s0017` are worked examples.
+`s0023-multi-value-filters` is the worked example of the default
+shape. `s0001-artifacts-os-ai-module` is the minimal early-era
+shape (Purpose / Public API / Key Concepts / Scope Boundary).
+`s0014-core-unified-filter-api` is the rare contested-design spec
+that earns a full `## Decisions` table.
 
-### Step 1 — Lock decisions, do not paraphrase
+### Step 1 — Lead with the architecture and its diagram
 
-Every load-bearing choice earns a row in a `## Locked Decisions
-Summary` table (`D1`, `D2`, …) plus a dedicated subsection later in
-the spec where trade-offs, rejected alternatives, and rationale
-live. The table is for skimmers; the subsections are for reviewers
-reconstructing the rationale.
+Open with the one-paragraph summary, then `## Architecture`. The
+section must carry a **diagram** — it is the single
+highest-bandwidth artefact a spec ships.
 
-When upstream research informed the design, reproduce its
-recommendation list as an engagement table — one row per
-recommendation with an explicit `LOCK` / `LOCK-WITH-EDIT` /
-`REJECT` verdict. No silent drops; a reviewer reading only that
-table can tell which research input shaped which decision.
-`s0017` § 10 is the worked example.
+- **ASCII boxes-and-arrows is the default.** Zero tooling, renders
+  everywhere, diffs cleanly. Most specs need nothing more.
+- **Mermaid is allowed** when the structure genuinely needs it; it
+  renders in GitHub and Obsidian.
+- **A committed image is allowed** for diagrams impractical as
+  text.
+- **Prose-only is not acceptable.** A three-box sketch carries
+  more than a paragraph.
 
-### Step 2 — Pin goals AND non-goals; descope before sprawl
+Use H3 sub-sections (`### Runtime Flow`, `### Data Flow`,
+`### Invariants`) when one diagram is not enough.
 
-Goals are mandatory; **non-goals are also mandatory.** Non-goals
-tell the reviewer what the spec is *not* taking responsibility for,
-and give the implementation task an authoritative answer when
-scope creep arrives mid-work. Cross-link deferred items to a
-`## Next Steps` section that sketches them well enough to file
-follow-up specs.
+### Step 2 — Pin only the surfaces the change touches
 
-If the spec is growing past what a single reviewer can hold in
-their head, **descope before review, not after.** Push deferred
-sections into `## Next Steps` and record the cut as a numbered
-entry in `## Scope History`. A spec that needs cutting in half
-during review almost always splits poorly. `s0017` § 13 is the
-worked example.
+`## Components`, `## Data Models`, `## Surfaces`, and
+`## File Structure` are conditional — include each only when its
+trigger fires:
 
-### Step 3 — Anchor required sections; respect the lifecycle
+| Section | Include when | Skip when |
+|---|---|---|
+| `## Components` | The change spans 2+ components/modules that interact. Lead with a `# \| Component \| Location \| Purpose` table, then a per-component contract (inputs, outputs, constraints). | A single-file, single-component change. |
+| `## Data Models` | A new data shape is introduced, or a persisted/serialized one changes (frontmatter schema, dataclass, JSON/event payload). | Pure behavioural changes that touch no shape. |
+| `## Surfaces` | A public surface is added or changed — a CLI verb/flag, a Python public API, a TUI view, an agent-facing contract. Pin signatures, I/O shapes, and compat impact per surface. | Internal-only refactors. |
+| `## File Structure` | A new module/package lands, or files move non-trivially. | Editing existing files in place. |
 
-The spec's required structure (`## Surfaces` is conditional on
-touching a public API; the rest are always required):
+When genuinely unsure, include the section — a one-line "n/a:
+single-file change" is cheaper than a reviewer guessing.
 
-- **`## Background and Cross-References`** — every upstream input
-  as a one-line bullet (prompting task, parent/sibling specs,
-  research, notes, code paths).
-- **`## Goals` + `## Non-Goals`** — see Step 2.
-- **`## Locked Decisions Summary` + per-decision subsections** —
-  see Step 1.
-- **`## Surfaces`** *(when the spec touches a public surface)* —
-  pin signatures, input/output shapes, and backwards-compat impact
-  per surface.
-- **`## Test Plan`** — grouped by the property each test verifies
-  (layer-isolation, contract validation, parity, compat); the
-  implementation task pulls this section verbatim into its work
-  plan.
-- **`## Cross-References`** — every artifact and code path the
-  spec consumes or affects. Bare wikilinks (`[[s0017-...]]`)
-  auto-resolve in the vault. Never copy text from a referenced
-  artifact — link and consume.
+### Step 3 — Keep Out of Scope honest; decisions are the exception
 
-Optional anchors when the spec calls for them: `## Layered
-Disclosure Model` (genuinely layered surfaces only — do not force
-non-layered designs into a layer table), `## Scope History`
-(descope or restructure during review), `## Next Steps` (deferred
-work), `## Implementation Notes` (pre-populate the follow-up
-task's scope).
+`## Out of Scope` is the implementation task's authoritative
+answer when scope creep arrives mid-work. Keep it current; if the
+spec grows past what one reviewer can hold, descope into Out of
+Scope (and a follow-up spec) *before* review, not after.
+
+`## Decisions` is optional and high-level by default. Capture the
+headline calls as bullets only when they are not already obvious
+from the architecture. Reach for a numbered `D1/D2` table with
+per-decision justification subsections **only** when the spec is
+genuinely choosing between reasonable alternatives a reviewer must
+adjudicate (`s0014`). Most specs lock a contract rather than
+contest a design — those carry no `## Decisions` section at all.
 
 Set `status: draft` on creation; advance to `review` after a
 self-check, `approved` after reviewer sign-off, `deprecated` if
 superseded. Implementation tasks must wait for `approved`. If
-implementation reveals a flaw, amend the spec under a new
-`## Scope History` entry — never let code drift from the approved
-contract.
+implementation reveals a flaw, amend the spec — never let code
+drift from the approved contract.
 
 ## Skeleton
 
@@ -112,13 +122,14 @@ contract.
 
 {{ONE_PARAGRAPH_SUMMARY}}
 
-## Background and Cross-References
+## Out of Scope
 
-## Goals
+## Architecture
 
-## Non-Goals
+<!-- Required: an ASCII / mermaid / image diagram, not prose. -->
 
-## Locked Decisions Summary
+<!-- Add the conditional sections the change touches (see ARTIFACT.md):
+     ## Components, ## Data Models, ## Surfaces, ## File Structure. -->
 
 ## Test Plan
 

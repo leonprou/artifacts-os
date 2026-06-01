@@ -14,144 +14,70 @@ Sub-spec of [[s0014-core-unified-filter-api]]. Extends the unified
 filter dict so that a single key can carry **multiple allowed
 values** (`status: [ready, in-progress, review]`) without a new
 operator vocabulary or any change to the per-key merge precedence.
-
 The motivating use case is the `active` view — "all in-flight
-work" — that today requires fanning out one named view per
-status. A second motivation is the CLI's `--status` flag, which
-accepts a single value and forces users into multiple invocations
-or a vault-wide "all" view to dodge the limit.
+work" — which today fans out one named view per status; a second
+is the CLI's `--status` flag, single-valued today, which forces
+multiple invocations or a vault-wide "all" view to dodge the
+limit. Scalar values keep working unchanged; the extension is
+strictly additive.
 
-**Scope: design + implementation.** This spec lands together with
-[[t0127-feat-multi-value-filters-in]].
+## Out of Scope
 
-## 1. Background
+- **OR across keys.** No `any_of` / `all_of` block at the view
+  level — conjunction across keys remains the only cross-key rule.
+- **Operator objects** (`{in: [...]}`, `{not: x}`, `{gte: ...}`).
+  Layerable later without breaking this v1 contract.
+- **Negation, regex, ranges** — flag for a future spec.
+- **Schema type-checking of filter elements** — `list_artifacts`
+  never enforces schema types on filter values; `validate` owns
+  that.
 
-- `core.discover.list_artifacts` (`src/artifacts_os/core/discover.py`
-  L155–L167) compares every `(key, value)` pair as
-  `str(meta.frontmatter.get(key, "")) == str(value)`. The `tags`
-  key is the only special case (list-membership). Today, a list
-  in any other key is silently coerced into its `repr()` and
-  never matches.
-- `views.models.ViewConfig.filters: dict[str, Any]`
-  (`src/artifacts_os/views/models.py` L31) accepts arbitrary
-  values; `_parse_view` round-trips the dict verbatim and never
-  validates the value type.
-- The CLI's per-kind `--status` flag (added by
-  `_add_schema_filter_flags` in
-  `src/artifacts_os/cli/commands/list.py` L89–L112) registers
-  argparse `choices=` from the kind's enum, so a single string
-  value is the only currently parseable shape.
+## Architecture
 
-## 2. Goals and Non-Goals
-
-**Goals:**
-
-- Express "filter by a set of values for one key" everywhere the
-  unified filter dict reaches: `core.list_artifacts`,
-  `ViewConfig.filters`, and `--status` (and any other
-  enum-string schema-derived flag).
-- Backwards-compatible. Scalar values keep working unchanged.
-- Predictable validation. Empty lists raise immediately at
-  view-load time and at the CLI layer for the symmetric CSV
-  case.
-
-**Non-goals:**
-
-- OR across keys. No `any_of` / `all_of` block at the view
-  level. Conjunction across keys remains the only cross-key
-  composition rule.
-- Operator objects (`{in: [...]}`, `{not: x}`, `{gte: ...}`).
-  Strictly additive — can be layered on later without breaking
-  this v1 contract.
-- Negation, regex, ranges. Out of scope; flag for a future spec.
-
-## 3. Contract
-
-### 3.1 Filter value shapes
-
-| Filter value type | Meaning |
-|---|---|
-| Scalar (`str` / `int` / `bool`) | Equality, as today: `str(meta.frontmatter.get(k, "")) == str(v)`. |
-| `list[Any]` | OR within that key — match if **any** element compares equal under the same stringified rule. |
-| `tags` (special) | List-membership semantics, **unchanged**. A scalar `tags` filter still means "the meta has this tag". |
-| Across keys | Always AND. |
-
-```yaml
-filters: { kind: task, status: ready }                                   # scalar
-filters: { kind: task, status: [ready, in-progress, review] }            # list = OR within status
-filters: { kind: task, status: [ready, in-progress], assignee: alice }   # AND-of-ORs
-```
-
-### 3.2 Type interaction
-
-A list filter value applied to a field whose schema declares a
-scalar type (string / integer / boolean) **just works** —
-each element is stringified and compared per the rule in §3.1.
-The schema validates each element's type at `validate` time
-(out of scope for this spec); `list_artifacts` never enforces
-schema types on filter values.
-
-### 3.3 Empty lists
-
-`status: []` (or any other key with an empty list value) is
-**always a config bug**: an empty OR clause matches nothing, so
-the only legitimate intent is "match nothing", which is better
-expressed by deleting the view. Empty lists therefore raise
-`ValidationError` at the layer that owns the value:
-
-| Layer | When the error fires | Message form |
-|---|---|---|
-| `ViewConfig` (view config in `artifacts.yaml`) | `_parse_view`, at settings load. | `view filter '<key>' has empty list — empty filter values are not allowed (use a scalar or a non-empty list)` |
-| CLI (`--status a,,b`, trailing comma `--status a,`) | argument parse, before dispatch. | `--<flag>: empty value in CSV (got '<input>'); use comma-separated non-empty values` |
-
-The core `list_artifacts` API does not re-validate — by
-contract, callers handing an empty list are programmer errors,
-not user-input errors, and a `ValueError` from the underlying
-`any()` would surface them. (Implementation note: an empty list
-in core simply yields `match=False` for that key. Tests cover
-this so we don't accidentally start raising — but we don't
-*encourage* it either; the validation seam is the value-owning
-layer above core.)
-
-### 3.4 CLI parsing
-
-`--status` (and any other `string`-typed schema field with an
-`enum` declaration) accepts a CSV input:
-
-```bash
-art ls --kind task --status ready,in-progress,review
-```
-
-The parser splits on `,` and produces a `list[str]`. The
-resulting list flows into `resolve_filters` per
-[[s0014-core-unified-filter-api]] §5 unchanged: it's a value
-in the filter dict, last-write-wins per key.
-
-**Empty CSV elements** (`a,,b`, `,a`, `a,`) are a
-`ValidationError` at the CLI layer (exit code `2`, per
-`s0015-cli-schema-derived-filter-flags` §6.4 conventions).
-
-**Single value** (`--status ready`) yields a single-element
-list `["ready"]`. Core's filter loop folds this through the
-`any()` branch and produces the same result as the legacy
-scalar path; no special case is required.
-
-**Choices validation** — when the schema declares an enum,
-each element of the parsed list must be in `choices`. This is
-enforced by a custom argparse `type=` callable (argparse's
-built-in `choices=` only checks against the raw argument
-string, which would always fail for CSV input). The error
-message names the offending element:
+A list value in any filter key means **OR within that key**;
+across keys the rule stays **AND**. Two entry points (the CLI
+`--status` flag and a `ViewConfig.filters` block) feed the same
+unified filter dict into `core.discover.list_artifacts`, whose
+per-key match loop is the single place the OR/AND semantics live.
 
 ```
---status: invalid value 'bogus' (choose from: backlog, ready, in-progress, done)
+  CLI:  art ls --status ready,in-progress       View:  filters: {status: [ready, review]}
+          │  split on ',' + enum-validate                │  _parse_view: reject empty list
+          ▼                                              ▼
+      ["ready","in-progress"]  ──────────►  filter dict  {kind: task, status: [...] }
+                                                          │
+                                                          ▼
+                                  core.discover.list_artifacts  — per-key match loop
+                                    • scalar value → equality, str-coerced  (as today)
+                                    • list value   → OR within key (any element ==)
+                                    • tags         → membership             (unchanged)
+                                    • across keys  → AND
+                                                          │
+                                                          ▼
+                                                  matched artifacts
 ```
 
-## 4. Implementation Plan
+### Invariants
 
-### 4.1 Core — `core.discover.list_artifacts`
+- Backwards-compatible: a scalar value folds through the same
+  `any()` branch as a single-element list and yields the identical
+  result; no legacy path changes behaviour.
+- Empty lists are always a config bug (an empty OR matches
+  nothing) and raise at the value-owning layer — never silently in
+  core.
 
-Extend the per-key match loop to recognise list values:
+## Components
+
+| # | Component | Location | Purpose |
+|---|---|---|---|
+| C1 | `list_artifacts` match loop | `src/artifacts_os/core/discover.py` L155–L167 | Apply scalar/list/tags/AND semantics per key. |
+| C2 | `ViewConfig` parse | `src/artifacts_os/views/models.py` (`_parse_view`) | Reject empty list filter values at settings load. |
+| C3 | Schema-derived `--status` flag | `src/artifacts_os/cli/commands/list.py` L89–L112 | Parse CSV input, enum-validate each element. |
+
+### C1 — core match loop
+
+Extend the per-key loop to recognise list values; `tags` keeps its
+membership special case, scalars keep equality:
 
 ```python
 for k, v in filters.items():
@@ -170,74 +96,106 @@ for k, v in filters.items():
             break
 ```
 
-`_validate_filters` is unchanged — it validates keys, not
-values.
+`_validate_filters` is unchanged — it validates keys, not values.
+An empty list in core simply yields `match=False` for that key;
+core does not re-validate (callers handing an empty list are
+programmer errors, caught by the layers above), but tests pin this
+so it never starts raising.
 
-### 4.2 Views — `views.models.ViewConfig`
+### C2 — ViewConfig parse
 
 `_parse_view` walks each value in `filters`; when a list is
-present, it raises `ValueError` if the list is empty. Scalar
-values (incl. `bool`, `int`, `str`) and non-empty lists pass
-through unchanged. The `ViewConfig.filters` type annotation is
-`dict[str, Any]` already — no dataclass change needed.
+present and empty, it raises `ValueError`. Scalars (`bool`, `int`,
+`str`) and non-empty lists pass through unchanged. The
+`filters: dict[str, Any]` annotation already accommodates lists —
+no dataclass change.
 
-### 4.3 CLI — `cli/commands/list.py`
+### C3 — CLI `--status` flag
 
 `_flag_kwargs_for_prop` adds a CSV-aware `type=` callable for
-`enum` properties whose underlying type is `string`. The
-callable:
+`enum` properties whose underlying type is `string`. It splits on
+`,`, raises `argparse.ArgumentTypeError` on any empty element,
+validates each element against the enum, and returns a `list[str]`.
+`choices=` is dropped on the per-kind enum flags (argparse's
+`choices` runs against the raw CSV string and would reject any
+multi-value input); the custom `type=` callable becomes the
+validation seam. `metavar` shifts from `"backlog|ready|..."` to
+`"backlog|ready|...[,...]"`. `_add_union_filter_flags` (cross-kind)
+keeps a simpler splitter without enum validation, since per-kind
+enums diverge.
 
-1. Splits on `,`.
-2. Raises `argparse.ArgumentTypeError` if any element is empty.
-3. Validates each element against the enum; raises if any
-   element is not in `choices`.
-4. Returns a `list[str]`.
+## Data Models
 
-`choices=` is dropped on the per-kind `--status` (and other
-enum-string flags) because argparse's `choices` runs against
-the raw string and would reject any CSV input. The custom
-`type=` callable replaces it as the validation seam.
+The filter dict value type determines the match rule:
 
-`metavar` shifts from `"backlog|ready|..."` to
-`"backlog|ready|...[,...]"` to communicate the CSV shape.
+| Filter value | Meaning |
+|---|---|
+| Scalar (`str` / `int` / `bool`) | Equality, as today: `str(meta.get(k,"")) == str(v)`. |
+| `list[Any]` | OR within the key — match if **any** element compares equal under the same stringified rule. |
+| `tags` key (special) | List-membership, **unchanged**: a scalar `tags` filter means "meta has this tag". |
+| Across keys | Always AND. |
 
-`_add_union_filter_flags` (cross-kind) keeps its current
-no-`choices=` behaviour but uses a simpler CSV splitter
-(no enum validation, since per-kind enums diverge across
-kinds — caller's responsibility).
+```yaml
+filters: { kind: task, status: ready }                                   # scalar
+filters: { kind: task, status: [ready, in-progress, review] }            # list = OR within status
+filters: { kind: task, status: [ready, in-progress], assignee: alice }   # AND-of-ORs
+```
 
-### 4.4 Tests
+A list value against a scalar-typed schema field just works — each
+element is stringified and compared. `status: []` (any empty list)
+is a config bug and raises at the value-owning layer.
 
-- **`tests/core/test_discover.py`** (or `test_list_artifacts_filters.py`):
-  list filter matches OR semantics; combined with another
-  scalar key it AND-s; numeric scalar values via list comparison
-  (`status: [1, 2]` against `status: 1` in frontmatter — string
-  coercion); missing keys never match (no exceptions); the
-  `tags` special case is **unaffected** by list-typed values
-  for any other key.
-- **`tests/cli/test_list_schema_flags.py`** (or
-  `test_list_artifacts_filters.py`): `--status ready,in-progress`
-  yields the union; trailing/empty CSV element exits 2 with a
-  clear message; bogus enum value exits 2 with a clear message;
-  single value still works (regression).
-- **`tests/views/test_views_settings.py`**: `ViewConfig`
-  round-trips a list-typed filter value (parsed equal to source);
-  empty list rejected with `ValueError` naming the offending key.
+## Surfaces
 
-## 5. Validation Errors — Exact Wording
+### CLI — `--status` (and any enum-string schema flag)
+
+```bash
+art ls --kind task --status ready,in-progress,review
+```
+
+- Splits on `,` → `list[str]`, flowing into `resolve_filters`
+  (per [[s0014-core-unified-filter-api]] §5) as a normal filter
+  value (last-write-wins per key).
+- **Single value** (`--status ready`) → `["ready"]`; folds through
+  the same `any()` branch as the legacy scalar path.
+- **Empty CSV elements** (`a,,b`, `,a`, `a,`) → exit code `2`
+  (per `s0015-cli-schema-derived-filter-flags` §6.4).
+- **Enum validation** — each element must be in `choices`,
+  enforced by the custom `type=` callable.
+
+Exact error wording:
 
 | Layer | Trigger | Message |
 |---|---|---|
 | `ViewConfig._parse_view` | `filters: { status: [] }` | `view filter 'status' has empty list — empty filter values are not allowed` |
-| CLI per-kind `--status` | `--status a,,b` | `argument --status: empty value in CSV (got 'a,,b')` |
-| CLI per-kind `--status` | `--status bogus` | `argument --status: invalid value 'bogus' (choose from: backlog, ready, ...)` |
+| CLI `--status` | `--status a,,b` | `argument --status: empty value in CSV (got 'a,,b')` |
+| CLI `--status` | `--status bogus` | `argument --status: invalid value 'bogus' (choose from: backlog, ready, ...)` |
 
-## 6. Migration
+## Test Plan
+
+Grouped by the property each test verifies:
+
+- **OR/AND semantics (C1)** — `tests/core/test_discover.py`: list
+  filter matches OR; combined with a scalar key AND-s; numeric
+  scalar via list (`status: [1, 2]` vs frontmatter `1`, string
+  coercion); missing keys never match (no exceptions); the `tags`
+  special case is unaffected by list values for other keys.
+- **CLI parsing + validation (C3)** —
+  `tests/cli/test_list_schema_flags.py`: `--status
+  ready,in-progress` yields the union; trailing/empty CSV element
+  exits `2` with a clear message; bogus enum value exits `2`;
+  single value still works (regression).
+- **View config validation (C2)** —
+  `tests/views/test_views_settings.py`: `ViewConfig` round-trips a
+  list-typed value (parsed equal to source); empty list rejected
+  with `ValueError` naming the offending key.
+
+## Migration
 
 The vault's own `artifacts/artifacts.yaml` shipped three
-per-status views (`active` = in-progress, `ready`, `review`)
-plus `all`. With this spec in place, those collapse into a
-single `active` view that carries the OR clause:
+per-status views (`active` = in-progress, `ready`, `review`) plus
+`all`. They collapse into a single `active` view carrying the OR
+clause:
 
 ```yaml
 active:
@@ -247,13 +205,13 @@ active:
 ```
 
 `default_views.task` is rebound from `all` to `active` so
-`artifacts list --kind task` shows in-flight work by default.
-`all` and named-purpose views (`features`, `developer-queue`,
-etc.) stay. The redundant `ready` / `review` views are
-removed; the old single-status `active` (= in-progress only)
-is replaced by the multi-status one.
+`artifacts list --kind task` shows in-flight work by default. `all`
+and named-purpose views (`features`, `developer-queue`, etc.) stay;
+the redundant `ready` / `review` views are removed; the old
+single-status `active` (in-progress only) is replaced by the
+multi-status one.
 
-## 7. Cross-References
+## Cross-References
 
 - [[s0014-core-unified-filter-api]] — parent spec; per-key
   precedence and validation surface.

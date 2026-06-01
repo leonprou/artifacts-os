@@ -174,7 +174,7 @@ adjacent ones:
 
 Name the kind's **load-bearing property** in one phrase (note:
 *fidelity* of transcription; research: *traceability* of every
-claim; spec: *decision-locking* with explicit rationale). Then
+claim; spec: *buildability* — the implementation contract). Then
 include a selection table that helps the author choose this kind
 over adjacent options — either sub-variants within the kind
 (note's `type` table) or signals against a sibling kind (research's

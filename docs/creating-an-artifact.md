@@ -28,8 +28,9 @@ disambiguate. Examples (from the shipped kinds):
   conversation.
 - `research` — captures cited findings; use when a question
   requires evidence before a design can act.
-- `spec` — locks a technical contract; use when a design has
-  alternatives worth recording.
+- `spec` — locks an implementation contract before code; use when
+  a change crosses a module boundary, lands across multiple tasks,
+  or pins a public surface.
 
 ---
 
@@ -80,7 +81,7 @@ sections — for example:
 |---|---|
 | `note` | `## Origin`, `## References` |
 | `research` | metadata block, `## TL;DR`, `## Recommendations`, `## Sources` |
-| `spec` | `## Background and Cross-References`, `## Goals`, `## Non-Goals`, `## Locked Decisions Summary` (+ per-decision subsections), `## Test Plan`, `## Cross-References` |
+| `spec` | one-paragraph summary, `## Out of Scope`, `## Architecture` (with a diagram), `## Test Plan`, `## Cross-References` — plus `## Components` / `## Data Models` / `## Surfaces` / `## File Structure` when the change touches them |
 
 When in doubt, re-run `artifacts kinds <name>` and re-read the
 authoring guide.

@@ -1,0 +1,5 @@
+{"ts":"2026-05-26T13:45:45.377253+03:00","event":"status_transition","task":"t0191-migrate-task-kind-json-and","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-05-26T13:52:15.095742+03:00","event":"run_started","task":"t0191-migrate-task-kind-json-and","agent":"developer","run_id":"r0206","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-05-26T13:54:43.223660+03:00","event":"status_transition","task":"t0191-migrate-task-kind-json-and","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-05-26T13:59:12.042123+03:00","event":"status_transition","task":"t0191-migrate-task-kind-json-and","old_status":"in-progress","new_status":"review","forced":false}
+{"ts":"2026-05-26T13:59:22.894314+03:00","event":"run_complete","task":"t0191-migrate-task-kind-json-and","agent":"developer","run_id":"r0206","run_status":"complete","cost":"1.14","turns":39}
