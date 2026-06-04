@@ -3,13 +3,14 @@ kind: task
 id: t0193
 name: reorient-spec-skeleton-around-implementation
 type: feature
-status: verified
+status: done
 assignee: author
 owner: user
 created: 2026-05-29
 started: 2026-05-29
 artifacts:
   - "[[s0023-multi-value-filters]]"
+completed: 2026-06-04
 ---
 
 # Reorient Spec Skeleton Around Implementation
