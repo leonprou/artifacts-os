@@ -1,0 +1,2 @@
+{"ts":"2026-06-04T10:34:11.342285+03:00","event":"status_transition","task":"t0193-reorient-spec-skeleton-around-implementation","old_status":"verified","new_status":"done","forced":false}
+{"ts":"2026-06-04T10:34:55.619485+03:00","event":"hook_fired","hook_type":"StatusTransition","phase":"post","matcher":"*\u2192done","command":"bin/hooks/auto-commit","task":"t0193-reorient-spec-skeleton-around-implementation","duration_ms":44273}

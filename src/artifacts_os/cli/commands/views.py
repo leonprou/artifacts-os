@@ -47,7 +47,8 @@ def register(subparsers) -> None:
 def run(args, registry: Registry) -> int:
     # Loader call and reverse-index happen once before dispatch.
     from artifacts_os.cli import _load_views_settings
-    settings = _load_views_settings(registry.root)
+    _sp = getattr(args, "settings_path", None) or registry.root / "artifacts.yaml"
+    settings = _load_views_settings(_sp)
 
     views_cfg = settings.views if settings is not None else None
     views_map = views_cfg.views if views_cfg is not None else {}

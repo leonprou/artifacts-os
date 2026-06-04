@@ -50,6 +50,19 @@ worktree — and it will always find the right place.
 
 ---
 
+## Global Flags
+
+These flags are accepted by the top-level `artifacts` parser and apply to
+every subcommand. See [docs/settings.md](../../../docs/settings.md) for full
+details on settings and the `--config` override.
+
+| Flag | Description |
+|------|-------------|
+| `--version`, `-v` | Print the installed version and exit. |
+| `--config <ref>` | Override settings-file discovery for this invocation. `<ref>` is a path (`./custom.yaml`, `/etc/foo.yaml`) or a basename (`openstation.yaml`) walked up from CWD. Has no effect on `artifacts init`. |
+
+---
+
 ## Referencing Artifacts
 
 Most commands take a `<ref>` argument to identify an artifact. Three forms

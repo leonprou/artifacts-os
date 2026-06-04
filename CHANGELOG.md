@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### CLI
+
+- `artifacts --config <ref>` overrides settings-file discovery for the
+  current invocation. Accepts a path or a basename; does not affect
+  `artifacts init`. See docs/settings.md § "CLI override".
+
 ## v0.5.0
 
 Fifth release of **artifacts-os**. Headline features: a **per-property

@@ -84,6 +84,38 @@ def vault(tmp_path: Path, monkeypatch):
     return root
 
 
+def make_vault_with_marker(tmp_path: Path, marker: str = "artifacts.yaml") -> Path:
+    """Materialise a minimal vault under *tmp_path* with a custom marker name.
+
+    The vault has a single ``task`` kind registered and an empty artifacts
+    directory, matching the layout expected by the CLI.
+
+    Spec: s0034 §11.3.
+    """
+    root = tmp_path / "vault"
+    kinds_dir = root / "artifacts" / "kinds"
+    kinds_dir.mkdir(parents=True)
+    (root / marker).write_text("layout_version: 1\nproject:\n  name: test\n")
+    # Register the task kind so common CLI verbs work.
+    task_schema = {
+        "x-dir": "tasks",
+        "x-prefix": "t",
+        "x-numbered": True,
+        "properties": {
+            "status": {
+                "enum": ["backlog", "done"],
+                "initial": "backlog",
+                "transitions": {"backlog": ["backlog", "done"], "done": ["backlog", "done"]},
+            },
+        },
+    }
+    task_dir = kinds_dir / "task"
+    task_dir.mkdir(parents=True)
+    (task_dir / "kind.json").write_text(json.dumps(task_schema))
+    (root / "artifacts" / "tasks").mkdir(parents=True)
+    return root
+
+
 @pytest.fixture
 def write_artifact():
     """Helper fixture: write a markdown artifact file to the vault."""

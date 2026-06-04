@@ -62,6 +62,28 @@ def test_no_marker_returns_none(tmp_path: Path) -> None:
     assert find_vault_root(deep) is None
 
 
+def test_find_vault_root_custom_marker(tmp_path: Path) -> None:
+    """find_vault_root(marker_filename=...) walks up looking for the custom name.
+
+    Spec: s0034 §6.4 / §11.2.
+    """
+    (tmp_path / "openstation.yaml").write_text("layout_version: 1\n")
+    deep = tmp_path / "a" / "b"
+    deep.mkdir(parents=True)
+    assert find_vault_root(deep, marker_filename="openstation.yaml") == tmp_path.resolve()
+
+
+def test_find_vault_root_default_unchanged(tmp_path: Path) -> None:
+    """Without the kwarg, find_vault_root behaves identically to before.
+
+    Regression guard for s0034 §11.2.
+    """
+    (tmp_path / "artifacts.yaml").write_text("")
+    assert find_vault_root(tmp_path) == tmp_path.resolve()
+    # Custom marker does NOT match artifacts.yaml (different filename).
+    assert find_vault_root(tmp_path, marker_filename="openstation.yaml") is None
+
+
 def test_legacy_layout_only_returns_none(tmp_path: Path) -> None:
     """Legacy <root>/artifacts/artifacts.yaml is NOT recognised (D3 hard cutover).
 

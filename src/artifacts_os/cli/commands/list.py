@@ -554,7 +554,8 @@ def _build_sort_key(sort_str: str | None):
 def run(args, registry: Registry) -> int:
     from artifacts_os.cli import _load_views_settings
 
-    views_settings = _load_views_settings(registry.root)
+    _sp = getattr(args, "settings_path", None) or registry.root / "artifacts.yaml"
+    views_settings = _load_views_settings(_sp)
     _apply_view(args, views_settings)
 
     # Resolve --children ref before running list_artifacts.

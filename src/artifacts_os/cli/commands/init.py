@@ -654,6 +654,15 @@ def register(subparsers) -> None:
 def run(args) -> int:  # no registry — called before vault setup
     import datetime
 
+    # Spec s0034 §7.3: emit a courtesy note when --config is given alongside
+    # init — the flag has no effect on init, which always writes artifacts.yaml.
+    if getattr(args, "config", None) is not None:
+        print(
+            "note: --config is ignored by `artifacts init`\n"
+            "      (init always writes artifacts.yaml at the target directory)",
+            file=sys.stderr,
+        )
+
     target = Path(args.directory).resolve()
 
     # ── Validate target directory ──────────────────────────────

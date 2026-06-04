@@ -54,6 +54,23 @@ print(settings.raw.get("views"))   # raw views section, or None
 
 ---
 
+## CLI override — `--config`
+
+`artifacts --config <ref>` overrides settings discovery for a single
+invocation. `<ref>` is either a path (`./custom.yaml`, `/etc/foo.yaml`)
+— used directly, no walk-up — or a basename (`openstation.yaml`) —
+walked up from CWD like the default `artifacts.yaml` marker.
+
+The flag has no effect on `artifacts init`, which always writes
+`artifacts.yaml` at the target directory. Custom-named markers are owned
+by the host application (e.g. openstation's own init flow writes
+`openstation.yaml`); `artifacts` only *reads* them.
+
+See [s0034-artifacts-cli-config-flag](../artifacts/specs/s0034-artifacts-cli-config-flag.md)
+for the full contract.
+
+---
+
 ## Extension Pattern
 
 Modules that own their own settings section subclass `Settings` and add a

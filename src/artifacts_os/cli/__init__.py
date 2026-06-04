@@ -24,6 +24,11 @@ from artifacts_os.core import (
     ValidationError,
 )
 from artifacts_os.core.errors import BlockedByPreHook
+from artifacts_os.cli._config import (
+    SettingsRef,
+    ConfigRefError,
+    _resolve_settings_path,
+)
 from artifacts_os.cli.commands import list as _list_cmd
 from artifacts_os.cli.commands import show as _show_cmd
 from artifacts_os.cli.commands import create as _create_cmd
@@ -46,8 +51,8 @@ from artifacts_os.cli.settings import CliSettings, DEFAULT_ALIASES
 _registered_kinds: list[KindDef] = []
 
 
-def _load_views_settings(root) -> "ViewsSettings | None":
-    """Try to load ViewsSettings from the vault at *root*.
+def _load_views_settings(settings_path: Path) -> "ViewsSettings | None":
+    """Try to load ViewsSettings from *settings_path*.
 
     Returns ``None`` on YAML / IO errors so callers can proceed without views
     config.  ``ValueError`` (e.g. a view entry missing the required ``columns``
@@ -57,9 +62,7 @@ def _load_views_settings(root) -> "ViewsSettings | None":
     cost.
     """
     try:
-        from pathlib import Path
         from artifacts_os.views.models import ViewsSettings
-        settings_path = Path(root) / "artifacts.yaml"
         base = load_settings(settings_path)
         return ViewsSettings.from_base(base)
     except ValueError:
@@ -68,14 +71,12 @@ def _load_views_settings(root) -> "ViewsSettings | None":
         return None
 
 
-def _load_cli_settings(root) -> CliSettings | None:
-    """Try to load CliSettings from the vault at *root*.
+def _load_cli_settings(settings_path: Path) -> CliSettings | None:
+    """Try to load CliSettings from *settings_path*.
 
     Returns ``None`` on any error so callers can proceed without settings.
     """
     try:
-        from pathlib import Path
-        settings_path = Path(root) / "artifacts.yaml"
         base = load_settings(settings_path)
         return CliSettings.from_base(base)
     except Exception:
@@ -232,6 +233,16 @@ def _build_parser(
         version=f"artifacts {__version__}",
         help="show program version and exit",
     )
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="<ref>",
+        help=(
+            "settings file path or basename to look up by walking parents of "
+            "CWD (default: walk up for artifacts.yaml). Has no effect on "
+            "`artifacts init`."
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
 
@@ -261,12 +272,49 @@ def _build_parser(
 
 
 def _run(argv: Sequence[str]) -> int:
+    import argparse
+
     argv = list(argv)
+
+    # Phase 0 — extract --config <ref> from argv before alias resolution and
+    # subcommand peek-parsers.  allow_abbrev=False prevents "--config-key=x"
+    # from being greedily matched as "--config".  Spec: s0034 §7.1.
+    def _nonempty_config(value: str) -> str:
+        if not value:
+            raise argparse.ArgumentTypeError("expected non-empty value")
+        return value
+
+    pre = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    pre.add_argument("--config", default=None, type=_nonempty_config)
+    known, argv = pre.parse_known_args(argv)
+    config_ref: str | None = known.config
+
+    # Detect `init` from the remaining argv: the first non-flag positional is
+    # the subcommand.  `init` is a pre-registry command that runs before vault
+    # setup — resolving --config for it would error on missing files even though
+    # the flag has no effect on init (spec s0034 §7.3, D7).
+    _first_positional = next(
+        (a for a in argv if not a.startswith("-")), None
+    )
+    _is_init = _first_positional == "init"
+
+    ref: SettingsRef | None
+    if _is_init:
+        # Skip resolution entirely; init doesn't consult the settings path.
+        ref = None
+    else:
+        try:
+            ref = _resolve_settings_path(config_ref=config_ref, cwd=Path.cwd())
+        except ConfigRefError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    root: Path | None = ref.root if ref is not None else None
+    settings_path: Path | None = ref.settings_path if ref is not None else None
 
     # Find vault root early so aliases can be applied before argparse sees argv.
     # Built-in DEFAULT_ALIASES are always active; vault-level aliases override per key.
-    root = find_vault_root()
-    cli_settings = _load_cli_settings(root) if root is not None else None
+    cli_settings = _load_cli_settings(settings_path) if settings_path is not None else None
     vault_aliases = cli_settings.aliases if cli_settings is not None else {}
     argv = _apply_aliases(argv, {**DEFAULT_ALIASES, **vault_aliases})
 
@@ -295,6 +343,11 @@ def _run(argv: Sequence[str]) -> int:
     )
     args = parser.parse_args(argv)
     args.cli_settings = cli_settings
+    # Thread the resolved settings path and original config_ref through args
+    # so that commands can load settings from the correct file and the init
+    # command can emit the carve-out note (spec s0034 §7.1, §7.3, §8).
+    args.settings_path = settings_path
+    args.config = config_ref
 
     try:
         # Pre-registry commands (e.g. init) run before vault/registry setup.

@@ -3,3 +3,8 @@
 {"ts":"2026-06-01T10:31:16.192247+03:00","event":"run_started","task":"t0193-reorient-spec-skeleton-around-implementation","agent":"project-manager","run_id":"r0211","mode":"verify","context_only":false,"detached":true}
 {"ts":"2026-06-01T10:33:27.400000+03:00","event":"status_transition","task":"t0193-reorient-spec-skeleton-around-implementation","old_status":"review","new_status":"verified","forced":false}
 {"ts":"2026-06-01T10:33:47.378208+03:00","event":"run_complete","task":"t0193-reorient-spec-skeleton-around-implementation","agent":"","run_id":"r0211","run_status":"complete","cost":"0.76","turns":19}
+{"ts":"2026-06-01T21:05:41.422466+03:00","event":"status_transition","task":"t0198-support-config-flag-on-cli","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-06-01T22:48:08.757012+03:00","event":"run_started","task":"t0198-support-config-flag-on-cli","agent":"architect","run_id":"r0212","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-06-01T22:49:00.186880+03:00","event":"status_transition","task":"t0198-support-config-flag-on-cli","old_status":"ready","new_status":"in-progress","forced":false}
+{"ts":"2026-06-01T22:54:37.808365+03:00","event":"task_created","task":"t0199-implement-artifacts-cli-config-flag","status":"backlog","assignee":"developer","parent":"t0198-support-config-flag-on-cli"}
+{"ts":"2026-06-01T22:55:53.262990+03:00","event":"run_complete","task":"t0198-support-config-flag-on-cli","agent":"architect","run_id":"r0212","run_status":"failed","cost":"2.52","turns":45}
