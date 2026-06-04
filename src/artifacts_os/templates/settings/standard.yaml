@@ -20,9 +20,9 @@ views:
   task-docs:       { columns: "id,name,status,assignee", filters: { kind: task, type: documentation },  sort: -created }
 
   # per-kind landing views
-  spec:     { columns: "id,name,status,created:date", filters: { kind: spec },     sort: -created }
+  specs:    { columns: "id,name,status,created:date", filters: { kind: spec },     sort: -created }
   research: { columns: "id,name,status,created:date", filters: { kind: research }, sort: -created }
-  note:     { columns: "id,name,type,created:date",   filters: { kind: note },     sort: -created }
+  notes:    { columns: "id,name,type,created:date",   filters: { kind: note },     sort: -created }
   agents:   { columns: "name,description",            filters: { kind: agent },    sort: name }
 
   # cross-kind utility
@@ -30,7 +30,7 @@ views:
 
 default_views:
   task: ready
-  spec: spec
+  spec: specs
   research: research
   agent: agents
-  note: note
+  note: notes
