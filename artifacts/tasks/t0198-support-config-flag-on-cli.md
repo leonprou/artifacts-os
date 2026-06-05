@@ -5,7 +5,7 @@ id: t0198
 kind: task
 name: support-config-flag-on-cli
 owner: user
-status: in-progress
+status: review
 type: feature
 started: 2026-06-01
 subtasks:

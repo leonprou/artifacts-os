@@ -3,11 +3,13 @@ kind: task
 id: t0199
 name: implement-artifacts-cli-config-flag
 type: feature
-status: backlog
+status: done
 assignee: developer
 owner: user
 parent: "[[t0198-support-config-flag-on-cli]]"
 created: 2026-06-01
+started: 2026-06-05
+completed: 2026-06-05
 ---
 
 # Implement `artifacts --config <ref>` CLI flag
