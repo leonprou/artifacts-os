@@ -5,13 +5,14 @@ id: t0198
 kind: task
 name: support-config-flag-on-cli
 owner: user
-status: review
+status: done
 type: feature
 started: 2026-06-01
 subtasks:
   - "[[t0199-implement-artifacts-cli-config-flag]]"
 artifacts:
   - "[[openstation/specs/s0034-artifacts-cli-config-flag]]"
+completed: 2026-06-05
 ---
 
 # Support `--config` flag on `artifacts` CLI to override settings discovery
