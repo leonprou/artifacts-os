@@ -19,3 +19,8 @@ views:
     columns: id,name,assignee,completed:date
     filters: { kind: task, status: done }
     sort: -completed
+
+cli:
+  defaults:
+    show:
+      editor: true   # behave as if -e were always passed to show
