@@ -11,6 +11,7 @@ Covers:
 import json
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -110,7 +111,8 @@ def test_show_editor_default_opens_editor(vault, write_artifact, monkeypatch):
     monkeypatch.setenv("EDITOR", "testedit")
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: calls.append(cmd))
 
-    main(["show", "t0001"])
+    with patch("artifacts_os.cli.commands.show._is_interactive", return_value=True):
+        main(["show", "t0001"])
     assert calls, "subprocess.run should have been called"
     assert calls[0][0] == "testedit"
 
@@ -131,7 +133,7 @@ def test_show_explicit_editor_flag_opens_editor(vault, write_artifact, monkeypat
 
 
 def test_show_json_overrides_editor_default(vault, write_artifact, capsys, monkeypatch):
-    """Explicit -j overrides cli.defaults.show.editor: true."""
+    """Explicit -j overrides cli.defaults.show.editor: true, even on interactive TTY."""
     (vault / "artifacts.yaml").write_text(
         "layout_version: 1\nproject:\n  name: test\n"
         "cli:\n  defaults:\n    show:\n      editor: true\n"
@@ -144,7 +146,8 @@ def test_show_json_overrides_editor_default(vault, write_artifact, capsys, monke
     calls: list = []
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: calls.append(cmd))
 
-    main(["show", "t0001", "-j"])
+    with patch("artifacts_os.cli.commands.show._is_interactive", return_value=True):
+        main(["show", "t0001", "-j"])
 
     assert calls == [], "subprocess.run must not be called when -j is passed"
     data = json.loads(capsys.readouterr().out)

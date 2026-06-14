@@ -79,14 +79,15 @@ def run(args, registry: Registry) -> int:
         return 0
 
     # editor mode: explicit -e flag, or default from cli settings (unless -j was given).
+    # Built-in default is True — show opens the file in $EDITOR on any interactive TTY.
+    # The config key cli.defaults.show.editor is now an opt-out (set to false to suppress).
     # The settings-driven default is suppressed in non-interactive / agent contexts
     # so that agents always receive artifact content on stdout.
     open_editor = args.editor
     if not open_editor and _is_interactive():
         cli_settings = getattr(args, "cli_settings", None)
-        if cli_settings is not None:
-            show_defaults = cli_settings.defaults.get("show") or {}
-            open_editor = bool(show_defaults.get("editor", False))
+        show_defaults = (cli_settings.defaults.get("show") or {}) if cli_settings is not None else {}
+        open_editor = bool(show_defaults.get("editor", True))
 
     if open_editor:
         editor = os.environ.get("EDITOR", "vi")

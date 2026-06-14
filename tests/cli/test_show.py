@@ -125,7 +125,7 @@ def test_show_editor_default_suppressed_when_not_tty(
 def test_show_editor_default_fires_in_interactive_context(
     vault, write_artifact, monkeypatch
 ):
-    """Interactive context + editor default → subprocess.run is called."""
+    """Interactive context + editor default (via yaml) → subprocess.run is called."""
     write_artifact(vault, "tasks", "t0005-interactive.md",
                    {"kind": "task", "id": "t0005", "name": "t0005-interactive",
                     "status": "ready"},
@@ -138,6 +138,49 @@ def test_show_editor_default_fires_in_interactive_context(
         main(["show", "t0005-interactive"])
         mock_run.assert_called_once()
         assert "t0005-interactive.md" in str(mock_run.call_args)
+
+
+def test_show_built_in_default_opens_editor_no_config(
+    vault, write_artifact, monkeypatch
+):
+    """Built-in default (no cli: block in yaml) opens editor in interactive context."""
+    write_artifact(vault, "tasks", "t0005b-builtin.md",
+                   {"kind": "task", "id": "t0005b", "name": "t0005b-builtin",
+                    "status": "ready"},
+                   body="built-in body")
+    # No cli: section written — relying on the built-in True default.
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+
+    with patch("artifacts_os.cli.commands.show._is_interactive", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        main(["show", "t0005b-builtin"])
+        mock_run.assert_called_once()
+        assert "t0005b-builtin.md" in str(mock_run.call_args)
+
+
+def test_show_config_editor_false_suppresses_default(
+    vault, write_artifact, capsys, monkeypatch
+):
+    """cli.defaults.show.editor: false in yaml overrides the built-in True default."""
+    write_artifact(vault, "tasks", "t0005c-optout.md",
+                   {"kind": "task", "id": "t0005c", "name": "t0005c-optout",
+                    "status": "ready"},
+                   body="opt-out body")
+    # Explicitly disable editor via config.
+    (vault / "artifacts.yaml").write_text(
+        "layout_version: 1\n"
+        "project:\n  name: test\n"
+        "cli:\n  defaults:\n    show:\n      editor: false\n"
+    )
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+
+    with patch("artifacts_os.cli.commands.show._is_interactive", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        main(["show", "t0005c-optout"])
+        mock_run.assert_not_called()
+
+    out = capsys.readouterr().out
+    assert "t0005c-optout" in out
 
 
 def test_show_explicit_editor_flag_always_opens_editor(

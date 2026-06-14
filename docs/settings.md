@@ -586,6 +586,32 @@ schema changes in a backward-incompatible way.
 
 ---
 
+## CLI Section
+
+The `cli` top-level key configures per-command defaults and command aliases.
+Full reference: [`src/artifacts_os/cli/README.md`](../src/artifacts_os/cli/README.md).
+
+### `cli.defaults.show.editor`
+
+**Built-in default: `true`.**
+
+`artifacts show` opens the artifact file in `$EDITOR` on any interactive TTY
+without any configuration. Set this key to `false` to opt out vault-wide:
+
+```yaml
+cli:
+  defaults:
+    show:
+      editor: false   # restore plain-text rendering
+```
+
+The built-in default is suppressed automatically in non-interactive contexts
+(piped output, `CLAUDECODE` agent runtime) so machine callers always receive
+artifact content on stdout. The explicit `-j` flag always produces JSON
+regardless of this setting.
+
+---
+
 ## Cross-References
 
 - Architecture overview — [architecture.md](architecture.md)

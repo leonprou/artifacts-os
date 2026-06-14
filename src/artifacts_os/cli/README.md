@@ -469,11 +469,15 @@ artifacts show <ref> [--kind KIND] [-j | -e]
 Displays the artifact's metadata and body. Use `<ref>` as a full name,
 numeric ID, or partial slug.
 
+On an interactive TTY, `show` opens the file in `$EDITOR` by default (built-in
+default). Use `-j` to get JSON output, or set `cli.defaults.show.editor: false`
+in `artifacts.yaml` to restore plain-text rendering vault-wide.
+
 | Flag | Description |
 |------|-------------|
 | `--kind KIND`, `-k` | Narrow resolution when the ref is ambiguous |
 | `-j`, `--json` | JSON object with all fields plus the body |
-| `-e`, `--editor` | Open the file in `$EDITOR` |
+| `-e`, `--editor` | Open the file in `$EDITOR` (explicit; works even in non-interactive contexts) |
 
 **Examples:**
 
@@ -1408,16 +1412,23 @@ if the key is absent entirely, the CLI behaves as if neither were configured.
 cli:
   defaults:
     show:
-      editor: true   # behave as if -e were always passed to `show`
+      editor: false   # opt out of the built-in editor default for `show`
 ```
 
-| Setting | Type | Effect |
-|---------|------|--------|
-| `cli.defaults.show.editor` | bool | Open `$EDITOR` automatically on `show`, unless `-j` is also passed. |
-| `cli.defaults.create.kind` | string | Default artifact kind for `create` when `--kind` is not passed (e.g. `note`). Falls back to `task` when absent. |
+| Setting | Type | Default | Effect |
+|---------|------|---------|--------|
+| `cli.defaults.show.editor` | bool | `true` (built-in) | Open `$EDITOR` automatically on `show` unless `-j` is passed. Set to `false` to disable. |
+| `cli.defaults.create.kind` | string | `task` | Default artifact kind for `create` when `--kind` is not passed (e.g. `note`). |
+
+**`show` opens in `$EDITOR` by default** on any interactive TTY — no configuration
+required. The `cli.defaults.show.editor` key is an **opt-out**: set it to `false`
+in `artifacts.yaml` to restore the plain-text rendering. Setting it to `true` is
+a no-op (that is already the built-in behaviour).
 
 Explicit flags always take precedence over defaults. Passing `-j` to `show`
-prints JSON regardless of the `editor` default.
+prints JSON regardless of the `editor` setting. The editor default is also
+suppressed automatically in non-interactive contexts (pipes, `CLAUDECODE` agent
+runtime) so that machine callers always receive artifact content on stdout.
 
 ### Command aliases
 
@@ -1469,7 +1480,7 @@ project:
 cli:
   defaults:
     show:
-      editor: true
+      editor: false  # built-in default is true; set false to opt out
     create:
       kind: note   # `artifacts create "…"` creates a note by default
   aliases:
