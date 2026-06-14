@@ -178,12 +178,12 @@ def create(
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
 
     fm_dict: dict = {"kind": kind, "id": aid, "name": slug, **fields}
-    _validate_schema(kd, fm_dict)
 
-    # Pre-phase dispatch — fires BEFORE content is written to disk.
-    # If a blocking pre-hook raises BlockedByPreHook, clean up the
-    # reserved (empty) file and propagate.
+    # Validate and dispatch pre-phase hooks BEFORE writing content.
+    # Any failure after os.open() must close the fd and unlink the
+    # reserved (empty) file so no 0-byte orphan is left on disk.
     try:
+        _validate_schema(kd, fm_dict)
         _events._dispatch_pre(
             "artifact.created",
             kind=kind,

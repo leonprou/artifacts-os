@@ -261,10 +261,12 @@ def _read_body(args) -> str:
     if args.body_file is not None:
         if args.body_file == "-":
             return sys.stdin.read()
-        path = Path(args.body_file)
-        if not path.exists():
-            raise ValueError(f"--body-file: file not found: {args.body_file!r}")
-        return path.read_text(encoding="utf-8")
+        try:
+            return Path(args.body_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(
+                f"--body-file: cannot read {args.body_file!r}: {exc.strerror}"
+            ) from exc
     return args.body or ""
 
 

@@ -69,6 +69,33 @@ def test_create_schema_validation_fails(tmp_path: Path) -> None:
         create(registry, "task", "No priority field")
 
 
+def test_create_schema_validation_leaves_no_orphan(tmp_path: Path) -> None:
+    """A ValidationError during create must not leave a 0-byte file on disk."""
+    root = tmp_path / "vault"
+    tasks_dir = root / "artifacts" / "tasks"
+    tasks_dir.mkdir(parents=True)
+    (root / "artifacts.yaml").write_text("layout_version: 1\n")
+    kinds = [
+        KindDef(
+            name="task",
+            dir="tasks",
+            prefix="t",
+            numbered=True,
+            schema={
+                "type": "object",
+                "required": ["priority"],
+                "properties": {"priority": {"type": "string"}},
+                "additionalProperties": True,
+            },
+        )
+    ]
+    registry = Registry(kinds, root=root)
+    with pytest.raises(ValidationError):
+        create(registry, "task", "No priority field")
+    # No orphan file should remain.
+    assert list(tasks_dir.iterdir()) == []
+
+
 def test_get_reads_body_and_title(make_vault) -> None:
     _, registry = make_vault()
     a = create(

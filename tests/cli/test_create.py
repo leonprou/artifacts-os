@@ -115,6 +115,22 @@ def test_body_and_body_file_are_mutually_exclusive(vault, capsys):
     assert exc.value.code != 0
 
 
+def test_body_file_unreadable_exits_nonzero_no_orphan(vault, capsys, tmp_path):
+    """An unreadable --body-file yields non-zero exit and leaves no artifact."""
+    body_file = tmp_path / "secret.md"
+    body_file.write_text("secret content")
+    body_file.chmod(0o000)
+    try:
+        with pytest.raises(SystemExit) as exc:
+            main(["create", "Task", "--body-file", str(body_file)])
+        assert exc.value.code != 0
+        assert "error:" in capsys.readouterr().err
+        # No artifact file should have been created.
+        assert not list((vault / "artifacts" / "tasks").glob("*.md"))
+    finally:
+        body_file.chmod(0o644)  # restore so tmp_path cleanup works
+
+
 # ---------------------------------------------------------------------------
 # Convenience flags
 # ---------------------------------------------------------------------------
