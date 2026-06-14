@@ -10,8 +10,18 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 from artifacts_os.core import frontmatter as _frontmatter
 from artifacts_os.core.errors import AmbiguousError, NotFoundError, ValidationError
+
+
+def _yaml_parse_error(path: Path, exc: "yaml.YAMLError") -> str:
+    """Return a single-line error message for a YAML parse failure."""
+    problem = getattr(exc, "problem", None) or str(exc).splitlines()[0]
+    mark = getattr(exc, "problem_mark", None)
+    loc = f" (line {mark.line + 1}, col {mark.column + 1})" if mark else ""
+    return f"{path}: {problem}{loc}"
 from artifacts_os.core.models import ArtifactMeta, KindDef
 
 if TYPE_CHECKING:
@@ -49,7 +59,10 @@ def _meta_from_file(path: Path) -> ArtifactMeta:
     poisoning the whole vault walk.
     """
     text = path.read_text(encoding="utf-8")
-    fm, _ = _frontmatter.parse(text)
+    try:
+        fm, _ = _frontmatter.parse(text)
+    except yaml.YAMLError as exc:
+        raise ValidationError(_yaml_parse_error(path, exc)) from exc
     name = fm.get("name", path.stem)
     tags = fm.get("tags", []) or []
     return ArtifactMeta(

@@ -173,3 +173,100 @@ def test_show_explicit_json_flag_overrides_editor_default(
     out = capsys.readouterr().out
     data = json.loads(out)
     assert data["name"] == "t0007-json"
+
+
+# ---------------------------------------------------------------------------
+# Malformed frontmatter — t0210
+# ---------------------------------------------------------------------------
+
+_MALFORMED_AGENT = (
+    "---\n"
+    "kind: agent\n"
+    "id: broken-agent\n"
+    "name: broken-agent\n"
+    "description: >- inline content on block-scalar line\n"
+    "---\n"
+    "body\n"
+)
+
+
+def _write_malformed_agent(vault):
+    path = vault / "artifacts" / "agents" / "broken-agent.md"
+    path.write_text(_MALFORMED_AGENT)
+    return path
+
+
+def test_show_malformed_frontmatter_exits_2(vault, capsys):
+    """show on malformed YAML: exit 2, single-line stderr error, no traceback."""
+    _write_malformed_agent(vault)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["show", "broken-agent", "--kind", "agent"])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    err_lines = [l for l in captured.err.splitlines() if l.strip()]
+    assert len(err_lines) == 1
+    assert err_lines[0].startswith("error:")
+    assert "broken-agent" in err_lines[0]
+    # No Python traceback frames.
+    assert "Traceback" not in captured.err
+    assert "yaml.scanner" not in captured.err
+
+
+def test_show_malformed_frontmatter_json_flag_exits_2(vault, capsys):
+    """show --json on malformed YAML: exit 2, single-line stderr, no traceback."""
+    _write_malformed_agent(vault)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["show", "broken-agent", "--kind", "agent", "-j"])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    err_lines = [l for l in captured.err.splitlines() if l.strip()]
+    assert len(err_lines) == 1
+    assert err_lines[0].startswith("error:")
+    assert "Traceback" not in captured.err
+
+
+def test_show_malformed_frontmatter_editor_flag_exits_2(vault, capsys, monkeypatch):
+    """show -e on malformed YAML: exit 2, single-line stderr, no traceback."""
+    _write_malformed_agent(vault)
+    monkeypatch.setenv("CLAUDECODE", "1")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["show", "broken-agent", "--kind", "agent", "-e"])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "error:" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_show_malformed_frontmatter_claudecode_env_exits_2(vault, capsys, monkeypatch):
+    """show with CLAUDECODE=1 on malformed YAML: exit 2, single-line stderr, no traceback."""
+    _write_malformed_agent(vault)
+    monkeypatch.setenv("CLAUDECODE", "1")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["show", "broken-agent", "--kind", "agent"])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "error:" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_list_malformed_frontmatter_skips_with_warning(vault, capsys):
+    """list --kind agent with malformed file: skips it, exits 0, emits warning."""
+    _write_malformed_agent(vault)
+    # Write a valid agent too so list has something to show.
+    from artifacts_os.core import frontmatter as _fm
+    good = vault / "artifacts" / "agents" / "good-agent.md"
+    good.write_text(_fm.dump({"kind": "agent", "id": "good-agent", "name": "good-agent"}, ""))
+
+    main(["list", "--kind", "agent"])
+    captured = capsys.readouterr()
+    assert "warning" in captured.err
+    assert "broken-agent" in captured.err
+    assert "good-agent" in captured.out

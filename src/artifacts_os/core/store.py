@@ -6,15 +6,22 @@ Spec: s2060-artifacts-os-architecture § store.py
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import jsonschema
-
-from typing import Any
+import yaml
 
 from artifacts_os.core import frontmatter as _frontmatter
 from artifacts_os.core import events as _events
 from artifacts_os.core.errors import ValidationError
+
+
+def _yaml_parse_error(path: Path, exc: "yaml.YAMLError") -> str:
+    """Return a single-line error message for a YAML parse failure."""
+    problem = getattr(exc, "problem", None) or str(exc).splitlines()[0]
+    mark = getattr(exc, "problem_mark", None)
+    loc = f" (line {mark.line + 1}, col {mark.column + 1})" if mark else ""
+    return f"{path}: {problem}{loc}"
 from artifacts_os.core.ids import next_prefixed_id, slugify
 from artifacts_os.core.models import Artifact, ArtifactMeta, KindDef
 from artifacts_os.core.transitions import check_create, check_transition
@@ -232,7 +239,10 @@ def get(
 
     path = resolve(registry, ref, kind=kind)
     text = path.read_text(encoding="utf-8")
-    meta, body = _frontmatter.parse(text)
+    try:
+        meta, body = _frontmatter.parse(text)
+    except yaml.YAMLError as exc:
+        raise ValidationError(_yaml_parse_error(path, exc)) from exc
     return _build_artifact(path, meta, body)
 
 
@@ -249,7 +259,10 @@ def update(
     fields = fields or {}
     path = resolve(registry, ref)
     text = path.read_text(encoding="utf-8")
-    meta, body = _frontmatter.parse(text)
+    try:
+        meta, body = _frontmatter.parse(text)
+    except yaml.YAMLError as exc:
+        raise ValidationError(_yaml_parse_error(path, exc)) from exc
 
     kind = meta.get("kind")
     if not kind:

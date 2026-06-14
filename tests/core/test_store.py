@@ -377,3 +377,50 @@ def test_set_prop_preserves_body(make_vault) -> None:
     set_prop(registry, a.id, "status", "ready")
     text = a.path.read_text(encoding="utf-8")
     assert "Keep me verbatim." in text
+
+
+# ---------------------------------------------------------------------------
+# Malformed frontmatter — t0210
+# ---------------------------------------------------------------------------
+
+_MALFORMED_FM = (
+    "---\n"
+    "kind: task\n"
+    "id: bad\n"
+    "name: bad\n"
+    "description: >- inline content on block-scalar line\n"
+    "---\n"
+    "body text\n"
+)
+
+
+def test_get_malformed_frontmatter_raises_validation_error(make_vault) -> None:
+    """core.get() on a file with invalid YAML raises ValidationError, not yaml.YAMLError."""
+    import yaml as _yaml
+
+    root, registry = make_vault()
+    bad_path = root / "artifacts" / "tasks" / "bad.md"
+    bad_path.write_text(_MALFORMED_FM)
+
+    with pytest.raises(ValidationError) as exc_info:
+        get(registry, "bad")
+
+    # Path must appear in the error message.
+    assert "bad.md" in str(exc_info.value)
+    # Must NOT be a raw YAMLError leaking through.
+    assert not isinstance(exc_info.value, _yaml.YAMLError)
+
+
+def test_update_malformed_frontmatter_raises_validation_error(make_vault) -> None:
+    """core.update() on a file with invalid YAML raises ValidationError, not yaml.YAMLError."""
+    import yaml as _yaml
+
+    root, registry = make_vault()
+    bad_path = root / "artifacts" / "tasks" / "bad2.md"
+    bad_path.write_text(_MALFORMED_FM.replace("id: bad\nname: bad\n", "id: bad2\nname: bad2\n"))
+
+    with pytest.raises(ValidationError) as exc_info:
+        update(registry, "bad2", status="ready")
+
+    assert "bad2.md" in str(exc_info.value)
+    assert not isinstance(exc_info.value, _yaml.YAMLError)

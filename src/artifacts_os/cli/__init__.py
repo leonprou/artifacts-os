@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+import yaml
+
 from artifacts_os.core import (
     __version__,
     find_vault_root,
@@ -381,6 +383,9 @@ def _run(argv: Sequence[str]) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except yaml.YAMLError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main(argv: Sequence[str] | None = None) -> None:
