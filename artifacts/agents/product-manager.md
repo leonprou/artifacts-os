@@ -4,7 +4,10 @@ name: product-manager
 alias: pdm
 aliases:
   - prd
-description: >- Product manager — hands-on user-story authoring, feature-task creation, strategy, and roadmap. Owns the inbound pipeline that fills the backlog.
+description: >-
+  Product manager — hands-on user-story authoring, feature-task
+  creation, strategy, and roadmap. Owns the inbound pipeline that
+  fills the backlog.
 model: claude-opus-4-7
 skills:
   - openstation-execute
