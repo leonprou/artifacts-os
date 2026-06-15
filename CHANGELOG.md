@@ -1,12 +1,40 @@
 # Changelog
 
-## Unreleased
+## v0.6.0
+
+Sixth release of **artifacts-os**. Headline changes: a new
+`artifacts --config <ref>` flag for per-invocation settings overrides,
+`show.editor` flipped to default-on so `artifacts show <id>` opens the
+artifact in `$EDITOR` without any configuration, and several
+correctness fixes around YAML parsing and atomic create.
 
 ### CLI
 
-- `artifacts --config <ref>` overrides settings-file discovery for the
-  current invocation. Accepts a path or a basename; does not affect
-  `artifacts init`. See docs/settings.md § "CLI override".
+- **`artifacts --config <ref>` settings override (s0034, t0198, t0199)** —
+  Overrides settings-file discovery for the current invocation. Accepts
+  a path (used directly) or a basename (walked up from CWD like the
+  default `artifacts.yaml` marker), and threads the resolved settings
+  path through to subcommands. Does not affect `artifacts init`. See
+  docs/settings.md § "CLI override".
+- **`show.editor` default flipped to true (t0213)** — `artifacts show
+  <id>` now opens the artifact in `$EDITOR` by default on any
+  interactive TTY. Set `cli.defaults.show.editor: false` to opt out.
+  Existing precedence is unchanged: `-j` forces JSON, `-e` forces
+  editor, and the non-TTY / `CLAUDECODE` guard downgrades to text.
+  Init templates ship the new default so new vaults pick it up.
+
+### Fix
+
+- **Atomic create no longer leaves 0-byte orphans (t0208)** — when the
+  body write fails after the file descriptor opens, `create` unlinks
+  the partial file instead of leaving an empty artifact on disk.
+- **YAML parse errors normalized on single-file load (t0210)** —
+  `discover.resolve()` and `store.load()` now wrap raw `yaml.YAMLError`
+  exceptions in `ValidationError`, so callers see the same error type
+  for malformed frontmatter regardless of entry point.
+- **Per-kind landing view names pluralized in `standard.yaml`** —
+  template now ships plural names that match `artifacts list` table
+  headings.
 
 ## v0.5.0
 
