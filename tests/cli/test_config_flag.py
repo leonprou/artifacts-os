@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 
 from artifacts_os.cli import _run, main
-from tests.cli.conftest import make_vault_with_marker
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -28,7 +27,7 @@ def _write_task(root: Path, name: str = "t0001-hello.md") -> None:
 # ── Test 1: --config <abs-path> resolves explicit path ─────────────────────
 
 
-def test_config_abs_path(tmp_path, monkeypatch, capsys):
+def test_config_abs_path(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """--config <abs-path> resolves a vault outside CWD."""
     vault = make_vault_with_marker(tmp_path)
     other = tmp_path / "other"
@@ -43,7 +42,7 @@ def test_config_abs_path(tmp_path, monkeypatch, capsys):
 # ── Test 2: --config ./<rel-path> resolves relative path ───────────────────
 
 
-def test_config_rel_path(tmp_path, monkeypatch, capsys):
+def test_config_rel_path(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """--config ./<rel-path> resolves a relative path from CWD."""
     vault = make_vault_with_marker(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -57,7 +56,7 @@ def test_config_rel_path(tmp_path, monkeypatch, capsys):
 # ── Test 3: --config <basename> walks up ───────────────────────────────────
 
 
-def test_config_basename_walks_up(tmp_path, monkeypatch, capsys):
+def test_config_basename_walks_up(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """Basename form walks up from CWD and finds the custom-named marker."""
     vault = make_vault_with_marker(tmp_path, marker="openstation.yaml")
     deep = vault / "a" / "b"
@@ -121,7 +120,7 @@ def test_config_empty_string_exits_2(tmp_path, monkeypatch, capsys):
 # ── Test 7: symmetric position ─────────────────────────────────────────────
 
 
-def test_config_symmetric_position(tmp_path, monkeypatch, capsys):
+def test_config_symmetric_position(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """``--config`` before verb and after verb produce identical output."""
     vault = make_vault_with_marker(tmp_path)
     _write_task(vault)
@@ -157,7 +156,7 @@ def test_config_symmetric_position(tmp_path, monkeypatch, capsys):
     # create succeeds (exit 0)
     (["create", "test artifact"], {0}),
 ])
-def test_config_verb_coverage(verb_args, expected_codes, tmp_path, monkeypatch, capsys):
+def test_config_verb_coverage(verb_args, expected_codes, tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """Each verb honours ``--config`` — vault resolution works for all verbs."""
     vault = make_vault_with_marker(tmp_path)
     other = tmp_path / "other"
@@ -195,7 +194,7 @@ def test_config_init_carve_out(tmp_path, monkeypatch, capsys):
 # ── Test 10: default behaviour unchanged ───────────────────────────────────
 
 
-def test_default_behaviour_unchanged(tmp_path, monkeypatch, capsys):
+def test_default_behaviour_unchanged(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """Without ``--config``, discovery from CWD still works."""
     vault = make_vault_with_marker(tmp_path)
     monkeypatch.chdir(vault)
@@ -223,7 +222,7 @@ def test_default_no_vault(tmp_path, monkeypatch, capsys):
 # ── Test 12: custom-basename vault ─────────────────────────────────────────
 
 
-def test_custom_basename_vault(tmp_path, monkeypatch, capsys):
+def test_custom_basename_vault(tmp_path, monkeypatch, capsys, make_vault_with_marker):
     """A vault with only ``openstation.yaml`` works under ``--config`` and
     fails under bare ``artifacts list`` (regression for the carve-out)."""
     vault = make_vault_with_marker(tmp_path, marker="openstation.yaml")
