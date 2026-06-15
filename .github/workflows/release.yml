@@ -149,33 +149,36 @@ jobs:
           files: dist/*
 
   # ── Job 4: PyPI Publish ───────────────────────────────────────────────────
-  pypi-publish:
-    name: Publish to ${{ needs.check.outputs.is_prerelease == 'true' && 'TestPyPI' || 'PyPI' }}
-    needs: [check, build]
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ needs.check.outputs.is_prerelease == 'true' && 'testpypi' || 'pypi' }}
-      url: >-
-        ${{
-          needs.check.outputs.is_prerelease == 'true'
-          && format('https://test.pypi.org/p/{0}', 'artifacts-os')
-          || format('https://pypi.org/p/{0}', 'artifacts-os')
-        }}
-    permissions:
-      id-token: write   # OIDC Trusted Publishers — no API token needed
-    steps:
-      - name: Download dist
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Publish to PyPI (production)
-        if: needs.check.outputs.is_prerelease == 'false'
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-      - name: Publish to TestPyPI (pre-release)
-        if: needs.check.outputs.is_prerelease == 'true'
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
+  # Disabled: PyPI Trusted Publisher is not yet configured for this project.
+  # Re-enable once the publisher is registered on pypi.org with:
+  #   owner=leonprou, repo=artifacts-os, workflow=release.yml, env=pypi
+  # pypi-publish:
+  #   name: Publish to ${{ needs.check.outputs.is_prerelease == 'true' && 'TestPyPI' || 'PyPI' }}
+  #   needs: [check, build]
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: ${{ needs.check.outputs.is_prerelease == 'true' && 'testpypi' || 'pypi' }}
+  #     url: >-
+  #       ${{
+  #         needs.check.outputs.is_prerelease == 'true'
+  #         && format('https://test.pypi.org/p/{0}', 'artifacts-os')
+  #         || format('https://pypi.org/p/{0}', 'artifacts-os')
+  #       }}
+  #   permissions:
+  #     id-token: write   # OIDC Trusted Publishers — no API token needed
+  #   steps:
+  #     - name: Download dist
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: dist
+  #         path: dist/
+  #
+  #     - name: Publish to PyPI (production)
+  #       if: needs.check.outputs.is_prerelease == 'false'
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #
+  #     - name: Publish to TestPyPI (pre-release)
+  #       if: needs.check.outputs.is_prerelease == 'true'
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         repository-url: https://test.pypi.org/legacy/
