@@ -14,7 +14,7 @@ def test_list_installed_includes_skill_link(vault: Path) -> None:
     assets = list_installed(vault, tool="claude")
 
     skill_assets = [a for a in assets if a.path.name == "SKILL.md"]
-    assert len(skill_assets) == 2
+    assert len(skill_assets) == 1
     for sa in skill_assets:
         assert sa.mode == "link"
         assert sa.source.exists()
@@ -26,7 +26,7 @@ def test_list_installed_includes_skill_copy(vault: Path) -> None:
     assets = list_installed(vault, tool="claude")
 
     skill_assets = [a for a in assets if a.path.name == "SKILL.md"]
-    assert len(skill_assets) == 2
+    assert len(skill_assets) == 1
     for sa in skill_assets:
         assert sa.mode == "copy"
 
@@ -39,7 +39,7 @@ def test_list_installed_skill_alongside_commands(vault: Path) -> None:
     skill_assets = [a for a in assets if a.path.name == "SKILL.md"]
 
     assert len(command_assets) >= 3, "Should report commands"
-    assert len(skill_assets) == 2, "Should report both skills"
+    assert len(skill_assets) == 1, "Should report the artifacts-os skill"
 
 
 def test_list_installed_skill_removed_after_uninstall(vault: Path) -> None:

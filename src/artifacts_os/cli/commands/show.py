@@ -21,7 +21,7 @@ def _is_interactive() -> bool:
     editor) must not fire for non-interactive callers such as agents, CI
     pipelines, or piped shells.
 
-    Detection mirrors openstation's convention:
+    Detection follows the artifact-kind prefix convention:
     - ``CLAUDECODE`` env var is set by the Claude Code agent runtime.
     - A missing stdout TTY covers other non-interactive callers.
     """

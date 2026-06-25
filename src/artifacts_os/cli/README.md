@@ -59,7 +59,7 @@ details on settings and the `--config` override.
 | Flag | Description |
 |------|-------------|
 | `--version`, `-v` | Print the installed version and exit. |
-| `--config <ref>` | Override settings-file discovery for this invocation. `<ref>` is a path (`./custom.yaml`, `/etc/foo.yaml`) or a basename (`openstation.yaml`) walked up from CWD. Has no effect on `artifacts init`. |
+| `--config <ref>` | Override settings-file discovery for this invocation. `<ref>` is a path (`./custom.yaml`, `/etc/foo.yaml`) or a basename (`myapp.yaml`) walked up from CWD. Has no effect on `artifacts init`. |
 
 ---
 

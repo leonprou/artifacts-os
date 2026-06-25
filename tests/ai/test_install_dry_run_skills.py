@@ -20,7 +20,7 @@ def test_dry_run_skill_writes_nothing(vault: Path) -> None:
         a for a in report.actions
         if a.action == "install-link" and a.target.name == "SKILL.md"
     ]
-    assert len(planned) == 2, "dry_run should plan install for both skills"
+    assert len(planned) == 1, "dry_run should plan install for the artifacts-os skill"
 
 
 def test_dry_run_skill_shows_skip_when_already_installed(vault: Path) -> None:
@@ -31,5 +31,5 @@ def test_dry_run_skill_shows_skip_when_already_installed(vault: Path) -> None:
         a for a in report2.actions
         if a.action == "skip" and a.target.name == "SKILL.md"
     ]
-    assert len(skill_skips) == 2
+    assert len(skill_skips) == 1
     assert report2.installed == 0

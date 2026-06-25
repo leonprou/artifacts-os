@@ -1,10 +1,13 @@
-"""Tests for the release-changelog skill and its install behavior.
+"""Tests for release-changelog skill migration.
 
 Covers spec §6 property groups:
 - §6.1  Layer isolation
 - §6.6  Migration / orphan pruning
-- Namespace allowlist widening
-- SKILL.md content verification
+
+The release-changelog skill was relocated out of artifacts-os (it is
+openstation-specific). These tests verify layer isolation is preserved
+and that the orphan-pruning mechanism handles stale artifacts-release
+symlinks left by earlier package versions.
 """
 
 from __future__ import annotations
@@ -74,35 +77,16 @@ def test_uninstall_does_not_write_to_tasks_dir(vault: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Namespace allowlist — release-changelog installs correctly
+# release-changelog relocated — not installed from artifacts-os
 # ---------------------------------------------------------------------------
 
-def test_release_changelog_skill_installed(vault: Path) -> None:
-    """The release-changelog skill directory is installed to the vault."""
-    install(vault, mode="link")
-    skill_path = vault / ".claude" / "skills" / "release-changelog" / "SKILL.md"
-    assert skill_path.is_symlink(), "release-changelog SKILL.md should be a symlink"
-    assert skill_path.resolve().exists(), "release-changelog SKILL.md symlink should resolve"
-
-
-def test_release_changelog_skill_resolves_into_package(vault: Path) -> None:
-    """The release-changelog symlink points into the artifacts_os package tree."""
-    install(vault, mode="link")
-    skill_path = vault / ".claude" / "skills" / "release-changelog" / "SKILL.md"
-    resolved = skill_path.resolve()
-    assert "artifacts_os" in str(resolved), (
-        f"Resolved path {resolved} does not point into the package"
-    )
-    assert resolved.name == "SKILL.md"
-
-
-def test_list_installed_reports_release_changelog(vault: Path) -> None:
-    """list_installed() includes the release-changelog skill."""
+def test_release_changelog_not_installed_from_package(vault: Path) -> None:
+    """release-changelog was relocated out of artifacts-os; install() must not add it."""
     install(vault, mode="link")
     assets = list_installed(vault, tool="claude")
     ns_names = {a.path.parent.name for a in assets if a.path.name == "SKILL.md"}
-    assert "release-changelog" in ns_names, (
-        f"release-changelog not in listed skills; found: {ns_names}"
+    assert "release-changelog" not in ns_names, (
+        "release-changelog should not be installed by artifacts-os (skill relocated)"
     )
 
 
@@ -173,30 +157,3 @@ def test_orphan_pruning_dry_run_does_not_remove(vault: Path) -> None:
     assert len(orphan_actions) == 1
 
 
-# ---------------------------------------------------------------------------
-# SKILL.md content verification
-# ---------------------------------------------------------------------------
-
-def _skill_source() -> Path:
-    import importlib.resources as ir
-    pkg = ir.files("artifacts_os.ai.claude.skills.release-changelog")
-    return Path(str(pkg / "SKILL.md"))
-
-
-def test_skill_frontmatter_name(vault: Path) -> None:
-    """SKILL.md must declare name: release-changelog."""
-    content = _skill_source().read_text()
-    assert "name: release-changelog" in content
-
-
-def test_skill_frontmatter_user_invocable_false(vault: Path) -> None:
-    """SKILL.md must declare user-invocable: false."""
-    content = _skill_source().read_text()
-    assert "user-invocable: false" in content
-
-
-def test_skill_documents_idempotency_check(vault: Path) -> None:
-    """§6.7 — SKILL.md must document the grep idempotency check."""
-    content = _skill_source().read_text()
-    assert "grep -q" in content
-    assert "## v<VERSION>" in content or "^## v<VERSION>" in content

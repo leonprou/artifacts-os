@@ -27,6 +27,23 @@ and lists candidates. Disambiguate with `--kind`:
 artifacts show fix-login --kind task
 ```
 
+## Global flags
+
+These flags sit on the top-level `artifacts` parser and apply to every
+subcommand.
+
+| Flag | Purpose |
+|------|---------|
+| `--version`, `-v` | Print the installed version and exit. |
+| `--config <ref>` | Override settings-file discovery for this one invocation. `<ref>` is a **path** (`./custom.yaml`, `/etc/foo.yaml`) used as-is, or a **basename** (`myapp.yaml`) walked up from CWD like the default `artifacts.yaml` marker. Has **no effect on `artifacts init`**. |
+
+```bash
+# Drive a vault that uses a custom marker name
+artifacts --config myapp.yaml list --kind task
+```
+
+Full contract: `docs/settings.md` § "CLI override".
+
 ## Commands
 
 ### Search / list — `artifacts list`
@@ -259,10 +276,11 @@ left literal.
 artifacts status <ref> <new-status>
 ```
 
-This is the **only CLI command that updates an existing artifact**.
-It changes the `status` frontmatter field; the body is preserved
+Changes the `status` frontmatter field; the body is preserved
 verbatim. The new status must be in the kind's allowed list, otherwise
-the command fails and prints the allowed values.
+the command fails and prints the allowed values. This is the focused,
+ergonomic verb for advancing an artifact's lifecycle state — to write
+any *other* property, use `artifacts set` (below).
 
 ```bash
 artifacts status t0042 in-progress
@@ -274,12 +292,120 @@ Common task statuses: `backlog`, `ready`, `in-progress`, `review`,
 `verified`, `done`, `cancelled`. Run `artifacts status t0042 ?` (any
 invalid value) to surface the actual list for a kind.
 
-**Updating non-status fields:** the CLI does not currently expose a
-generic field-update command. If the user asks to change a non-status
-frontmatter field (e.g. `assignee`, `priority`), say so and ask whether
-to (a) wait for that command, (b) recreate the artifact, or (c)
-proceed with a direct file edit as a one-off. Do not silently fall
-back to direct edits.
+**Other frontmatter fields:** to change a non-status field (e.g.
+`assignee`, `priority`), use `artifacts set <ref> <property> <value>`
+(see *Write a property* below). Don't recreate the artifact or edit the
+file directly.
+
+### Read a property — `artifacts get`
+
+```bash
+artifacts get <ref> [<property>] [-j]
+```
+
+Reads one frontmatter property — or, with no property, lists every
+frontmatter field as key/value (no body, unlike `show`). Reach for
+this instead of `show -j | jq .field` when you only need one value.
+
+- **With `<property>`** — prints the scalar value on one line. `-j`
+  returns `{"property": "<name>", "value": <value>}`.
+- **Without `<property>`** — prints all frontmatter as a key/value
+  table. `-j` returns the full frontmatter object.
+- Unknown property exits 2 with
+  `Unknown property '<name>' for kind '<kind>' — known: [...]`.
+
+```bash
+# Read the status property
+artifacts get t0042 status
+# → ready
+
+# JSON form — pipe-friendly
+artifacts get t0042 status -j
+# → {"property": "status", "value": "ready"}
+
+# An arbitrary frontmatter field
+artifacts get t0042 assignee
+# → alice
+
+# All frontmatter, no body
+artifacts get t0042
+
+# Full frontmatter as JSON
+artifacts get t0042 -j
+```
+
+### Write a property — `artifacts set`
+
+```bash
+artifacts set <ref> <property> <value>
+```
+
+Writes exactly one frontmatter property; the body is preserved
+verbatim. **This is the generic field-update command** — it supersedes
+any older guidance that `status` was the only way to mutate an
+artifact. Use it for any single-field change.
+
+Every write runs the full validation pipeline:
+
+- **State-machined properties** (e.g. `status`) — the new value must be
+  a legal transition from the current one (s0033). An illegal
+  transition exits 2:
+
+  ```
+  error: Illegal transition for field 'status': 'in-progress' → 'verified' (allowed targets: ['review']) (allowed from any state: ['rejected'])
+  ```
+
+- **Free-form properties** (e.g. `assignee`) — written through JSON
+  Schema validation only (no transition check).
+
+```bash
+# Advance a state-machined property (transition-validated)
+artifacts set t0042 status review
+
+# Set a free-form property
+artifacts set t0042 assignee alice
+
+# Illegal transition exits 2
+artifacts set t0042 status verified
+# → error: Illegal transition for field 'status': ...
+```
+
+To see which targets are legal before writing, run
+`artifacts transitions` (below).
+
+### Inspect transitions — `artifacts transitions`
+
+```bash
+artifacts transitions <ref> [<property>] [-j]
+```
+
+Shows the state-machine snapshot for one or all state-machined
+properties on the artifact's kind — the legal next values before you
+call `set`. Columns: `property`, `current`, `allowed_next`,
+`wildcard_targets`, `locked?`.
+
+- `allowed_next` — targets reachable from the current value.
+- `wildcard_targets` — targets reachable from *any* state.
+- `locked` — `yes` when the field is frozen at its initial value.
+- Omit `<property>` to list every state-machined property; `-j`
+  returns a dict keyed by property name.
+- A property with no state machine (e.g. `title`) exits 2 with
+  `no state machine declared for field '<name>' in kind '<kind>'`.
+
+```bash
+# All state-machined properties on the artifact
+artifacts transitions t0042
+
+# Just 'status'
+artifacts transitions t0042 status
+
+# JSON for piping
+artifacts transitions t0042 status -j
+# → {"property": "status", "current": "ready", "allowed_next": ["in-progress"], "wildcard_targets": [], "locked": false}
+```
+
+For the full per-property state-machine model — how transition tables,
+wildcards, and locks are declared — see `s0033`.
 
 ### Validate — `artifacts validate`
 
@@ -306,6 +432,39 @@ artifacts verify [<ref>] [--kind KIND] [--all] [-j]
 Counts `- [ ]` / `- [x]` items in the body. Exits non-zero if any are
 unchecked. Use this to confirm a task's completion checklist is
 satisfied before `status … done`.
+
+### Manage hooks — `artifacts hooks`
+
+Hook bundles live under `artifacts/hooks/<slug>/` (a manifest plus
+optional sibling scripts). A bundle must be **promoted** into
+`artifacts/hooks/.active/` before the loader will fire it — that
+`.active/` symlink is what separates a *defined* hook from a *live*
+one. Full model: `docs/hooks.md`.
+
+```bash
+artifacts hooks list    [--host HOST] [--active | --inactive] [--source yaml|bundle] [--tail [N]] [-j]
+artifacts hooks show    <slug> [-j]
+artifacts hooks promote <slug> [--force] [-j]
+artifacts hooks demote  <slug> [-j]
+```
+
+- **`list`** — every hook (yaml + bundle) as a table; `active` is `yes`
+  (symlink resolves), `dangling` (target missing), or `no` (not
+  promoted).
+- **`show <slug>`** — manifest frontmatter, sibling files, active
+  state, and recent `hook.fired` / `hook.failed` events.
+- **`promote <slug>`** — create the `.active/<slug>` entry so the hook
+  fires; idempotent, `--force` overwrites a divergent entry.
+- **`demote <slug>`** — remove the `.active/<slug>` entry (no-op when
+  inactive).
+
+```bash
+# List hooks (JSON for scripting)
+artifacts hooks list -j
+
+# Activate a hook
+artifacts hooks promote auto-commit
+```
 
 ## Output Mode Selection
 
@@ -339,10 +498,10 @@ artifacts show t0042 -j | jq -r .body
 
 ## Rules
 
-1. **CLI only.** Read artifacts via `artifacts show -j`, never via
-   the Read tool. Update status via `artifacts status`, never by
-   editing markdown directly. Create via `artifacts create`, never
-   by writing files.
+1. **CLI only.** Read artifacts via `artifacts show -j` (or
+   `artifacts get`), never via the Read tool. Update frontmatter via
+   `artifacts set` / `artifacts status`, never by editing markdown
+   directly. Create via `artifacts create`, never by writing files.
 2. **Resolve before mutating.** When the user gives a partial ref,
    run `artifacts show <ref> -k <kind>` first to confirm the match,
    especially before `status` changes.
@@ -350,9 +509,10 @@ artifacts show t0042 -j | jq -r .body
    parsing.
 4. **Honor allowed statuses.** Don't invent status values; use
    exactly what the kind defines.
-5. **Body is immutable through the CLI.** `status` only updates
-   frontmatter. If the body needs to change, surface that to the
-   user — there is no CLI command for it today.
+5. **Body is immutable through the CLI.** `set` and `status` update
+   frontmatter only; the body is always preserved verbatim. If the
+   body needs to change, surface that to the user — there is no CLI
+   command for it.
 6. **Select kinds by description; draft bodies from `ARTIFACT.md`.**
    For every create: pick the kind by its `description:` field
    (consulted via `artifacts kinds`) before falling back to the

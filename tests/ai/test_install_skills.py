@@ -12,16 +12,15 @@ from artifacts_os.ai import install
 def test_install_skill_creates_symlink(vault: Path) -> None:
     report = install(vault, mode="link")
 
-    for skill_ns in ("artifacts-os", "release-changelog"):
-        skill_path = vault / ".claude" / "skills" / skill_ns / "SKILL.md"
-        assert skill_path.is_symlink(), f"{skill_path} is not a symlink"
-        assert skill_path.resolve().exists(), f"{skill_path} symlink is broken"
+    skill_path = vault / ".claude" / "skills" / "artifacts-os" / "SKILL.md"
+    assert skill_path.is_symlink(), f"{skill_path} is not a symlink"
+    assert skill_path.resolve().exists(), f"{skill_path} symlink is broken"
 
     skill_actions = [
         a for a in report.actions
         if a.action == "install-link" and a.target.name == "SKILL.md"
     ]
-    assert len(skill_actions) == 2
+    assert len(skill_actions) == 1
 
 
 def test_install_skill_resolves_into_package(vault: Path) -> None:
@@ -44,7 +43,7 @@ def test_install_skill_idempotent(vault: Path) -> None:
         a for a in report2.actions
         if a.action == "skip" and a.target.name == "SKILL.md"
     ]
-    assert len(skill_skips) == 2
+    assert len(skill_skips) == 1
 
     skill_installs = [
         a for a in report2.actions

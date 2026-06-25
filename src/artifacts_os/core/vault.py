@@ -15,7 +15,7 @@ def find_vault_root(
     Returns the directory or None.
 
     The *marker_filename* kwarg lets callers look for a custom-named
-    settings file (e.g. ``openstation.yaml``) without altering the
+    settings file (e.g. ``myapp.yaml``) without altering the
     default discovery behaviour. Spec: s0034 §6.4.
     """
     current = Path(start) if start is not None else Path.cwd()
