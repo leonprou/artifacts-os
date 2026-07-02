@@ -105,6 +105,18 @@ class TestFormatField:
     def test_none_value_with_datetime_fmt(self):
         assert format_field(None, "datetime") == ""
 
+    def test_list_value_joined(self):
+        assert format_field(["arch"], None) == "arch"
+
+    def test_list_value_multiple_joined(self):
+        assert format_field(["pdm", "prd"], None) == "pdm, prd"
+
+    def test_empty_list_returns_empty(self):
+        assert format_field([], None) == ""
+
+    def test_list_value_with_date_fmt(self):
+        assert format_field(["2026-04-22T14:30:00"], "date") == "2026-04-22"
+
 
 # ---------------------------------------------------------------------------
 # default_columns

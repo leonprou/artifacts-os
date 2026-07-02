@@ -70,9 +70,13 @@ def format_field(value: Any, fmt: str | None) -> str:
     - ``fmt="date"``     — parse ISO datetime string, return ``YYYY-MM-DD``
     - ``fmt="datetime"`` — return ``YYYY-MM-DD HH:MM``
     - ``fmt=None``       — ``str(value)`` with ``None`` → ``""``
+    - list/tuple values  — each element formatted, joined with ``", "``
     """
     if value is None:
         return ""
+
+    if isinstance(value, (list, tuple)):
+        return ", ".join(format_field(v, fmt) for v in value)
 
     if fmt == "date":
         try:
