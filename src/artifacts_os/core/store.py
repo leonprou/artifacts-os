@@ -248,16 +248,36 @@ def get(
 
 def update(
     registry: "Registry",
-    ref: str,
+    ref: "str | Path",
     *,
     status: str | None = None,
     fields: dict | None = None,
+    force: bool = False,
+    skip_validation: bool = False,
 ) -> Artifact:
-    """Merge frontmatter updates. Body preserved verbatim."""
+    """Merge frontmatter updates. Body preserved verbatim.
+
+    *ref* may be a name/stem string (resolved via the registry) or an
+    absolute Path (used directly, skipping resolution). Passing a Path
+    is useful when the caller has already resolved the file and it may
+    not live under root/artifacts/ (e.g. legacy vault layouts).
+
+    When *force* is True, state-machine transition validation is skipped.
+    Use this when the caller has already validated the transition via its
+    own domain rules (e.g. openstation's lifecycle guardrails).
+
+    When *skip_validation* is True, JSON Schema validation is also skipped.
+    Use this when the caller manages its own schema constraints and existing
+    data may not conform to the kind's JSON Schema (e.g. openstation tasks
+    with types outside the standard enum).
+    """
     from artifacts_os.core.discover import resolve
 
     fields = fields or {}
-    path = resolve(registry, ref)
+    if isinstance(ref, Path) and ref.is_absolute():
+        path = ref
+    else:
+        path = resolve(registry, str(ref))
     text = path.read_text(encoding="utf-8")
     try:
         meta, body = _frontmatter.parse(text)
@@ -278,11 +298,14 @@ def update(
     # other state-machined property) at write time — s0033 §5.2. For properties
     # with enum-only declarations (D206), JSON Schema via _validate_schema
     # still enforces target ∈ enum.
-    for prop in kd.state_machines:
-        if meta.get(prop) != new_meta.get(prop):
-            check_transition(kd, prop, meta.get(prop), new_meta.get(prop))
+    # Skip when force=True: the caller has applied its own validation.
+    if not force:
+        for prop in kd.state_machines:
+            if meta.get(prop) != new_meta.get(prop):
+                check_transition(kd, prop, meta.get(prop), new_meta.get(prop))
 
-    _validate_schema(kd, new_meta)
+    if not skip_validation:
+        _validate_schema(kd, new_meta)
 
     # Compute diff for dispatch payload.
     all_keys = set(meta) | set(new_meta)
@@ -305,6 +328,19 @@ def update(
         after=dict(diff_after),
         fields=dict(new_meta),
     )
+
+    # Pre-phase status_changed: allows pre-hooks to block status transitions.
+    if "status" in changed_keys:
+        _events._dispatch_pre(
+            "artifact.status_changed",
+            kind=kind,
+            id=aid,
+            name=name,
+            stem=stem,
+            before=diff_before["status"],
+            after=diff_after["status"],
+            fields=dict(new_meta),
+        )
 
     new_text = _frontmatter.dump(new_meta, body)
     tmp = path.with_suffix(path.suffix + ".tmp")

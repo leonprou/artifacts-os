@@ -51,19 +51,3 @@ def test_init_with_yes_flag_is_non_interactive(tmp_path: Path, monkeypatch) -> N
 
     assert (tmp_path / "artifacts.yaml").is_file()
     assert (tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md").is_file()
-
-
-def test_init_with_openstation_compat(tmp_path: Path, monkeypatch) -> None:
-    """--openstation-compat creates symlink alongside D2 skill install."""
-    monkeypatch.chdir(tmp_path)
-    main([
-        "init",
-        "--template", "minimal",
-        "--openstation-compat",
-        "-y",
-    ])
-
-    symlink = tmp_path / "openstation"
-    assert symlink.is_symlink()
-    # D2: skill is installed
-    assert (tmp_path / ".claude" / "skills" / "artifacts-os" / "SKILL.md").is_file()

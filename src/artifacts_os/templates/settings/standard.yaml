@@ -29,7 +29,6 @@ views:
   recent:   { columns: "id,kind,name,status,created:date", sort: -created }
 
 default_views:
-  task: ready
   spec: specs
   research: research
   agent: agents

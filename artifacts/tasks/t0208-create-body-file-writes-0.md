@@ -6,8 +6,8 @@ kind: task
 name: create-body-file-writes-0
 owner: user
 priority: high
-status: done
-type: implementation
+status: in-progress
+type: bug
 ---
 
 # create --body-file writes 0-byte files

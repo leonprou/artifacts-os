@@ -7,7 +7,7 @@ id: t0177
 kind: task
 name: teach-openstation-create-to-use
 owner: user
-status: ready
+status: rejected
 type: documentation
 ---
 

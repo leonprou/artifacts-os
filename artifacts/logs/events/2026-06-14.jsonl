@@ -1,0 +1,6 @@
+{"ts": "2026-06-14T18:01:35+00:00", "event": "status_transition", "task": "t0208-create-body-file-writes-0", "old_status": "backlog", "new_status": "ready", "forced": false}
+{"ts": "2026-06-14T18:01:56+00:00", "event": "run_started", "task": "t0208-create-body-file-writes-0", "agent": "developer", "run_id": "r0214", "mode": "execute", "context_only": false, "detached": true}
+{"ts": "2026-06-14T18:07:33+00:00", "event": "hook.pulled", "book": "os-hooks", "written": ["demo"], "overwritten": [], "removed": []}
+{"ts": "2026-06-14T19:23:33+00:00", "event": "hook.pulled", "book": "os-hooks", "written": ["demo"], "overwritten": [], "removed": []}
+{"ts": "2026-06-14T19:45:11+00:00", "event": "hook.pulled", "book": "os-hooks", "written": ["demo"], "overwritten": [], "removed": []}
+{"ts": "2026-06-14T19:47:11+00:00", "event": "hook.pulled", "book": "os-hooks", "written": ["demo"], "overwritten": [], "removed": []}

@@ -819,7 +819,7 @@ artifacts verify t0042 -j
 ```
 artifacts init [DIRECTORY] [--template TIER]
                [--distro URL] [--book NAME[:ITEMS]] ...
-               [--force] [-y] [--dry-run] [--openstation-compat]
+               [--force] [-y] [--dry-run]
 ```
 
 Creates a new artifacts-os project in *DIRECTORY* (default: current directory).
@@ -845,7 +845,6 @@ in non-TTY mode unless `-y` or all applicable flags are supplied.
 | `--force` | Overwrite existing files (per-file). Also bypasses the already-initialised guard. |
 | `-y` / `--yes` | Accept defaults at every un-flagged stage (enables non-interactive mode). |
 | `--dry-run` | Print planned writes without writing anything. |
-| `--openstation-compat` | Also create the legacy `openstation → artifacts` symlink. |
 
 **Environment defaults:**
 

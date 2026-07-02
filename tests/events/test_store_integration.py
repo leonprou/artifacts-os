@@ -130,8 +130,10 @@ def test_update_status_changed_payload_has_scalar_before_after(make_vault):
     )
 
     update(registry, a.id, status="ready")
-    assert len(status_changed_payloads) == 1
-    payload = status_changed_payloads[0]
+    # Both pre and post dispatches fire; filter to post-phase (after write)
+    post_payloads = [p for p in status_changed_payloads if p.get("_phase") == "post"]
+    assert len(post_payloads) == 1
+    payload = post_payloads[0]
     # before/after must be scalar strings, not dicts
     assert payload["before"] == "backlog"
     assert payload["after"] == "ready"

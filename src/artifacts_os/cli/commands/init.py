@@ -622,11 +622,6 @@ def register(subparsers) -> None:
         help="print actions without writing anything",
     )
     p.add_argument(
-        "--openstation-compat",
-        action="store_true",
-        help="also create 'openstation -> artifacts' symlink",
-    )
-    p.add_argument(
         "--distro",
         default=None,
         metavar="URL",
@@ -815,26 +810,6 @@ def run(args) -> int:  # no registry — called before vault setup
 
     # artifacts.yaml
     _do_write(target / "artifacts.yaml", settings_content)
-
-    # openstation-compat symlink
-    if getattr(args, "openstation_compat", False):
-        symlink = target / "openstation"
-        rel_sym = str(symlink.relative_to(target))
-        if symlink.exists() or symlink.is_symlink():
-            if not args.force:
-                _print_skip(f"{rel_sym} -> artifacts")
-        else:
-            if args.dry_run:
-                _print_write(f"{rel_sym} -> artifacts", True, overwritten=False)
-            else:
-                try:
-                    os.symlink("artifacts", symlink)
-                    _print_write(f"{rel_sym} -> artifacts", False, overwritten=False)
-                    written += 1
-                except OSError as exc:
-                    _print_fail(rel_sym, str(exc))
-                    failed += 1
-                    failures.append((rel_sym, str(exc)))
 
     # ── D2 fallback: no distro → install bundled skill ─────────
     if distro_url is None:

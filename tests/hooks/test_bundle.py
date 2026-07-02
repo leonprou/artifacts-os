@@ -271,8 +271,8 @@ def test_load_hooks_bundle_sorted_by_slug(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_host_dispatch_fires_artifacts_os_only(tmp_path):
-    """Only artifacts-os hooks enter the fire-list."""
+def test_fire_list_includes_all_hosts(tmp_path):
+    """s2073: host: field is tolerated but ignored — all hooks enter the fire-list."""
     from artifacts_os.hooks.actions import ShellAction
 
     hooks = [
@@ -284,12 +284,13 @@ def test_host_dispatch_fires_artifacts_os_only(tmp_path):
              source="bundle", host="jira-bot"),
     ]
     fireable = _fire_list(hooks)
-    assert len(fireable) == 1
-    assert fireable[0].name == "local"
+    assert len(fireable) == 3
+    names = {h.name for h in fireable}
+    assert names == {"local", "foreign", "unknown"}
 
 
-def test_foreign_host_openstation_loaded_not_fired(tmp_path):
-    """openstation hooks are loaded and listed but not added to fire-list."""
+def test_foreign_host_openstation_loaded_and_fired(tmp_path):
+    """s2073: openstation hooks are loaded AND included in the fire-list."""
     (tmp_path / "artifacts.yaml").write_text("layout_version: 1\nproject:\n  name: test\n")
     _make_bundle(tmp_path, "os-hook", host="openstation")
     _promote_bundle(tmp_path, "os-hook")
@@ -297,26 +298,24 @@ def test_foreign_host_openstation_loaded_not_fired(tmp_path):
     hooks = load_hooks(tmp_path)
     # Loaded.
     assert any(h.name == "os-hook" for h in hooks)
-    # Not in fire-list.
+    # Also in fire-list (host: ignored since s2073).
     fireable = _fire_list(hooks)
-    assert not any(h.name == "os-hook" for h in fireable)
+    assert any(h.name == "os-hook" for h in fireable)
 
 
-def test_unknown_host_warns_once(tmp_path, capsys):
-    """Unknown host triggers a one-line warning exactly once per process."""
-    from artifacts_os.hooks.loader import _WARNED_UNKNOWN_HOSTS
-
+def test_unknown_host_no_warning(tmp_path, capsys):
+    """s2073: unknown host: values are silently tolerated — no warning emitted."""
     (tmp_path / "artifacts.yaml").write_text("layout_version: 1\nproject:\n  name: test\n")
     _make_bundle(tmp_path, "jira-hook", host="jira-bot")
     _promote_bundle(tmp_path, "jira-hook")
 
     hooks = load_hooks(tmp_path)
-    # Call _fire_list twice — warning should appear once.
     _fire_list(hooks)
     _fire_list(hooks)
 
     captured = capsys.readouterr()
-    assert captured.err.count("jira-bot") == 1
+    # No warning for unknown hosts since the host: field is now ignored
+    assert "jira-bot" not in captured.err
 
 
 # ---------------------------------------------------------------------------

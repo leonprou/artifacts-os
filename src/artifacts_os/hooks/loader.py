@@ -7,10 +7,10 @@ The top-level ``notify(event, payload)`` function is registered with
 ``core.events.register_emitter`` when this module is imported (via
 ``hooks/__init__.py``).
 
-Host dispatch:
-  - ``host: artifacts-os`` (or absent) — enters the fire-list.
-  - ``host: openstation`` (reserved foreign) — loaded + listed, never fired.
-  - unknown hosts — warned once per process, skipped from fire-list (D113).
+All loaded hooks enter the fire-list regardless of ``host:`` value.
+The ``host:`` field is tolerated (not validated) for one back-compat
+release and will be dropped from the bundle schema thereafter (step 6
+of s2073 migration).
 
 Spec: s0025-artifact-events § C4; s0032-hooks-via-artbook §3, §6
 """
@@ -74,12 +74,6 @@ def _is_valid_matcher_key(key: str) -> bool:
 # Data model
 # ---------------------------------------------------------------------------
 
-# Reserved foreign hosts that are loaded + listed but never fired.
-_RESERVED_FOREIGN_HOSTS: frozenset[str] = frozenset(["openstation"])
-
-# The only host that enters the fire-list.
-_LOCAL_HOST: str = "artifacts-os"
-
 
 @dataclass(frozen=True)
 class Hook:
@@ -131,7 +125,7 @@ def _parse_hook_entry(entry: dict, *, i: int, source: str = "yaml") -> Hook:
 
     blocking: bool = bool(entry.get("blocking", False))
     timeout: int = int(entry.get("timeout", 30))
-    host: str = str(entry.get("host", _LOCAL_HOST))
+    host: str = str(entry.get("host", "artifacts-os"))
 
     return Hook(
         name=name,
@@ -195,18 +189,6 @@ def load_hooks_from_yaml(root: Path) -> list[Hook]:
 # ---------------------------------------------------------------------------
 # Bundle loader: reads .active/ symlinks / JSON stubs
 # ---------------------------------------------------------------------------
-
-_WARNED_UNKNOWN_HOSTS: set[str] = set()
-
-
-def _warn_unknown_host_once(host: str) -> None:
-    """Emit a one-line stderr warning for *host* the first time it's seen."""
-    if host not in _WARNED_UNKNOWN_HOSTS:
-        _WARNED_UNKNOWN_HOSTS.add(host)
-        sys.stderr.write(
-            f"warning: hook host {host!r} is unknown; "
-            "skipping from fire-list (loaded but not fired)\n"
-        )
 
 
 def _read_frontmatter(path: Path) -> dict[str, Any]:
@@ -412,27 +394,19 @@ def load_hooks(root: Path) -> list[Hook]:
 
 
 # ---------------------------------------------------------------------------
-# Host dispatch: which hooks enter the fire-list
+# Fire-list: all loaded hooks are fireable (host: field is ignored)
 # ---------------------------------------------------------------------------
 
 
 def _fire_list(hooks: list[Hook]) -> list[Hook]:
-    """Return the subset of *hooks* that should be fired.
+    """Return all *hooks* for firing (host: field is tolerated but ignored).
 
-    - ``host: artifacts-os`` (or empty) → included.
-    - Reserved foreign hosts (e.g. ``openstation``) → excluded silently.
-    - Unknown hosts → warn once, excluded.
+    Prior to s2073 the foreign-host allowlist excluded bundles with
+    host: values not in a reserved set.  That coupling was removed:
+    the hook engine names no consumer; all bundles fire regardless of
+    their host: tag.
     """
-    result: list[Hook] = []
-    for hook in hooks:
-        if hook.host == _LOCAL_HOST or not hook.host:
-            result.append(hook)
-        elif hook.host in _RESERVED_FOREIGN_HOSTS:
-            # Loaded + listed but not fired — silently skip.
-            pass
-        else:
-            _warn_unknown_host_once(hook.host)
-    return result
+    return list(hooks)
 
 
 # ---------------------------------------------------------------------------
@@ -732,8 +706,7 @@ def invalidate_cache() -> None:
 
     Useful in tests to reset state between cases.
     """
-    global _hooks_cache, _hooks_root, _legacy_deprecation_warned, _WARNED_UNKNOWN_HOSTS
+    global _hooks_cache, _hooks_root, _legacy_deprecation_warned
     _hooks_cache = None
     _hooks_root = None
     _legacy_deprecation_warned = False
-    _WARNED_UNKNOWN_HOSTS.clear()

@@ -10,6 +10,7 @@ Spec: s0025-artifact-events § C3
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import sys
 from datetime import datetime, timezone
@@ -24,9 +25,11 @@ def _now_iso() -> str:
 
 
 def _serialize(obj: object) -> object:
-    """Coerce non-JSON-serializable objects (e.g. Path) to str."""
+    """Coerce non-JSON-serializable objects (e.g. Path, date) to str."""
     if isinstance(obj, Path):
         return str(obj)
+    if isinstance(obj, (_dt.datetime, _dt.date)):
+        return obj.isoformat()
     if isinstance(obj, dict):
         return {k: _serialize(v) for k, v in obj.items()}
     if isinstance(obj, list):

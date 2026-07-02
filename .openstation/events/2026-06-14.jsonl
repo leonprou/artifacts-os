@@ -1,0 +1,9 @@
+{"ts":"2026-06-14T21:09:38.392636+03:00","event":"run_complete","task":"t0208-create-body-file-writes-0","agent":"","run_id":"r0214","run_status":"complete","cost":"1.16","turns":41}
+{"ts":"2026-06-14T22:16:03.079862+03:00","event":"task_created","task":"t0210-artifacts-show-crashes-with-yaml","status":"backlog","assignee":"developer","parent":""}
+{"ts":"2026-06-14T22:18:06.005511+03:00","event":"status_transition","task":"t0210-artifacts-show-crashes-with-yaml","old_status":"backlog","new_status":"ready","forced":false}
+{"ts":"2026-06-14T22:18:07.981728+03:00","event":"run_started","task":"t0210-artifacts-show-crashes-with-yaml","agent":"developer","run_id":"r0215","mode":"execute","context_only":false,"detached":false}
+{"ts":"2026-06-14T22:24:40.343414+03:00","event":"run_complete","task":"t0210-artifacts-show-crashes-with-yaml","agent":"developer","run_id":"r0215","run_status":"complete","cost":"0.98","turns":48}
+{"ts":"2026-06-14T22:25:18.888598+03:00","event":"run_started","task":"t0210-artifacts-show-crashes-with-yaml","agent":"project-manager","run_id":"r0216","mode":"verify","context_only":false,"detached":true}
+{"ts":"2026-06-14T22:25:59.863956+03:00","event":"run_complete","task":"t0210-artifacts-show-crashes-with-yaml","agent":"","run_id":"r0216","run_status":"complete","cost":"0.36","turns":5}
+{"ts":"2026-06-14T22:42:13.491871+03:00","event":"run_started","task":"t0213-flip-show-editor-default-to","agent":"developer","run_id":"r0217","mode":"execute","context_only":false,"detached":true}
+{"ts":"2026-06-14T22:48:07.847824+03:00","event":"run_complete","task":"t0213-flip-show-editor-default-to","agent":"","run_id":"r0217","run_status":"complete","cost":"0.90","turns":39}

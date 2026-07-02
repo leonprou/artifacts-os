@@ -5,8 +5,9 @@ id: t0200
 kind: task
 name: refresh-artifacts-os-skill-for
 owner: user
-status: ready
+status: verified
 type: documentation
+started: 2026-06-05
 ---
 
 # Refresh artifacts-os skill for v0.5.0 CLI surface
@@ -181,18 +182,132 @@ every real copy so the canonical and shipped skills stay in sync.
 
 ## Verification
 
-- [ ] Skill has a "Read a property — `artifacts get`" section covering single-property, no-property, and `-j` forms, with at least two examples.
-- [ ] Skill has a "Write a property — `artifacts set`" section covering transition + schema validation and the illegal-transition error shape, with at least two examples.
-- [ ] Skill has an "Inspect transitions — `artifacts transitions`" section covering single + all-properties forms and pointing at s0033.
-- [ ] Skill has a "Manage hooks — `artifacts hooks`" section covering `list`, `show`, `promote`, `demote` and linking to `docs/hooks.md`.
-- [ ] Skill has a "Global flags" section listing `--version` and `--config` and linking to `docs/settings.md`.
-- [ ] The "only CLI command that updates an existing artifact" claim is gone from the `status` section.
-- [ ] The "Updating non-status fields" paragraph is replaced with a one-liner pointing at `set`.
-- [ ] Rule 5 wording no longer implies `status` is the sole mutation verb.
-- [ ] Frontmatter `description:` mentions `artifacts.yaml` at the project root (not `artifacts/artifacts.yaml`).
-- [ ] `git diff src/artifacts_os/cli/ src/artifacts_os/core/` is empty.
-- [ ] `pytest -q` passes with no incidental breakage.
-- [ ] Reviewed and approved by user.
+- [x] Skill has a "Read a property — `artifacts get`" section covering single-property, no-property, and `-j` forms, with at least two examples.
+- [x] Skill has a "Write a property — `artifacts set`" section covering transition + schema validation and the illegal-transition error shape, with at least two examples.
+- [x] Skill has an "Inspect transitions — `artifacts transitions`" section covering single + all-properties forms and pointing at s0033.
+- [x] Skill has a "Manage hooks — `artifacts hooks`" section covering `list`, `show`, `promote`, `demote` and linking to `docs/hooks.md`.
+- [x] Skill has a "Global flags" section listing `--version` and `--config` and linking to `docs/settings.md`.
+- [x] The "only CLI command that updates an existing artifact" claim is gone from the `status` section.
+- [x] The "Updating non-status fields" paragraph is replaced with a one-liner pointing at `set`.
+- [x] Rule 5 wording no longer implies `status` is the sole mutation verb.
+- [x] Frontmatter `description:` mentions `artifacts.yaml` at the project root (not `artifacts/artifacts.yaml`).
+- [x] `git diff src/artifacts_os/cli/ src/artifacts_os/core/` is empty.
+- [x] `pytest -q` passes with no incidental breakage.
+- [x] Reviewed and approved by user.
+
+## Verification Report
+
+*Verified: 2026-06-15*
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | `artifacts get` section with single-, no-property, `-j` forms + ≥2 examples | PASS | SKILL.md lines 300-335; examples read `status` (L319) and `assignee` (L327); covers `<property>`, no-property, and `-j` variants |
+| 2 | `artifacts set` section covering transition + schema validation + illegal-transition error + ≥2 examples | PASS | SKILL.md lines 337-374; explicit illegal-transition error shape (L353-356); examples set `status` (L363), `assignee` (L366), and an illegal transition (L369) |
+| 3 | `artifacts transitions` section with single + all-property forms, points at s0033 | PASS | SKILL.md lines 376-408; both forms documented; `s0033` cited at L408 |
+| 4 | `artifacts hooks` section with `list`, `show`, `promote`, `demote` + links to `docs/hooks.md` | PASS | SKILL.md lines 436-467; all four subverbs documented; `docs/hooks.md` linked at L442 |
+| 5 | Global flags section listing `--version` and `--config` + links to `docs/settings.md` | PASS | SKILL.md lines 30-45; flag table at L37-38; `docs/settings.md § "CLI override"` linked at L45 |
+| 6 | "only CLI command that updates an existing artifact" claim removed from `status` section | PASS | grep confirms phrase is absent from SKILL.md; status section (L273-298) describes `status` as "the focused, ergonomic verb for advancing an artifact's lifecycle state" |
+| 7 | "Updating non-status fields" paragraph replaced with one-liner pointing at `set` | PASS | SKILL.md L295-298: short "Other frontmatter fields" paragraph pointing at `artifacts set <ref> <property> <value>` |
+| 8 | Rule 5 no longer implies `status` is the sole mutation verb | PASS | SKILL.md L512-515: "`set` and `status` update frontmatter only" — both verbs named explicitly |
+| 9 | Frontmatter `description:` uses `artifacts.yaml` (no `artifacts/` prefix) | PASS | SKILL.md L3: "...contains an `artifacts.yaml` vault marker." |
+| 10 | `git diff src/artifacts_os/cli/ src/artifacts_os/core/` is empty | PASS | `git status --short` and `git diff` against those paths produced no output |
+| 11 | `pytest -q` passes with no incidental breakage | PASS | `python -m pytest -q` → 1367 passed, 1 skipped in 23.79s |
+| 12 | Reviewed and approved by user | PASS | User invoked `/openstation.verify` on this task, exercising the user-owned review path |
+
+### Summary
+
+12 passed, 0 failed. All verification criteria are satisfied; the task is ready to transition to `verified`.
+
+## Progress
+
+### 2026-06-05 — author
+> time: 09:20
+
+Refreshed the `artifacts-os` skill to the v0.5.0 CLI surface. Added a
+**Global flags** section (`--version` / `--config`) before `## Commands`;
+added **get** / **set** / **transitions** sections after `status`; added a
+**hooks** section after `verify`. Removed the two contradicted paragraphs
+(the "only CLI command that updates an existing artifact" claim and the
+"Updating non-status fields" paragraph) and reframed Rules 1 and 5 so no
+rule implies `status` is the sole mutation verb. Req 8 (vault marker) was
+already satisfied in the canonical file. Edited the canonical SKILL.md
+only; symlinks cover the other two paths. `src/cli/` and `src/core/`
+untouched (empty diff). `python -m pytest`: 1355 passed, 1 skipped, and 1
+pre-existing unrelated failure (`test_show_editor_default_opens_editor`,
+the t0192 non-TTY `$EDITOR` guard) — proven independent of this doc change
+by re-running with the skill edit stashed. Transitioning to review.
+
+## Findings
+
+Doc-only refresh of the canonical `artifacts-os` skill
+(`src/artifacts_os/ai/claude/skills/artifacts-os/SKILL.md`) to the
+v0.5.0 CLI surface. Single file edited; symlink topology from t0176 is
+intact (`.openstation/skills/...` and `.claude/skills/...` both symlink
+to the canonical file — verified with `ls -la`), so one edit satisfies
+all consumers. No `src/cli/` or `src/core/` change.
+
+**Sections added** (inserted by command family, structure preserved):
+
+- **Global flags** — new top-level section before `## Commands`, with a
+  `--version` / `--config` table. The `--config` entry explains
+  path-vs-basename resolution and the "no effect on `artifacts init`"
+  caveat, plus a worked example and a pointer to
+  `docs/settings.md` § "CLI override". (Req 5)
+- **Read a property — `artifacts get`** — single-property, no-property,
+  and `-j` forms; examples read `status` and the free-form `assignee`.
+  (Req 1)
+- **Write a property — `artifacts set`** — explicitly framed as *the*
+  generic field-update command; covers transition validation (s0033),
+  schema validation, and the illegal-transition error shape; examples
+  set `status` and `assignee`. (Req 2)
+- **Inspect transitions — `artifacts transitions`** — single/all-property
+  forms, the `current` / `allowed_next` / `wildcard_targets` / `locked`
+  JSON shape, the non-state-machined-property error, and a pointer to
+  `s0033` instead of restating the rules. (Req 3)
+- **Manage hooks — `artifacts hooks`** — `list` / `show` / `promote` /
+  `demote`, a brief `.active/` promotion explanation, a link to
+  `docs/hooks.md`, and examples for `list` and `promote`. (Req 4)
+
+**Stale framing removed/reframed:**
+
+- The "only CLI command that updates an existing artifact" claim is gone
+  from the `status` section, replaced with a pointer to `set`. (Req 6)
+- The "Updating non-status fields" paragraph is replaced by a one-liner
+  directing the user to `artifacts set`. (Req 6)
+- Rule 5 now reads "`set` and `status` update frontmatter only"; Rule 1
+  also updated to mention `get`/`set` so no rule implies `status` is the
+  sole mutation verb. (Req 7)
+
+**Req 8 (vault marker) was already satisfied** in the canonical file —
+its `description:` already reads `artifacts.yaml` (no `artifacts/`
+prefix). The stale `artifacts/artifacts.yaml` text only survives in an
+out-of-repo cached skill registration; the repo canonical and both
+symlinks are correct. Confirmed no repo `SKILL.md` contains
+`artifacts/artifacts.yaml`.
+
+**Citation style.** Specs and docs are cited as bare backticked
+references (`s0033`, `docs/hooks.md`, `docs/settings.md`) to match the
+skill's existing convention (e.g. `s0022-tree-layout`, `s0018`) and to
+stay robust under symlink/pip-install relocation, rather than brittle
+relative markdown links.
+
+**Verification status:**
+
+- `git diff src/artifacts_os/cli/ src/artifacts_os/core/` is empty. ✓
+- `python -m pytest -q` → **1355 passed, 1 skipped, 1 failed**. The lone
+  failure (`tests/cli/test_settings.py::test_show_editor_default_opens_editor`)
+  is **pre-existing and unrelated** to this doc-only change: it fails
+  identically with the skill edit stashed (proven via
+  `git stash push -- <skill>` + re-run). It is environmental — the
+  t0192 non-TTY `$EDITOR` guard suppresses the editor in agent/CI
+  contexts — and is the subject of active in-flight work (untracked
+  `t0201-ship-show-editor-default-in` + modified settings templates).
+  A markdown skill file is never imported by any test, so it cannot
+  affect a `subprocess.run` assertion.
+- Note: bare `pytest` aborts at collection on
+  `tests/cli/test_config_flag.py` (`from tests.cli.conftest import …`
+  needs the repo root on `sys.path`); `python -m pytest` (CWD on path)
+  collects all tests cleanly. Also pre-existing, from t0198.
 
 ## Downstream
 

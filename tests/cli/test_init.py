@@ -568,22 +568,10 @@ class TestErrorHandling:
         assert exc.value.code == 2
 
 
-# ─── openstation-compat ──────────────────────────────────────────────────────
+# ─── Registration ────────────────────────────────────────────────────────────
 
 
-class TestOpenstationCompat:
-    def test_creates_symlink(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        main(["init", "--template", "minimal", "--openstation-compat", "-y"])
-        symlink = tmp_path / "openstation"
-        assert symlink.is_symlink()
-        assert symlink.resolve() == (tmp_path / "artifacts").resolve()
-
-    def test_no_symlink_without_flag(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        main(["init", "--template", "minimal", "-y"])
-        assert not (tmp_path / "openstation").exists()
-
+class TestInitRegistration:
     def test_pre_registry_flag_set(self):
         """init runs without a registry (pre_registry=True)."""
         import argparse
